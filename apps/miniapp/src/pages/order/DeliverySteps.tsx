@@ -2,6 +2,7 @@ import type { OrderDto, OrderStatus } from '@istock/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'motion/react';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { CopyField } from '../../components/ui/CopyField';
 import { Icon } from '../../components/ui/Icon';
@@ -159,6 +160,13 @@ function FinishStep({ order }: { order: OrderDto }) {
       <Button isFullWidth icon="verified" isLoading={complete.isPending} onClick={() => complete.mutate()}>
         Приложение работает
       </Button>
+      <Link
+        to="/guide"
+        className="flex h-11 items-center justify-center gap-2 rounded-full bg-surface-container-high text-label-lg text-on-surface transition-transform active:scale-[0.97]"
+      >
+        <Icon name="menu_book" className="text-[20px]" />
+        Подробная инструкция
+      </Link>
       <ErrorText error={complete.error} />
     </StepCard>
   );

@@ -80,6 +80,7 @@ export const api = {
   createOrder: (input: CreateOrderInput) => request<OrderDto>('POST', '/orders', input),
   orders: () => request<OrderDto[]>('GET', '/orders'),
   order: (id: number) => request<OrderDto>('GET', `/orders/${id}`),
+  cancelOrder: (id: number) => request<OrderDto>('POST', `/orders/${id}/cancel`),
   download: (id: number) => request<DownloadDto>('GET', `/orders/${id}/download`),
   confirmDownload: (id: number) => request<OrderDto>('POST', `/orders/${id}/confirm-download`),
   credentials: (id: number) => request<CredentialsDto>('POST', `/orders/${id}/credentials`),

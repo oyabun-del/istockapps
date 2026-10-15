@@ -16,6 +16,8 @@ export const ICON_NAMES = [
   'content_copy',
   'credit_card',
   'currency_bitcoin',
+  'currency_exchange',
+  'description',
   'download',
   'download_done',
   'download_for_offline',

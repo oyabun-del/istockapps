@@ -1,73 +1,59 @@
-import { isPaidStatus, type OrderDto } from '@istock/shared';
+import { formatRub, isPaidStatus, type OrderDto } from '@istock/shared';
+import { useCallback, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Page } from '../../components/layout/Page';
-import { SupportButton } from '../../components/SupportButton';
 import { AppIcon } from '../../components/ui/AppIcon';
 import { Badge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { ErrorState, Skeleton } from '../../components/ui/StateViews';
 import { errorMessage } from '../../lib/api';
+import { formatOrderDate } from '../../lib/format';
 import { ORDER_STATUS_META } from '../../lib/order-status';
-import { useOrder } from '../../lib/queries';
-import { openExternalLink } from '../../lib/telegram';
+import { useMe, useOrder } from '../../lib/queries';
+import { openTelegramLink } from '../../lib/telegram';
+import { AwaitingPayment } from './AwaitingPayment';
 import { DeliverySteps } from './DeliverySteps';
+import { PaymentClosed, isClosedStatus } from './PaymentClosed';
 
 function OrderHeader({ order }: { order: OrderDto }) {
   const meta = ORDER_STATUS_META[order.status];
   return (
-    <section className="rounded-xl bg-surface-container-high p-space-lg shadow-md">
-      <div className="flex items-center justify-between gap-2">
-        <Badge label={`Заказ #${order.id} · ${meta.label}`} tone={meta.tone} icon={meta.icon} />
-      </div>
-      <div className="flex items-center gap-space-md pt-space-md">
-        <AppIcon src={order.app.iconUrl} size="md" />
-        <h1 className="min-w-0 truncate text-headline-lg tracking-tight text-on-surface">{order.app.name}</h1>
-      </div>
-    </section>
-  );
-}
-
-function AwaitingPayment({ order }: { order: OrderDto }) {
-  return (
-    <section className="flex flex-col gap-space-md rounded-xl bg-surface-container p-space-lg">
-      <div className="flex items-center gap-space-sm">
-        <span className="relative flex h-3 w-3">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-warning opacity-60" />
-          <span className="relative inline-flex h-3 w-3 rounded-full bg-warning" />
+    <section className="flex items-center gap-space-md rounded-xl bg-surface-container-high p-space-lg shadow-md">
+      <AppIcon src={order.app.iconUrl} size="md" />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <h1 className="truncate text-headline-md tracking-tight text-on-surface">{order.app.name}</h1>
+        <span className="tabular text-body-sm text-on-surface-variant">
+          Заказ #{order.id}, {formatOrderDate(order.createdAt).toLowerCase()}
         </span>
-        <h2 className="text-headline-sm text-on-surface">Ждём оплату</h2>
       </div>
-      <p className="text-body-sm text-on-surface-variant">
-        Завершите оплату на странице CISPAY. Статус обновится автоматически, страницу можно не закрывать.
-      </p>
-      {order.paymentUrl && (
-        <Button isFullWidth icon="open_in_new" onClick={() => openExternalLink(order.paymentUrl as string)}>
-          Перейти к оплате
-        </Button>
-      )}
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <span className="tabular text-headline-sm text-on-surface">{formatRub(order.amountKopecks)}</span>
+        {order.status !== 'awaiting_payment' && <Badge label={meta.label} tone={meta.tone} icon={meta.icon} />}
+      </div>
     </section>
   );
 }
 
-function PaymentProblem({ order }: { order: OrderDto }) {
-  const isRefunded = order.status === 'refunded';
+function SupportRow({ orderId }: { orderId: number }) {
+  const { data: me } = useMe();
   return (
-    <section className="flex flex-col gap-space-md rounded-xl bg-surface-container p-space-lg">
-      <h2 className="text-headline-sm text-on-surface">{isRefunded ? 'Деньги возвращены' : 'Оплата не завершена'}</h2>
-      <p className="text-body-sm text-on-surface-variant">
-        {isRefunded
-          ? 'По этому заказу оформлен возврат. Если это ошибка, напишите в поддержку.'
-          : 'Счёт отменён или истёк. Деньги не списаны, можно оформить заказ заново.'}
-      </p>
-      {!isRefunded && (
-        <Link
-          to={`/apps/${encodeURIComponent(order.app.id)}`}
-          className="flex h-11 items-center justify-center gap-2 rounded-full bg-primary-container text-label-lg text-white"
-        >
-          <Icon name="refresh" className="text-[20px]" />
-          Оформить заново
+    <section className="flex items-center gap-space-md rounded-xl bg-surface-container p-space-md">
+      <Icon name="support_agent" className="text-[24px] text-tertiary" />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="text-label-lg text-on-surface">Возникла трудность?</span>
+        <Link to={`/support?order=${orderId}`} className="text-body-sm text-primary">
+          Создать обращение
         </Link>
+      </div>
+      {me && (
+        <button
+          type="button"
+          onClick={() => openTelegramLink(me.supportUrl)}
+          className="flex h-9 shrink-0 items-center gap-1 rounded-full bg-tertiary-container/30 px-3.5 text-label-lg text-tertiary transition-transform active:scale-[0.97]"
+        >
+          Написать
+          <Icon name="chevron_right" className="text-[18px]" />
+        </button>
       )}
     </section>
   );
@@ -77,27 +63,43 @@ export function OrderPage() {
   const { orderId } = useParams();
   const id = Number(orderId);
   const order = useOrder(id);
+  const [isChecking, setIsChecking] = useState(false);
+  const { refetch } = order;
+
+  // Only a refresh the buyer asked for shows a spinner; background polling stays silent.
+  const checkStatus = useCallback(async () => {
+    setIsChecking(true);
+    try {
+      await refetch();
+    } finally {
+      setIsChecking(false);
+    }
+  }, [refetch]);
+  const handleRefresh = useCallback(() => void checkStatus(), [checkStatus]);
+
+  const data = order.data;
+  const closedStatus = data && isClosedStatus(data.status) ? data.status : null;
 
   return (
     <Page subtitle="Заказ" hasBackButton>
       <div className="flex flex-col gap-space-lg">
-        {order.isPending && <Skeleton className="h-[120px]" />}
-        {order.isError && <ErrorState message={errorMessage(order.error)} onRetry={() => void order.refetch()} />}
-
-        {order.data && (
+        {order.isPending && (
           <>
-            <OrderHeader order={order.data} />
-            {order.data.status === 'awaiting_payment' && <AwaitingPayment order={order.data} />}
-            {isPaidStatus(order.data.status) && <DeliverySteps order={order.data} />}
-            {['failed', 'expired', 'refunded'].includes(order.data.status) && <PaymentProblem order={order.data} />}
-            <Link
-              to={`/support?order=${order.data.id}`}
-              className="flex items-center justify-center gap-1.5 text-label-lg text-primary"
-            >
-              <Icon name="report" className="text-[18px]" />
-              Проблема с заказом? Создать обращение
-            </Link>
-            <SupportButton />
+            <Skeleton className="h-[88px]" />
+            <Skeleton className="h-[260px]" />
+          </>
+        )}
+        {order.isError && <ErrorState message={errorMessage(order.error)} onRetry={handleRefresh} />}
+
+        {data && closedStatus && <PaymentClosed order={data} status={closedStatus} />}
+        {data && !closedStatus && (
+          <>
+            <OrderHeader order={data} />
+            {data.status === 'awaiting_payment' && (
+              <AwaitingPayment order={data} isRefreshing={isChecking} onRefresh={handleRefresh} />
+            )}
+            {isPaidStatus(data.status) && <DeliverySteps order={data} />}
+            <SupportRow orderId={data.id} />
           </>
         )}
       </div>

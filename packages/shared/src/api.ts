@@ -74,6 +74,8 @@ export interface OrderDto {
   amountKopecks: number;
   paymentMethod: PaymentMethod;
   paymentUrl: string | null;
+  /** When the unpaid invoice expires (ISO); null once the order is no longer awaiting payment. */
+  expiresAt: string | null;
   createdAt: string;
   paidAt: string | null;
   completedAt: string | null;
@@ -101,6 +103,10 @@ export interface MeDto {
   isSubscribed: boolean;
   channelUrl: string;
   supportUrl: string;
+  /** Terms of service page, if the shop has published one. */
+  termsUrl: string | null;
+  /** Unknown values are null (e.g. the bot cannot read the channel). */
+  channel: { title: string | null; subscriberCount: number | null };
 }
 
 export interface SubscriptionDto {

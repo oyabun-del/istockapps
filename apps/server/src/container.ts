@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import type { Bot } from 'grammy';
-import { createChatMemberFetcher, createMessageSender } from './bot/bot.js';
+import { createChannelFetcher, createChatMemberFetcher, createMessageSender } from './bot/bot.js';
 import { channelUrl, supportUrl, type Env } from './config/env.js';
 import type { AppDeps } from './http/app.js';
 import type { Logger } from './lib/logger.js';
@@ -12,6 +12,7 @@ import { MockPaymentProvider } from './providers/payment/mock-payment-provider.j
 import type { PaymentProvider } from './providers/payment/payment-provider.js';
 import { createPrismaRepositories } from './repositories/prisma/prisma-repositories.js';
 import type { Repositories } from './repositories/repositories.js';
+import { ChannelInfoService } from './services/channel-info-service.js';
 import { DeliveryService } from './services/delivery-service.js';
 import { NotificationService } from './services/notification-service.js';
 import { OrderService } from './services/order-service.js';
@@ -70,7 +71,8 @@ export function createContainer(env: Env, bot: Bot, logger: Logger): Container {
     trustProxyHops: env.TRUST_PROXY_HOPS,
     devUserId: env.DEV_USER_ID,
     allowedOrigin: new URL(env.WEBAPP_URL).origin,
-    links: { channelUrl: channelUrl(env), supportUrl: supportUrl(env) },
+    links: { channelUrl: channelUrl(env), supportUrl: supportUrl(env), termsUrl: env.TERMS_URL ?? null },
+    channel: new ChannelInfoService({ channel: env.REQUIRED_CHANNEL, fetchChannel: createChannelFetcher(bot), logger }),
     repos,
     catalog,
     payments,

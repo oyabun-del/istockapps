@@ -52,6 +52,8 @@ const envSchema = z
     REQUIRED_CHANNEL_URL: httpsUrl.optional(),
     ADMIN_IDS: adminIdsSchema,
     SUPPORT_USERNAME: usernameSchema,
+    /** Terms of service page shown in the profile (e.g. a Telegraph article). */
+    TERMS_URL: httpsUrl.optional(),
 
     DATABASE_URL: z.string().min(1),
 

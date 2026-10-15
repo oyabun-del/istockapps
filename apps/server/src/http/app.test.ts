@@ -25,7 +25,8 @@ function baseDeps(overrides: Partial<AppDeps> = {}): AppDeps {
   return {
     botToken: BOT_TOKEN,
     allowedOrigin: 'https://shop.example.com',
-    links: { channelUrl: 'https://t.me/test_channel', supportUrl: 'https://t.me/support' },
+    links: { channelUrl: 'https://t.me/test_channel', supportUrl: 'https://t.me/support', termsUrl: null },
+    channel: ctx.channel,
     repos: ctx.repos,
     catalog: ctx.catalog,
     payments: ctx.payments,
@@ -124,6 +125,57 @@ describe('catalog', () => {
   it('lists payment methods with the card minimum', async () => {
     const response = await app.inject({ method: 'GET', url: '/api/payment-methods', headers: authHeader() });
     expect(response.json().data).toContainEqual({ method: 'CARD', minAmountKopecks: 5000 });
+  });
+});
+
+describe('profile and gate data', () => {
+  it('returns channel info and the terms link with /me', async () => {
+    await app.close();
+    app = await buildApp(
+      baseDeps({ links: { channelUrl: 'https://t.me/test_channel', supportUrl: 'https://t.me/support', termsUrl: 'https://telegra.ph/terms' } }),
+    );
+
+    const me = await app.inject({ method: 'GET', url: '/api/me', headers: authHeader() });
+
+    expect(me.json().data).toMatchObject({
+      termsUrl: 'https://telegra.ph/terms',
+      channel: { title: 'AppDrop', subscriberCount: 42_800 },
+    });
+  });
+});
+
+describe('order lifecycle through HTTP', () => {
+  it('reports when an unpaid invoice expires and lets the buyer cancel it', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/orders',
+      headers: authHeader(),
+      payload: { appId: 'sberbank', paymentMethod: 'SBP' },
+    });
+    const order = created.json().data;
+    const lifetimeMs = Date.parse(order.expiresAt) - Date.parse(order.createdAt);
+    expect(lifetimeMs).toBe(30 * 60 * 1000);
+
+    const cancelled = await app.inject({ method: 'POST', url: `/api/orders/${order.id}/cancel`, headers: authHeader() });
+
+    expect(cancelled.json().data).toMatchObject({ status: 'cancelled', expiresAt: null, paymentUrl: null });
+  });
+
+  it('hides other buyers orders from cancellation', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/orders',
+      headers: authHeader(),
+      payload: { appId: 'sberbank', paymentMethod: 'SBP' },
+    });
+
+    const foreign = await app.inject({
+      method: 'POST',
+      url: `/api/orders/${created.json().data.id}/cancel`,
+      headers: authHeader(OTHER_USER),
+    });
+
+    expect(foreign.statusCode).toBe(404);
   });
 });
 

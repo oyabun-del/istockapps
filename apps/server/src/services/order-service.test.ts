@@ -253,6 +253,51 @@ describe('OrderService payment webhooks', () => {
   });
 });
 
+describe('OrderService.cancelOrder', () => {
+  it('cancels an unpaid order of its owner and records the event', async () => {
+    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
+
+    const cancelled = await ctx.orders.cancelOrder(BUYER.id, order.id);
+
+    expect(cancelled.status).toBe('cancelled');
+    expect(await ctx.repos.orderEvents.has(order.id, 'cancelled')).toBe(true);
+  });
+
+  it('is idempotent for an already cancelled order', async () => {
+    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
+    await ctx.orders.cancelOrder(BUYER.id, order.id);
+
+    expect((await ctx.orders.cancelOrder(BUYER.id, order.id)).status).toBe('cancelled');
+  });
+
+  it('refuses to cancel paid orders and hides foreign ones', async () => {
+    const paid = await createPaidOrder(ctx);
+    await expect(ctx.orders.cancelOrder(BUYER.id, paid.id)).rejects.toMatchObject({ code: 'INVALID_STATE' });
+
+    const order = await ctx.orders.createOrder(BUYER, { appId: 'canva', paymentMethod: 'SBP' });
+    await expect(ctx.orders.cancelOrder(OTHER_USER.id, order.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('still delivers when the buyer pays a cancelled invoice anyway', async () => {
+    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
+    await ctx.orders.cancelOrder(BUYER.id, order.id);
+    const payment = ctx.payments.setStatus(order.paymentId as string, 'PAID');
+
+    await ctx.orders.handlePaymentWebhook(order.paymentOrderId, payment as NonNullable<typeof payment>);
+
+    expect((await ctx.repos.orders.findById(order.id))?.status).toBe('paid');
+  });
+
+  it('does not reuse a cancelled invoice for a new order', async () => {
+    const first = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
+    await ctx.orders.cancelOrder(BUYER.id, first.id);
+
+    const second = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
+
+    expect(second.id).not.toBe(first.id);
+  });
+});
+
 describe('OrderService.getOrder', () => {
   it('hides orders of other users', async () => {
     const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });

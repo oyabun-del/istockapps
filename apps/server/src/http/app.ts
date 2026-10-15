@@ -7,6 +7,7 @@ import type { CatalogProvider } from '../providers/catalog/catalog-provider.js';
 import type { MockPaymentProvider } from '../providers/payment/mock-payment-provider.js';
 import type { PaymentProvider } from '../providers/payment/payment-provider.js';
 import type { Repositories } from '../repositories/repositories.js';
+import type { ChannelInfoService } from '../services/channel-info-service.js';
 import type { DeliveryService } from '../services/delivery-service.js';
 import type { OrderService } from '../services/order-service.js';
 import type { SubscriptionService } from '../services/subscription-service.js';
@@ -27,7 +28,8 @@ export interface AppDeps {
   trustProxyHops?: number;
   devUserId?: number;
   allowedOrigin: string;
-  links: { channelUrl: string; supportUrl: string };
+  links: { channelUrl: string; supportUrl: string; termsUrl: string | null };
+  channel: ChannelInfoService;
   repos: Repositories;
   catalog: CatalogProvider;
   payments: PaymentProvider;

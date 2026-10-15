@@ -10,6 +10,7 @@ import type { FastifyInstance } from 'fastify';
 import { AppError, getErrorMessage } from '../../lib/app-error.js';
 import type { CatalogProvider } from '../../providers/catalog/catalog-provider.js';
 import type { Repositories } from '../../repositories/repositories.js';
+import type { ChannelInfoService } from '../../services/channel-info-service.js';
 import type { DeliveryService } from '../../services/delivery-service.js';
 import type { OrderService } from '../../services/order-service.js';
 import type { SubscriptionService } from '../../services/subscription-service.js';
@@ -30,7 +31,8 @@ export interface ApiRoutesDeps {
   delivery: DeliveryService;
   tickets: TicketService;
   subscription: SubscriptionService;
-  links: { channelUrl: string; supportUrl: string };
+  links: { channelUrl: string; supportUrl: string; termsUrl: string | null };
+  channel: ChannelInfoService;
 }
 
 async function callCatalog<T>(call: () => Promise<T>): Promise<T> {
@@ -48,10 +50,15 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiRoutesDeps): vo
   app.get('/me', { config: { skipSubscription: true } }, async (request) => {
     const user = requireUser(request);
     await deps.repos.users.upsert(user);
+    const [isSubscribed, channel] = await Promise.all([
+      deps.subscription.isSubscribed(user.id),
+      deps.channel.getInfo(),
+    ]);
     const me: MeDto = {
       user: { id: user.id, firstName: user.firstName, username: user.username, photoUrl: user.photoUrl },
-      isSubscribed: await deps.subscription.isSubscribed(user.id),
+      isSubscribed,
       ...deps.links,
+      channel,
     };
     return ok(me);
   });
@@ -100,6 +107,11 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiRoutesDeps): vo
   app.get('/orders/:id', async (request) => {
     const { id } = parseInput(orderIdParamSchema, request.params);
     return ok(toOrderDto(await deps.orders.getOrder(requireUser(request).id, id)));
+  });
+
+  app.post('/orders/:id/cancel', async (request) => {
+    const { id } = parseInput(orderIdParamSchema, request.params);
+    return ok(toOrderDto(await deps.orders.cancelOrder(requireUser(request).id, id)));
   });
 
   app.get('/orders/:id/download', async (request, reply) => {

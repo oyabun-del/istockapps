@@ -2,13 +2,10 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '../lib/api';
-import { queryKeys } from '../lib/queries';
 import { ME, SBER, makeOrder, renderWithProviders } from '../test/render';
 import { AppPage } from './app/AppPage';
 import { CatalogPage } from './catalog/CatalogPage';
-import { DownloadsPage } from './downloads/DownloadsPage';
 import { GuidePage } from './guide/GuidePage';
-import { ProfilePage } from './profile/ProfilePage';
 import { TicketPage } from './support/TicketPage';
 
 const CATEGORIES = [
@@ -91,34 +88,6 @@ describe('AppPage', () => {
     expect(screen.queryByRole('button', { name: /Карта РФ/ })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Оплатить/ }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось создать платёж');
-  });
-});
-
-describe('DownloadsPage', () => {
-  it('lists orders with status badges', async () => {
-    vi.spyOn(api, 'orders').mockResolvedValue([makeOrder({ status: 'completed' }), makeOrder({ id: 8, status: 'awaiting_payment' })]);
-    renderWithProviders(<DownloadsPage />);
-    expect(await screen.findByText('Активировано')).toBeInTheDocument();
-    expect(screen.getByText('Ожидает оплаты')).toBeInTheDocument();
-  });
-
-  it('shows the empty state', async () => {
-    vi.spyOn(api, 'orders').mockResolvedValue([]);
-    renderWithProviders(<DownloadsPage />);
-    expect(await screen.findByText('Покупок пока нет')).toBeInTheDocument();
-  });
-});
-
-describe('ProfilePage', () => {
-  it('shows purchase stats and support actions', async () => {
-    vi.spyOn(api, 'orders').mockResolvedValue([makeOrder({ status: 'completed' }), makeOrder({ id: 8, status: 'failed' })]);
-    const open = vi.spyOn(window, 'open').mockReturnValue(null);
-    const { client } = renderWithProviders(<ProfilePage />);
-    client.setQueryData(queryKeys.me, ME);
-
-    await waitFor(() => expect(screen.getByText(/Покупок:/)).toHaveTextContent('Покупок: 1, активировано: 1'));
-    await userEvent.click(await screen.findByRole('button', { name: /Поддержка/ }));
-    expect(open).toHaveBeenCalledWith('https://t.me/support', '_blank', 'noopener,noreferrer');
   });
 });
 

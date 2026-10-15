@@ -1,4 +1,5 @@
 import { Bot, GrammyError, InlineKeyboard, type Context } from 'grammy';
+import type { ChannelFetcher } from '../services/channel-info-service.js';
 import type { ChatMemberFetcher, SubscriptionService } from '../services/subscription-service.js';
 import type { MessageSender } from '../services/notification-service.js';
 import type { UserRepository } from '../repositories/repositories.js';
@@ -29,6 +30,13 @@ export function createChatMemberFetcher(bot: Bot): ChatMemberFetcher {
   return async (chatId, userId) => {
     const member = await bot.api.getChatMember(chatId, userId);
     return { status: member.status, isMember: 'is_member' in member ? member.is_member : undefined };
+  };
+}
+
+export function createChannelFetcher(bot: Bot): ChannelFetcher {
+  return async (chatId) => {
+    const [chat, memberCount] = await Promise.all([bot.api.getChat(chatId), bot.api.getChatMemberCount(chatId)]);
+    return { title: 'title' in chat && chat.title ? chat.title : chatId, memberCount };
   };
 }
 

@@ -50,12 +50,13 @@ export function CopyField({ label, value, isSecret = false }: Props) {
       <button
         type="button"
         onClick={handleCopy}
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-container-high transition-[color,transform] active:scale-95 ${
-          isCopied ? 'text-success' : 'text-primary'
+        className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-surface-container-high px-3 text-label-lg transition-[color,transform] active:scale-95 ${
+          isCopied ? 'text-success' : 'text-on-surface'
         }`}
         aria-label={isCopied ? `${label} скопирован` : `Скопировать: ${label}`}
       >
-        <Icon name={isCopied ? 'check' : 'content_copy'} className="text-[20px]" />
+        <Icon name={isCopied ? 'check' : 'content_copy'} className="text-[18px]" />
+        <span aria-hidden="true">{isCopied ? 'Готово' : 'Копировать'}</span>
       </button>
     </div>
   );

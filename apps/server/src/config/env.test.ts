@@ -25,6 +25,12 @@ describe('parseEnv', () => {
     expect(env.SERVE_MINIAPP).toBe(true);
   });
 
+  it('accepts an optional https terms of service link', () => {
+    expect(parseEnv(BASE).TERMS_URL).toBeUndefined();
+    expect(parseEnv({ ...BASE, TERMS_URL: 'https://telegra.ph/terms' }).TERMS_URL).toBe('https://telegra.ph/terms');
+    expect(() => parseEnv({ ...BASE, TERMS_URL: 'http://telegra.ph/terms' })).toThrow(/TERMS_URL/);
+  });
+
   it('rejects invalid admin ids with a readable message', () => {
     expect(() => parseEnv({ ...BASE, ADMIN_IDS: '111,abc' })).toThrow(/ADMIN_IDS: Invalid admin ids: abc/);
   });

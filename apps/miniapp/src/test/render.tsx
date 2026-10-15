@@ -28,6 +28,8 @@ export const ME: MeDto = {
   isSubscribed: true,
   channelUrl: 'https://t.me/test_channel',
   supportUrl: 'https://t.me/support',
+  termsUrl: null,
+  channel: { title: 'AppDrop', subscriberCount: 42_800 },
 };
 
 export const SBER: AppDto = {
@@ -49,6 +51,7 @@ export function makeOrder(overrides: Partial<OrderDto> = {}): OrderDto {
     amountKopecks: 34900,
     paymentMethod: 'SBP',
     paymentUrl: null,
+    expiresAt: null,
     createdAt: '2026-10-14T12:00:00.000Z',
     paidAt: '2026-10-14T12:01:00.000Z',
     completedAt: null,

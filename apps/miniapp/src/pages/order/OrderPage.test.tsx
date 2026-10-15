@@ -9,17 +9,76 @@ function renderOrder() {
   return renderWithProviders(<OrderPage />, { route: '/orders/7', path: '/orders/:orderId' });
 }
 
-describe('OrderPage', () => {
-  it('asks to finish payment while unpaid', async () => {
-    vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'awaiting_payment', paymentUrl: 'https://pay.example.com/7' }));
+const IN_15_MINUTES = () => new Date(Date.now() + 15 * 60 * 1000 - 500).toISOString();
+
+function unpaidOrder() {
+  return makeOrder({
+    status: 'awaiting_payment',
+    paymentUrl: 'https://pay.example.com/7',
+    expiresAt: IN_15_MINUTES(),
+    paidAt: null,
+  });
+}
+
+describe('OrderPage while unpaid', () => {
+  it('counts down the invoice and opens the payment page for the chosen method', async () => {
+    vi.spyOn(api, 'order').mockResolvedValue(unpaidOrder());
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
 
     renderOrder();
 
-    expect(await screen.findByText('Ждём оплату')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /Перейти к оплате/ }));
+    expect(await screen.findByText('Ожидание оплаты')).toBeInTheDocument();
+    expect(screen.getByRole('timer')).toHaveTextContent('15:00');
+    await userEvent.click(screen.getByRole('button', { name: 'Оплатить через СБП' }));
     expect(open).toHaveBeenCalledWith('https://pay.example.com/7', '_blank', 'noopener,noreferrer');
   });
+
+  it('checks the payment status on demand', async () => {
+    const order = vi.spyOn(api, 'order').mockResolvedValue(unpaidOrder());
+
+    renderOrder();
+    await userEvent.click(await screen.findByRole('button', { name: /Проверить статус платежа/ }));
+
+    await waitFor(() => expect(order).toHaveBeenCalledTimes(2));
+  });
+
+  it('cancels only after an explicit confirmation', async () => {
+    vi.spyOn(api, 'order').mockResolvedValue(unpaidOrder());
+    const cancel = vi.spyOn(api, 'cancelOrder').mockResolvedValue(makeOrder({ status: 'cancelled', paidAt: null }));
+
+    renderOrder();
+    await userEvent.click(await screen.findByRole('button', { name: 'Отменить заказ' }));
+    expect(cancel).not.toHaveBeenCalled();
+    await userEvent.click(await screen.findByRole('button', { name: 'Да, отменить' }));
+
+    await waitFor(() => expect(cancel).toHaveBeenCalledWith(7));
+    expect(await screen.findByRole('heading', { name: 'Заказ отменён' })).toBeInTheDocument();
+  });
+});
+
+describe('OrderPage after the invoice closed', () => {
+  it('explains an expired invoice and offers to order again', async () => {
+    vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'expired', paidAt: null }));
+
+    renderOrder();
+
+    expect(await screen.findByRole('heading', { name: 'Счёт истёк' })).toBeInTheDocument();
+    expect(screen.getByText('Номер заказа')).toBeInTheDocument();
+    expect(screen.getByText(/Если банк всё же списал деньги/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Оформить заново/ })).toHaveAttribute('href', '/apps/sberbank');
+  });
+
+  it('does not offer to reorder a refunded order', async () => {
+    vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'refunded' }));
+
+    renderOrder();
+
+    expect(await screen.findByRole('heading', { name: 'Деньги возвращены' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Оформить заново/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('OrderPage', () => {
 
   it('downloads and confirms the download', async () => {
     vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'paid' }));
@@ -94,19 +153,6 @@ describe('OrderPage', () => {
     renderOrder();
     await userEvent.click(await screen.findByRole('button', { name: /Получить код/ }));
     expect(await screen.findByText('Подождите немного')).toBeInTheDocument();
-  });
-
-  it('offers to reorder after a failed payment', async () => {
-    vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'expired' }));
-    renderOrder();
-    expect(await screen.findByText('Оплата не завершена')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Оформить заново/ })).toHaveAttribute('href', '/apps/sberbank');
-  });
-
-  it('explains refunds and missing orders', async () => {
-    vi.spyOn(api, 'order').mockResolvedValueOnce(makeOrder({ status: 'refunded' }));
-    renderOrder();
-    expect(await screen.findByText('Деньги возвращены')).toBeInTheDocument();
   });
 
   it('shows not found errors', async () => {

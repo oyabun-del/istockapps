@@ -5,6 +5,7 @@ import { MockCatalogProvider } from '../providers/catalog/mock-catalog-provider.
 import { MockDeliveryProvider } from '../providers/delivery/mock-delivery-provider.js';
 import { MockPaymentProvider } from '../providers/payment/mock-payment-provider.js';
 import { createMemoryRepositories, type MemoryRepositories } from '../repositories/memory/memory-repositories.js';
+import { ChannelInfoService } from '../services/channel-info-service.js';
 import { DeliveryService } from '../services/delivery-service.js';
 import { NotificationService, type MessageButton, type MessageSender } from '../services/notification-service.js';
 import { OrderService } from '../services/order-service.js';
@@ -51,6 +52,7 @@ export interface TestContext {
   delivery: MockDeliveryProvider;
   members: Map<number, ChatMemberInfo>;
   subscription: SubscriptionService;
+  channel: ChannelInfoService;
   notifications: NotificationService;
   orders: OrderService;
   deliveryService: DeliveryService;
@@ -70,6 +72,12 @@ export function createTestContext(): TestContext {
   const subscription = new SubscriptionService({
     channel: '@test_channel',
     fetchMember: async (_chat, userId) => members.get(userId) ?? { status: 'left' },
+    logger: silentLogger,
+    now: () => clock.current.getTime(),
+  });
+  const channel = new ChannelInfoService({
+    channel: '@test_channel',
+    fetchChannel: async () => ({ title: 'AppDrop', memberCount: 42_800 }),
     logger: silentLogger,
     now: () => clock.current.getTime(),
   });
@@ -95,6 +103,7 @@ export function createTestContext(): TestContext {
     delivery,
     members,
     subscription,
+    channel,
     notifications,
     orders,
     deliveryService,

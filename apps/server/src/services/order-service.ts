@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { AppDto, CreateOrderInput, PaymentMethod } from '@istock/shared';
 import type { Order, User } from '../domain/models.js';
-import { allowedSourcesFor } from '../domain/order-transitions.js';
+import { allowedSourcesFor, INVOICE_TTL_MS } from '../domain/order-transitions.js';
 import { AppError, getErrorMessage } from '../lib/app-error.js';
 import type { Logger } from '../lib/logger.js';
 import type { CatalogProvider } from '../providers/catalog/catalog-provider.js';
@@ -11,7 +11,7 @@ import type { NotificationService } from './notification-service.js';
 import { getOwnedOrder } from './order-access.js';
 
 /** A fresh unpaid order for the same app is reused instead of creating a new invoice. */
-const PENDING_REUSE_WINDOW_MS = 30 * 60 * 1000;
+const PENDING_REUSE_WINDOW_MS = INVOICE_TTL_MS;
 /** Fallback polling of CISPAY when the webhook is late. */
 export const PAYMENT_SYNC_INTERVAL_MS = 15_000;
 const ORDER_LIST_LIMIT = 50;
@@ -151,6 +151,19 @@ export class OrderService {
       this.deps.logger.warn({ orderId, err: getErrorMessage(error) }, 'Payment status sync failed');
       return order;
     }
+  }
+
+  /** Buyer gives up on an unpaid order. CISPAY has no cancel call: the invoice just expires on its side. */
+  async cancelOrder(userId: number, orderId: number): Promise<Order> {
+    const order = await getOwnedOrder(this.deps.repos.orders, userId, orderId);
+    if (order.status === 'cancelled') return order;
+
+    const cancelled = await this.deps.repos.orders.transition(order.id, allowedSourcesFor('cancelled'), {
+      status: 'cancelled',
+    });
+    if (!cancelled) throw new AppError('INVALID_STATE', 'Этот заказ уже нельзя отменить');
+    await this.recordEvent(order.id, 'cancelled');
+    return cancelled;
   }
 
   /** Applies a verified payment webhook. Safe to call repeatedly with the same payload. */

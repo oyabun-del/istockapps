@@ -1,32 +1,14 @@
 import type { CodeDto } from '@istock/shared';
 import { useMutation } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
+import { useSecondsUntil } from '../../hooks/useSecondsUntil';
 import { api, errorMessage } from '../../lib/api';
 import { copyText } from '../../lib/clipboard';
 import { REVEAL } from '../../lib/motion';
 import { hapticNotify } from '../../lib/telegram';
-
-const TICK_MS = 1000;
-
-function secondsUntil(iso: string, now: number): number {
-  return Math.max(0, Math.ceil((new Date(iso).getTime() - now) / TICK_MS));
-}
-
-function useSecondsLeft(until: string | null): number {
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    if (!until) return undefined;
-    setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), TICK_MS);
-    return () => clearInterval(timer);
-  }, [until]);
-
-  return until ? secondsUntil(until, now) : 0;
-}
 
 function CodeDisplay({ code }: { code: string }) {
   const [isCopied, setIsCopied] = useState(false);
@@ -63,7 +45,7 @@ type Props = {
 
 export function LoginCodeBox({ orderId }: Props) {
   const [code, setCode] = useState<CodeDto | null>(null);
-  const secondsLeft = useSecondsLeft(code?.nextRequestAt ?? null);
+  const secondsLeft = useSecondsUntil(code?.nextRequestAt ?? null);
 
   const request = useMutation({
     mutationFn: () => api.code(orderId),

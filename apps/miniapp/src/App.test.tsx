@@ -32,10 +32,10 @@ describe('App', () => {
     renderApp();
 
     expect(await screen.findByText('Подпишитесь на канал')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /Я подписался/ }));
-    expect(await screen.findByText(/Подписка пока не найдена/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Проверить подписку/ }));
+    expect(await screen.findByText('Подписка не найдена')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /Я подписался/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Проверить подписку/ }));
     expect(await screen.findByText('СберБанк Онлайн')).toBeInTheDocument();
     expect(check).toHaveBeenCalledTimes(2);
   });

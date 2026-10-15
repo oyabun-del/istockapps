@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '../lib/api';
@@ -140,10 +140,30 @@ describe('TicketPage', () => {
 });
 
 describe('GuidePage', () => {
-  it('renders activation steps and FAQ', () => {
+  it('explains the Apple ID activation from download to getting your own Apple ID back', () => {
     renderWithProviders(<GuidePage />);
-    expect(screen.getByText('Как активировать приложение')).toBeInTheDocument();
-    expect(screen.getByText('Код не приходит')).toBeInTheDocument();
-    expect(screen.getByText(/Никогда не входите с этими данными в iCloud/)).toBeInTheDocument();
+
+    expect(screen.getByRole('heading', { name: 'Как активировать приложение' })).toBeInTheDocument();
+    const steps = within(screen.getByRole('list', { name: 'Шаги активации' })).getAllByRole('listitem');
+    expect(steps).toHaveLength(6);
+    expect(steps[0]).toHaveTextContent('Скачайте приложение');
+    expect(steps[5]).toHaveTextContent('Верните свой Apple ID');
+    expect(screen.getAllByText('Медиаматериалы и покупки').length).toBeGreaterThan(0);
+  });
+
+  it('lists the safety rules and answers common problems', () => {
+    renderWithProviders(<GuidePage />);
+
+    const rules = screen.getByRole('region', { name: 'Важно до начала' });
+    expect(within(rules).getByText(/никогда не входите с ними в iCloud/i)).toBeInTheDocument();
+    expect(within(rules).getByText(/Сгружать неиспользуемые/)).toBeInTheDocument();
+    expect(screen.getByText('Код не приходит или не подходит')).toBeInTheDocument();
+    expect(screen.getByText('Я удалил приложение')).toBeInTheDocument();
+  });
+
+  it('never mentions certificate, profile or IPA installation', () => {
+    renderWithProviders(<GuidePage />);
+    // Scoped to <main>: the bottom navigation has an unrelated «Профиль» tab.
+    expect(screen.getByRole('main').textContent).not.toMatch(/сертификат|профил|IPA|разработчик|VPN/i);
   });
 });

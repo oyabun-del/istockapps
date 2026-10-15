@@ -5,7 +5,9 @@ import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { CopyField } from '../../components/ui/CopyField';
 import { Icon } from '../../components/ui/Icon';
+import { SettingsPath } from '../../components/ui/SettingsPath';
 import { Spinner } from '../../components/ui/Spinner';
+import { MEDIA_PURCHASES_PATH } from '../../content/guide';
 import { api, errorMessage } from '../../lib/api';
 import { REVEAL } from '../../lib/motion';
 import { queryKeys } from '../../lib/queries';
@@ -102,16 +104,7 @@ function CredentialsStep({ order }: { order: OrderDto }) {
 
   return (
     <StepCard index={2} title="Войдите в App Store" state={state}>
-      <div className="flex flex-col gap-1 rounded-lg bg-surface-container-low p-space-sm text-code-sm text-on-surface-variant">
-        <span className="flex items-center gap-space-xs">
-          <Icon name="settings" className="text-[16px] text-primary" />
-          Настройки → Ваше имя
-        </span>
-        <span className="flex items-center gap-space-xs pl-4">
-          <Icon name="subdirectory_arrow_right" className="text-[14px] text-outline" />
-          <span className="font-semibold text-on-surface">Медиаматериалы и покупки</span>
-        </span>
-      </div>
+      <SettingsPath path={MEDIA_PURCHASES_PATH} />
       <p className="flex items-start gap-1.5 rounded-lg bg-warning/10 p-space-sm text-body-sm text-warning">
         <Icon name="warning" className="mt-0.5 text-[16px]" />
         Входите только в App Store. Не входите с этими данными в iCloud.

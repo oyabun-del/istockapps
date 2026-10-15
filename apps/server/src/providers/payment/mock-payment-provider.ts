@@ -30,6 +30,8 @@ export class MockPaymentProvider implements PaymentProvider {
       orderId: input.orderId,
       status: 'PENDING',
       amountKopecks: input.amountKopecks,
+      // No real money moves, so these behave like CISPAY sandbox payments.
+      isSandbox: true,
     });
     return { paymentId, paymentUrl: `${this.publicUrl}/dev/mock-pay/${paymentId}` };
   }

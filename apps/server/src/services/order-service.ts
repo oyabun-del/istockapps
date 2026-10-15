@@ -25,6 +25,9 @@ export interface PaymentUpdate {
   isSandbox: boolean;
 }
 
+/** Verified webhook payload; a null amount (non-ruble currency) is confirmed via the payment API. */
+export type PaymentNotice = Omit<PaymentUpdate, 'amountKopecks'> & { amountKopecks: number | null };
+
 export interface OrderServiceDeps {
   repos: Repositories;
   catalog: CatalogProvider;
@@ -151,25 +154,34 @@ export class OrderService {
   }
 
   /** Applies a verified payment webhook. Safe to call repeatedly with the same payload. */
-  async handlePaymentWebhook(paymentOrderId: string, update: PaymentUpdate): Promise<void> {
+  async handlePaymentWebhook(paymentOrderId: string, notice: PaymentNotice): Promise<void> {
     const order = await this.deps.repos.orders.findByPaymentOrderId(paymentOrderId);
     if (!order) {
       this.deps.logger.warn({ paymentOrderId }, 'Webhook for unknown order ignored');
       return;
     }
-    if (order.paymentId && order.paymentId !== update.paymentId) {
+    if (order.paymentId && order.paymentId !== notice.paymentId) {
       this.deps.logger.warn({ orderId: order.id }, 'Webhook payment id mismatch ignored');
       return;
     }
-    if (update.isSandbox && !this.deps.acceptSandboxPayments) {
-      this.deps.logger.warn({ orderId: order.id, status: update.status }, 'Sandbox payment ignored');
-      return;
-    }
+    const update = await this.resolveAmount(notice);
     // Payment creation may have timed out on our side while CISPAY created it: bind it now.
     const bound = order.paymentId
       ? order
       : await this.deps.repos.orders.update(order.id, { paymentId: update.paymentId });
     await this.applyPaymentUpdate(bound, update);
+  }
+
+  /** CISPAY reports CRYPTO webhooks in USD cents; its status API also returns the ruble amount. */
+  private async resolveAmount(notice: PaymentNotice): Promise<PaymentUpdate> {
+    if (notice.amountKopecks !== null) return { ...notice, amountKopecks: notice.amountKopecks };
+    const state = await this.deps.payments.getPayment(notice.paymentId);
+    return {
+      paymentId: notice.paymentId,
+      status: state.status,
+      amountKopecks: state.amountKopecks,
+      isSandbox: state.isSandbox,
+    };
   }
 
   private shouldSyncPayment(order: Order): boolean {
@@ -186,13 +198,19 @@ export class OrderService {
       paymentId,
       status: state.status,
       amountKopecks: state.amountKopecks,
-      isSandbox: false,
+      isSandbox: state.isSandbox,
     });
     return (await this.deps.repos.orders.findById(order.id)) ?? synced;
   }
 
+  /** Shared by webhooks and polling, so both paths enforce the same rules. */
   private async applyPaymentUpdate(order: Order, update: PaymentUpdate): Promise<void> {
     const { repos, notifications } = this.deps;
+
+    if (update.isSandbox && !this.deps.acceptSandboxPayments) {
+      this.deps.logger.warn({ orderId: order.id, status: update.status }, 'Sandbox payment ignored');
+      return;
+    }
 
     switch (update.status) {
       case 'PENDING':
@@ -214,9 +232,9 @@ export class OrderService {
           paidAt: this.now(),
         });
         if (!paid) return; // already processed
-        await repos.orderEvents.add(order.id, 'paid', { sandbox: update.isSandbox });
-        const user = await repos.users.findById(paid.userId);
-        await notifications.purchaseCompleted(paid, user, update.isSandbox);
+        // The transition is committed and a retry would skip it, so nothing below may throw.
+        await this.recordEvent(order.id, 'paid', { sandbox: update.isSandbox });
+        await notifications.purchaseCompleted(paid, await this.findBuyer(paid.userId), update.isSandbox);
         await notifications.notifyBuyerPaid(paid);
         return;
       }
@@ -224,7 +242,7 @@ export class OrderService {
       case 'EXPIRED': {
         const status = update.status === 'FAILED' ? 'failed' : 'expired';
         const changed = await repos.orders.transition(order.id, allowedSourcesFor(status), { status });
-        if (changed) await repos.orderEvents.add(order.id, status);
+        if (changed) await this.recordEvent(order.id, status);
         return;
       }
       case 'REFUNDED': {
@@ -232,10 +250,29 @@ export class OrderService {
           status: 'refunded',
         });
         if (!refunded) return;
-        await repos.orderEvents.add(order.id, 'refunded');
+        await this.recordEvent(order.id, 'refunded');
         await notifications.orderRefunded(refunded);
         return;
       }
+    }
+  }
+
+  /** Audit trail after a committed transition: a failure is logged, never propagated. */
+  private async recordEvent(orderId: number, type: string, data?: Record<string, unknown>): Promise<void> {
+    try {
+      await this.deps.repos.orderEvents.add(orderId, type, data);
+    } catch (error: unknown) {
+      this.deps.logger.error({ orderId, type, err: getErrorMessage(error) }, 'Failed to record order event');
+    }
+  }
+
+  /** The admin notification still goes out (with the bare id) if the user lookup fails. */
+  private async findBuyer(userId: number): Promise<User | null> {
+    try {
+      return await this.deps.repos.users.findById(userId);
+    } catch (error: unknown) {
+      this.deps.logger.error({ userId, err: getErrorMessage(error) }, 'Failed to load buyer for notification');
+      return null;
     }
   }
 }

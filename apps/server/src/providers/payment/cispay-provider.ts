@@ -15,13 +15,20 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const CAPABILITIES_TTL_MS = 5 * 60 * 1000;
 const SIGNATURE_HEADER = 'x-signature';
 
+const RUB = 'RUB';
+
 const statusSchema = z.enum(['PENDING', 'PAID', 'FAILED', 'EXPIRED', 'REFUNDED']);
 
 const paymentResponseSchema = z.object({
   id: z.string(),
   order_id: z.string(),
   status: statusSchema,
+  /** For CRYPTO created in RUB this is already converted to USD cents. */
   amount: z.number().int(),
+  /** CRYPTO only: the original ruble amount in kopecks. */
+  source_amount: z.number().int().nullish(),
+  /** Sandbox payment or blocked buyer: never real money. */
+  is_sandbox: z.boolean().default(false),
   payment_url: z.string().nullish(),
 });
 
@@ -35,6 +42,8 @@ const webhookSchema = z.object({
   order_id: z.string(),
   status: statusSchema,
   amount: z.number().int(),
+  /** Missing currency is treated as unknown: the amount is then confirmed via GET /payments/status. */
+  currency: z.string().optional(),
   is_sandbox: z.boolean().default(false),
 });
 
@@ -113,7 +122,13 @@ export class CisPayProvider implements PaymentProvider {
   async getPayment(paymentId: string): Promise<PaymentState> {
     const query = new URLSearchParams({ id: paymentId });
     const body = paymentResponseSchema.parse(await this.request('GET', `/payments/status?${query}`));
-    return { paymentId: body.id, orderId: body.order_id, status: body.status, amountKopecks: body.amount };
+    return {
+      paymentId: body.id,
+      orderId: body.order_id,
+      status: body.status,
+      amountKopecks: body.source_amount ?? body.amount,
+      isSandbox: body.is_sandbox,
+    };
   }
 
   parseWebhook(rawBody: Buffer, headers: Record<string, string | string[] | undefined>): PaymentWebhook | null {
@@ -132,7 +147,7 @@ export class CisPayProvider implements PaymentProvider {
       paymentId: parsed.data.id,
       orderId: parsed.data.order_id,
       status: parsed.data.status,
-      amountKopecks: parsed.data.amount,
+      amountKopecks: parsed.data.currency === RUB ? parsed.data.amount : null,
       isSandbox: parsed.data.is_sandbox,
     };
   }

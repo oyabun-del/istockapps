@@ -22,11 +22,15 @@ export interface PaymentState {
   paymentId: string;
   orderId: string;
   status: PaymentStatus;
+  /** Amount in rubles' kopecks, whatever currency the provider settled in. */
   amountKopecks: number;
+  /** Test payment or a payment from a blocked buyer: no real money was received. */
+  isSandbox: boolean;
 }
 
-export interface PaymentWebhook extends PaymentState {
-  isSandbox: boolean;
+export interface PaymentWebhook extends Omit<PaymentState, 'amountKopecks'> {
+  /** null when the webhook does not carry a ruble amount (CISPAY reports CRYPTO in USD cents). */
+  amountKopecks: number | null;
 }
 
 export interface PaymentProvider {

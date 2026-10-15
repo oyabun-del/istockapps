@@ -125,6 +125,56 @@ describe('OrderService payment webhooks', () => {
     expect((await ctx.repos.orders.findById(order.id))?.status).toBe('awaiting_payment');
   });
 
+  it('confirms through the payment API when the webhook amount is not in rubles (CRYPTO)', async () => {
+    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'CRYPTO' });
+    ctx.payments.setStatus(order.paymentId as string, 'PAID');
+    const getPayment = vi.spyOn(ctx.payments, 'getPayment');
+
+    await ctx.orders.handlePaymentWebhook(order.paymentOrderId, {
+      paymentId: order.paymentId as string,
+      status: 'PAID',
+      amountKopecks: null,
+      isSandbox: false,
+    });
+
+    expect(getPayment).toHaveBeenCalledWith(order.paymentId);
+    expect((await ctx.repos.orders.findById(order.id))?.status).toBe('paid');
+  });
+
+  it('does not deliver a CRYPTO payment when the confirmed amount differs', async () => {
+    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'CRYPTO' });
+    vi.spyOn(ctx.payments, 'getPayment').mockResolvedValue({
+      paymentId: order.paymentId as string,
+      orderId: order.paymentOrderId,
+      status: 'PAID',
+      amountKopecks: 431,
+      isSandbox: false,
+    });
+
+    await ctx.orders.handlePaymentWebhook(order.paymentOrderId, {
+      paymentId: order.paymentId as string,
+      status: 'PAID',
+      amountKopecks: null,
+      isSandbox: false,
+    });
+
+    expect((await ctx.repos.orders.findById(order.id))?.status).toBe('awaiting_payment');
+    expect(ctx.sender.sent[0]?.html).toContain('Сумма оплаты не совпала');
+  });
+
+  it('still notifies when the paid event cannot be recorded', async () => {
+    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
+    const payment = ctx.payments.setStatus(order.paymentId as string, 'PAID');
+    vi.spyOn(ctx.repos.orderEvents, 'add').mockRejectedValue(new Error('db down'));
+
+    await expect(
+      ctx.orders.handlePaymentWebhook(order.paymentOrderId, { ...(payment as NonNullable<typeof payment>), isSandbox: false }),
+    ).resolves.toBeUndefined();
+
+    expect((await ctx.repos.orders.findById(order.id))?.status).toBe('paid');
+    expect(ctx.sender.sent.map((message) => message.chatId)).toEqual([...ADMIN_IDS, BUYER.id]);
+  });
+
   it('binds the payment id when payment creation timed out on our side', async () => {
     const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
     const realPaymentId = order.paymentId as string;
@@ -216,6 +266,32 @@ describe('OrderService.getOrder', () => {
     const synced = await ctx.orders.getOrder(BUYER.id, order.id);
 
     expect(synced.status).toBe('paid');
+  });
+
+  it('does not accept sandbox payments found by polling when sandbox is not allowed', async () => {
+    const strict = new OrderService({
+      repos: ctx.repos,
+      catalog: ctx.catalog,
+      payments: ctx.payments,
+      notifications: ctx.notifications,
+      logger: silentLogger,
+      returnUrl: () => null,
+      acceptSandboxPayments: false,
+      now: ctx.clock.now,
+    });
+    const order = await strict.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
+    vi.spyOn(ctx.payments, 'getPayment').mockResolvedValue({
+      paymentId: order.paymentId as string,
+      orderId: order.paymentOrderId,
+      status: 'PAID',
+      amountKopecks: order.amountKopecks,
+      isSandbox: true,
+    });
+
+    const polled = await strict.getOrder(BUYER.id, order.id);
+
+    expect(polled.status).toBe('awaiting_payment');
+    expect(ctx.sender.sent).toHaveLength(0);
   });
 
   it('throttles provider polling', async () => {

@@ -101,8 +101,37 @@ describe('CisPayProvider.getPayment', () => {
 
     const state = await createProvider(fetchFn).getPayment('pay-1');
 
-    expect(state).toEqual({ paymentId: 'pay-1', orderId: 'ord-1', status: 'PAID', amountKopecks: 500 });
+    expect(state).toEqual({ paymentId: 'pay-1', orderId: 'ord-1', status: 'PAID', amountKopecks: 500, isSandbox: false });
     expect(fetchFn.mock.calls[0]?.[0]).toBe('https://api.cispay.app/payments/status?id=pay-1');
+  });
+
+  it('reports sandbox and blocked-buyer payments as sandbox', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({ id: 'pay-1', order_id: 'ord-1', status: 'PAID', amount: 500, is_sandbox: true, block_reason: 'fraud' }),
+    );
+
+    const state = await createProvider(fetchFn).getPayment('pay-1');
+
+    expect(state.isSandbox).toBe(true);
+  });
+
+  it('returns the ruble amount of CRYPTO payments from source_amount', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        id: 'pay-1',
+        order_id: 'ord-1',
+        status: 'PAID',
+        payment_method: 'CRYPTO',
+        currency: 'USD',
+        amount: 431,
+        source_currency: 'RUB',
+        source_amount: 34900,
+      }),
+    );
+
+    const state = await createProvider(fetchFn).getPayment('pay-1');
+
+    expect(state.amountKopecks).toBe(34900);
   });
 });
 
@@ -170,6 +199,17 @@ describe('CISPAY webhooks', () => {
     const provider = createProvider(vi.fn<typeof fetch>());
     const parsed = provider.parseWebhook(body, { 'x-signature': signCisPayBody(API_KEY, body) });
     expect(parsed).toEqual({ paymentId: 'pay-1', orderId: 'ord-1', status: 'PAID', amountKopecks: 34900, isSandbox: true });
+  });
+
+  it('leaves the amount unknown when the webhook is not in rubles (CRYPTO is reported in USD cents)', () => {
+    const crypto = Buffer.from(
+      JSON.stringify({ id: 'pay-2', order_id: 'ord-2', payment_method: 'CRYPTO', status: 'PAID', amount: 431, currency: 'USD' }),
+    );
+    const provider = createProvider(vi.fn<typeof fetch>());
+
+    const parsed = provider.parseWebhook(crypto, { 'x-signature': signCisPayBody(API_KEY, crypto) });
+
+    expect(parsed).toMatchObject({ paymentId: 'pay-2', status: 'PAID', amountKopecks: null, isSandbox: false });
   });
 
   it('rejects unsigned, tampered or malformed webhooks', () => {

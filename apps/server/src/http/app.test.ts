@@ -223,7 +223,15 @@ describe('CISPAY webhook', () => {
   }
 
   function webhookBody(paymentOrderId: string, paymentId: string): string {
-    return JSON.stringify({ id: paymentId, order_id: paymentOrderId, status: 'PAID', amount: 34900, is_sandbox: false });
+    return JSON.stringify({
+      id: paymentId,
+      order_id: paymentOrderId,
+      payment_method: 'SBP',
+      status: 'PAID',
+      amount: 34900,
+      currency: 'RUB',
+      is_sandbox: false,
+    });
   }
 
   it('accepts a correctly signed webhook and marks the order paid', async () => {

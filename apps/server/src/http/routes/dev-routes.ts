@@ -49,7 +49,7 @@ export async function devRoutes(app: FastifyInstance, deps: DevRoutesDeps): Prom
     reply.type('text/html; charset=utf-8');
     if (!payment) return page('Платёж не найден', '<h1>Платёж не найден</h1>');
 
-    await deps.orders.handlePaymentWebhook(payment.orderId, { ...payment, isSandbox: true });
+    await deps.orders.handlePaymentWebhook(payment.orderId, payment);
     const title = status === 'PAID' ? 'Оплачено' : 'Оплата отклонена';
     return page(title, `<h1>${title}</h1><p>Вернитесь в Telegram. Статус заказа обновится автоматически.</p>`);
   });

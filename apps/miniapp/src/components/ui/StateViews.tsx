@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { IconName } from '../../lib/icons';
 import { Button } from './Button';
 import { Icon } from './Icon';
 
@@ -24,7 +25,7 @@ export function ErrorState({ message, onRetry }: ErrorProps) {
 }
 
 type EmptyProps = {
-  icon: string;
+  icon: IconName;
   title: string;
   text: string;
   action?: ReactNode;

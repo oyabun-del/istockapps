@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError, api, errorMessage } from './api';
 import { copyText } from './clipboard';
+import { FALLBACK_ICON, iconFontNames, injectIconNames, toIconName } from './icons';
 import { createQueryClient, queryKeys } from './queries';
 import {
   getStartParam,
@@ -179,5 +180,23 @@ describe('copyText', () => {
     Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
     document.execCommand = vi.fn(() => true);
     expect(await copyText('abc')).toBe(true);
+  });
+});
+
+describe('icon font subset', () => {
+  it('lists every icon once, alphabetically, as Google Fonts requires for icon_names', () => {
+    const names = iconFontNames().split(',');
+    expect(names).toEqual([...new Set(names)].sort());
+    expect(names).toEqual(expect.arrayContaining(['check', 'key', 'account_balance', 'grid_view']));
+  });
+
+  it('injects the subset into the font URL in index.html', () => {
+    const html = '<link href="https://fonts.googleapis.com/css2?family=X&icon_names=%MATERIAL_SYMBOLS%&display=block" />';
+    expect(injectIconNames(html)).toContain(`icon_names=${iconFontNames()}&display=block`);
+  });
+
+  it('falls back to a bundled icon for unknown names from the API', () => {
+    expect(toIconName('sports_esports')).toBe('sports_esports');
+    expect(toIconName('rocket_launch')).toBe(FALLBACK_ICON);
   });
 });

@@ -94,6 +94,12 @@ function CredentialsStep({ order }: { order: OrderDto }) {
     retry: false,
   });
 
+  // After a failed request the query stays enabled, so only an explicit refetch tries again.
+  const handleRequest = () => {
+    if (isRequested) void credentials.refetch();
+    else setIsRequested(true);
+  };
+
   return (
     <StepCard index={2} title="Войдите в App Store" state={state}>
       <div className="flex flex-col gap-1 rounded-lg bg-surface-container-low p-space-sm text-code-sm text-on-surface-variant">
@@ -121,7 +127,7 @@ function CredentialsStep({ order }: { order: OrderDto }) {
           <Spinner />
         </div>
       ) : (
-        <Button isFullWidth icon="key" onClick={() => setIsRequested(true)}>
+        <Button isFullWidth icon="key" onClick={handleRequest}>
           Получить логин и пароль
         </Button>
       )}

@@ -1,10 +1,15 @@
 import react from '@vitejs/plugin-react';
+import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
+import { injectIconNames } from './src/lib/icons';
 
 const API_TARGET = process.env.VITE_DEV_API_TARGET ?? 'http://localhost:3000';
 
+/** Requests only the Material Symbols glyphs listed in src/lib/icons.ts. */
+const materialSymbolsSubset: Plugin = { name: 'material-symbols-subset', transformIndexHtml: injectIconNames };
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), materialSymbolsSubset],
   server: {
     port: 5173,
     host: true,

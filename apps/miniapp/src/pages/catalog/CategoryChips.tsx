@@ -1,6 +1,7 @@
 import type { CategoryDto } from '@istock/shared';
 import { motion } from 'motion/react';
 import { Icon } from '../../components/ui/Icon';
+import { toIconName } from '../../lib/icons';
 import { HIGHLIGHT_SPRING } from '../../lib/motion';
 import { hapticImpact } from '../../lib/telegram';
 
@@ -38,7 +39,7 @@ export function CategoryChips({ categories, activeId, onSelect }: Props) {
                 className="absolute inset-0 rounded-full bg-primary-container shadow-sm"
               />
             )}
-            <Icon name={category.icon} className="relative text-[16px]" />
+            <Icon name={toIconName(category.icon)} className="relative text-[16px]" />
             <span className="relative">{category.title}</span>
           </button>
         );

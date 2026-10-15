@@ -50,7 +50,7 @@ export interface PaymentMethodDto {
 export interface CategoryDto {
   id: string;
   title: string;
-  /** Material Symbols icon name. */
+  /** Material Symbols icon name; must be listed in apps/miniapp/src/lib/icons.ts, otherwise a fallback is shown. */
   icon: string;
 }
 

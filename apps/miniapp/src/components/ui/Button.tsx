@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { IconName } from '../../lib/icons';
 import { Icon } from './Icon';
 import { Spinner } from './Spinner';
 
@@ -9,7 +10,7 @@ type Props = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> & {
   children: ReactNode;
   variant?: Variant;
   size?: Size;
-  icon?: string;
+  icon?: IconName;
   isLoading?: boolean;
   isFullWidth?: boolean;
 };

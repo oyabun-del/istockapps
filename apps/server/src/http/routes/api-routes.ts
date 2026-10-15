@@ -1,5 +1,6 @@
 import type { MeDto, PaymentMethodDto } from '@istock/shared';
 import {
+  appIdParamSchema,
   catalogQuerySchema,
   createOrderSchema,
   createTicketSchema,
@@ -69,7 +70,7 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiRoutesDeps): vo
   });
 
   app.get('/catalog/apps/:appId', async (request) => {
-    const { appId } = request.params as { appId: string };
+    const { appId } = parseInput(appIdParamSchema, request.params);
     const found = await callCatalog(() => deps.catalog.getApp(appId));
     if (!found) throw new AppError('NOT_FOUND', 'Приложение не найдено');
     return ok(found);

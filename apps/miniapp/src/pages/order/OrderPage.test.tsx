@@ -51,6 +51,23 @@ describe('OrderPage', () => {
     expect(credentials).toHaveBeenCalledWith(7);
   });
 
+  it('retries the credentials request after a delivery error', async () => {
+    vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'download_confirmed' }));
+    const credentials = vi
+      .spyOn(api, 'credentials')
+      .mockRejectedValueOnce(new ApiError('DELIVERY_PROVIDER_ERROR', 'Сервис выдачи временно недоступен', 502))
+      .mockResolvedValueOnce({ login: 'id@example.com', password: 'secret' });
+
+    renderOrder();
+    await userEvent.click(await screen.findByRole('button', { name: /Получить логин и пароль/ }));
+    expect(await screen.findByText('Сервис выдачи временно недоступен')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /Получить логин и пароль/ }));
+
+    expect(await screen.findByText('id@example.com')).toBeInTheDocument();
+    expect(credentials).toHaveBeenCalledTimes(2);
+  });
+
   it('requests a login code and completes the order', async () => {
     vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'credentials_issued' }));
     vi.spyOn(api, 'credentials').mockResolvedValue({ login: 'id@example.com', password: 'secret' });

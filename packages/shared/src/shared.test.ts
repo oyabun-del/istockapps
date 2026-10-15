@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatRub, isPaidStatus, isTerminalStatus, rubToKopecks } from './index.js';
-import { createOrderSchema, createTicketSchema } from './schemas.js';
+import { appIdParamSchema, createOrderSchema, createTicketSchema } from './schemas.js';
 
 describe('formatRub', () => {
   it('formats whole rubles without fraction', () => {
@@ -41,6 +41,17 @@ describe('request schemas', () => {
   it('rejects unknown payment methods', () => {
     const result = createOrderSchema.safeParse({ appId: 'sber', paymentMethod: 'TPAY' });
     expect(result.success).toBe(false);
+  });
+
+  it('accepts catalog-style app ids and rejects path-like ones', () => {
+    for (const appId of ['sberbank', 'vtb-invest', 'com.example.app_2', '1234567890']) {
+      expect(appIdParamSchema.safeParse({ appId }).success).toBe(true);
+      expect(createOrderSchema.safeParse({ appId, paymentMethod: 'SBP' }).success).toBe(true);
+    }
+    for (const appId of ['', '../admin', 'a/b', 'a?b=1', 'a b', 'x'.repeat(129)]) {
+      expect(appIdParamSchema.safeParse({ appId }).success).toBe(false);
+      expect(createOrderSchema.safeParse({ appId, paymentMethod: 'SBP' }).success).toBe(false);
+    }
   });
 
   it('trims ticket message and enforces minimum length', () => {

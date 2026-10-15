@@ -1,5 +1,7 @@
+import type { IconName } from '../../lib/icons';
+
 type Props = {
-  name: string;
+  name: IconName;
   className?: string;
   isFilled?: boolean;
 };

@@ -1,8 +1,9 @@
 import type { OrderStatus, PaymentMethod } from '@istock/shared';
+import type { IconName } from './icons';
 
 export type Tone = 'info' | 'success' | 'warning' | 'danger' | 'neutral';
 
-export const ORDER_STATUS_META: Record<OrderStatus, { label: string; tone: Tone; icon: string }> = {
+export const ORDER_STATUS_META: Record<OrderStatus, { label: string; tone: Tone; icon: IconName }> = {
   awaiting_payment: { label: 'Ожидает оплаты', tone: 'warning', icon: 'schedule' },
   paid: { label: 'Оплачен', tone: 'info', icon: 'check_circle' },
   download_confirmed: { label: 'Скачано', tone: 'info', icon: 'download_done' },
@@ -13,7 +14,7 @@ export const ORDER_STATUS_META: Record<OrderStatus, { label: string; tone: Tone;
   refunded: { label: 'Возврат', tone: 'neutral', icon: 'undo' },
 };
 
-export const PAYMENT_METHOD_META: Record<PaymentMethod, { label: string; icon: string; iconClass: string }> = {
+export const PAYMENT_METHOD_META: Record<PaymentMethod, { label: string; icon: IconName; iconClass: string }> = {
   SBP: { label: 'СБП', icon: 'qr_code_2', iconClass: 'text-secondary' },
   CARD: { label: 'Карта РФ', icon: 'credit_card', iconClass: 'text-primary' },
   CRYPTO: { label: 'USDT', icon: 'currency_bitcoin', iconClass: 'text-success' },

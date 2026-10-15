@@ -1,10 +1,11 @@
+import type { IconName } from '../../lib/icons';
 import type { Tone } from '../../lib/order-status';
 import { Icon } from './Icon';
 
 type Props = {
   label: string;
   tone?: Tone;
-  icon?: string;
+  icon?: IconName;
 };
 
 const TONE_CLASSES: Record<Tone, string> = {

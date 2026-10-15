@@ -10,8 +10,16 @@ import {
 
 /** Server-side request validation. Kept out of the main entry so zod is not bundled into the Mini App. */
 
+const APP_ID_MAX = 128;
+/** Slugs, bundle ids and numeric store ids; nothing that could alter a provider URL path or query. */
+const APP_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
+
+const appIdSchema = z.string().min(1).max(APP_ID_MAX).regex(APP_ID_PATTERN).refine((id) => !id.includes('..'));
+
+export const appIdParamSchema = z.object({ appId: appIdSchema });
+
 export const createOrderSchema: z.ZodType<CreateOrderInput> = z.object({
-  appId: z.string().min(1).max(128),
+  appId: appIdSchema,
   paymentMethod: z.enum(PAYMENT_METHODS),
 });
 

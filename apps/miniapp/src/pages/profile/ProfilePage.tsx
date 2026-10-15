@@ -4,11 +4,12 @@ import { Link } from 'react-router-dom';
 import { Page } from '../../components/layout/Page';
 import { Icon } from '../../components/ui/Icon';
 import { api } from '../../lib/api';
+import type { IconName } from '../../lib/icons';
 import { queryKeys, useMe } from '../../lib/queries';
 import { getTelegramProfile, openTelegramLink } from '../../lib/telegram';
 
 type ActionProps = {
-  icon: string;
+  icon: IconName;
   title: string;
   hint: string;
   onClick?: () => void;

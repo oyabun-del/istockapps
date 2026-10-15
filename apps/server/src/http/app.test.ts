@@ -110,6 +110,11 @@ describe('catalog', () => {
     const missing = await app.inject({ method: 'GET', url: '/api/catalog/apps/none', headers: authHeader() });
     expect(missing.statusCode).toBe(404);
 
+    const getApp = vi.spyOn(ctx.catalog, 'getApp');
+    const malformed = await app.inject({ method: 'GET', url: '/api/catalog/apps/..%2Fadmin', headers: authHeader() });
+    expect(malformed.statusCode).toBe(400);
+    expect(getApp).not.toHaveBeenCalled();
+
     vi.spyOn(ctx.catalog, 'listCategories').mockRejectedValue(new Error('down'));
     const failed = await app.inject({ method: 'GET', url: '/api/catalog/categories', headers: authHeader() });
     expect(failed.statusCode).toBe(502);

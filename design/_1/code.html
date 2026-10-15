@@ -15,71 +15,91 @@
 <span class="material-symbols-outlined text-[14px]">check_circle</span>
 <span class="font-label-sm text-label-sm">Заказ #84920 оплачен</span>
 </div>
-<span class="font-label-sm text-label-sm text-on-surface-variant">iOS 14.0 — 18.x</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">iOS 14.0+</span>
 </div>
 <div class="flex items-center gap-space-md pt-space-xs">
 <div class="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-container-lowest shadow-sm">
-<img class="h-full w-full object-cover" data-alt="High resolution realistic 3D app icon of SberBank Online with vibrant emerald green brand gradient and polished glassmorphic finish, centered on a deep dark canvas with crisp lighting reflections." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB1SJmvXlO8jydxTWHvO00cC8YtfGDIaQvUBnZTVcJgRsfO5GTB_6BC07o0du9oDOrqCall2sWZVDvPZTzPlIVo6qbEbROie1yDqwS_1lUAnA_RCDoLpAlEqvOkxtNooMdd3u8T0Zj18uR-MrrZXkIP0Mp0sXrh0XFaEMEqQmYm7NPtAprzhF6IFMKADO3mUsX59Yn-X6YIXMXsfItfgPy4uawNdsJR8Luo7QoHqgQF6xg9RdSYviXw"/>
+<img class="h-full w-full object-cover" data-alt="SberBank Online app icon" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB1SJmvXlO8jydxTWHvO00cC8YtfGDIaQvUBnZTVcJgRsfO5GTB_6BC07o0du9oDOrqCall2sWZVDvPZTzPlIVo6qbEbROie1yDqwS_1lUAnA_RCDoLpAlEqvOkxtNooMdd3u8T0Zj18uR-MrrZXkIP0Mp0sXrh0XFaEMEqQmYm7NPtAprzhF6IFMKADO3mUsX59Yn-X6YIXMXsfItfgPy4uawNdsJR8Luo7QoHqgQF6xg9RdSYviXw"/>
 </div>
 <div class="flex flex-col min-w-0">
 <h1 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface font-semibold tracking-tight truncate">
             СберБанк Онлайн
           </h1>
 <p class="font-body-sm text-body-sm text-on-surface-variant truncate">
-            Версия 15.8.0 • Прямая корпоративная подпись
+            Версия 15.8.0 • Официальный клиент
           </p>
 </div>
 </div>
 </div>
 </div>
-<!-- Primary Direct Action CTA -->
+<!-- Primary Direct Action CTA: download -->
 <div class="flex flex-col rounded-xl bg-surface-container p-space-lg shadow-md space-y-space-md">
 <div class="flex items-center gap-space-sm">
-<span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-container text-on-primary font-label-sm text-label-sm font-bold">1</span>
-<span class="font-headline-sm text-headline-sm text-on-surface">Первый шаг: запуск загрузки</span>
+<span class="flex h-6 w-6 items-center justify-center rounded-full bg-primary-container text-on-primary-container font-label-sm text-label-sm font-bold">1</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">Первый шаг: скачайте приложение</span>
 </div>
 <p class="font-body-sm text-body-sm text-on-surface-variant">
-      Нажмите кнопку ниже. Появится системное уведомление Safari с запросом на установку на рабочий стол вашего iPhone.
+      Нажмите «Скачать» и дождитесь окончания загрузки. Затем подтвердите её кнопкой «Я скачал».
     </p>
-<button class="w-full h-11 flex items-center justify-center gap-space-sm rounded-full bg-primary-container text-on-primary font-label-lg text-label-lg transition-transform active:scale-[0.98] shadow-md" id="install-trigger-btn" type="button">
-<span class="material-symbols-outlined text-[20px]">ios_share</span>
-<span>Установить на iPhone</span>
+<button class="w-full h-11 flex items-center justify-center gap-space-sm rounded-full bg-primary-container text-on-primary-container font-label-lg text-label-lg transition-transform active:scale-[0.98] shadow-md" type="button">
+<span class="material-symbols-outlined text-[20px]">download</span>
+<span>Скачать</span>
 </button>
-<!-- Interactive Simulator Feedback Toast -->
-<div class="hidden flex items-start gap-space-sm rounded-lg bg-surface-container-high p-space-md text-on-surface" id="install-alert">
-<span class="material-symbols-outlined text-secondary text-[20px] shrink-0">info</span>
-<div class="flex flex-col min-w-0">
-<span class="font-label-md text-label-md text-secondary">Диалоговое окно отправлено</span>
-<span class="font-body-sm text-body-sm text-on-surface-variant">Подтвердите «Установить» во всплывающем системном окне, затем следуйте инструкции ниже.</span>
+<button class="w-full h-11 flex items-center justify-center gap-space-sm rounded-full bg-surface-container-high text-on-surface font-label-lg text-label-lg transition-transform active:scale-[0.98]" type="button">
+<span class="material-symbols-outlined text-[20px]">task_alt</span>
+<span>Я скачал</span>
+</button>
 </div>
+<!-- Safety rules -->
+<div class="flex flex-col rounded-xl bg-[#F59E0B]/10 p-space-lg space-y-space-sm">
+<div class="flex items-center gap-space-xs text-[#F59E0B]">
+<span class="material-symbols-outlined text-[20px]">warning</span>
+<span class="font-headline-sm text-headline-sm">Важно до начала</span>
 </div>
+<ul class="flex flex-col space-y-space-sm">
+<li class="flex items-start gap-space-xs font-body-sm text-body-sm text-on-surface"><span class="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#F59E0B]"></span>Данные из заказа только для App Store, не для iCloud.</li>
+<li class="flex items-start gap-space-xs font-body-sm text-body-sm text-on-surface"><span class="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#F59E0B]"></span>Не меняйте пароль, почту и настройки выданного аккаунта.</li>
+<li class="flex items-start gap-space-xs font-body-sm text-body-sm text-on-surface"><span class="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#F59E0B]"></span>Выключите «Сгружать неиспользуемые» и автообновление приложений в Настройки → App Store.</li>
+</ul>
 </div>
 <!-- Interactive Timeline Steps Section -->
 <div class="flex flex-col space-y-space-md">
 <div class="flex items-center justify-between px-space-xs">
 <div class="flex items-center gap-space-xs">
 <span class="material-symbols-outlined text-primary text-[20px]">verified</span>
-<span class="font-headline-sm text-headline-sm text-on-surface">Пошаговый процесс активации</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">Активация через App Store</span>
 </div>
-<span class="font-label-sm text-label-sm text-secondary bg-secondary-container/20 px-space-sm py-0.5 rounded-full">4 шага</span>
+<span class="font-label-sm text-label-sm text-secondary bg-secondary-container/20 px-space-sm py-0.5 rounded-full">5 шагов</span>
 </div>
 <!-- Step 1 -->
 <div class="flex gap-space-md rounded-xl bg-surface-container p-space-lg shadow-sm">
 <div class="flex flex-col items-center">
-<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-container text-on-primary font-label-md text-label-md font-bold shadow-sm">
+<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-container text-on-primary-container font-label-md text-label-md font-bold shadow-sm">
           1
         </div>
 <div class="w-0.5 grow bg-surface-container-highest my-space-xs rounded-full"></div>
 </div>
-<div class="flex flex-col space-y-space-xs min-w-0 pb-space-xs">
-<span class="font-headline-sm text-headline-sm text-on-surface">Разрешите установку профиля</span>
+<div class="flex flex-col space-y-space-xs min-w-0 pb-space-xs grow">
+<span class="font-headline-sm text-headline-sm text-on-surface">Выйдите из своего Apple ID в App Store</span>
 <p class="font-body-sm text-body-sm text-on-surface-variant">
-          В появившемся окне браузера Safari нажмите кнопку <strong class="text-on-surface font-semibold">«Установить»</strong> или <strong class="text-on-surface font-semibold">«Разрешить»</strong>. Значок приложения начнет загружаться на экран «Домой».
+          Нажмите <strong class="text-on-surface font-semibold">«Выйти»</strong>. Выход только из App Store: iCloud, фото и контакты остаются на месте.
         </p>
-<div class="pt-space-xs">
-<div class="inline-flex items-center gap-space-xs rounded-md bg-surface-container-low px-space-sm py-1">
-<span class="material-symbols-outlined text-[16px] text-outline">touch_app</span>
-<span class="font-code-sm text-code-sm text-on-surface-variant">Safari Dialog: "Открыть в iTunes?" → Установить</span>
+<div class="flex flex-col rounded-lg bg-surface-container-low p-space-sm space-y-1 my-space-xs">
+<div class="flex items-center gap-space-xs text-on-surface-variant font-code-sm text-code-sm">
+<span class="material-symbols-outlined text-[16px] text-primary">settings</span>
+<span>Настройки</span>
+</div>
+<div class="flex items-center gap-space-xs text-on-surface-variant font-code-sm text-code-sm pl-4">
+<span class="material-symbols-outlined text-[14px] text-outline">subdirectory_arrow_right</span>
+<span>Ваше имя</span>
+</div>
+<div class="flex items-center gap-space-xs text-on-surface-variant font-code-sm text-code-sm pl-8">
+<span class="material-symbols-outlined text-[14px] text-outline">subdirectory_arrow_right</span>
+<span>Медиаматериалы и покупки</span>
+</div>
+<div class="flex items-center gap-space-xs text-on-surface-variant font-code-sm text-code-sm pl-12">
+<span class="material-symbols-outlined text-[14px] text-outline">subdirectory_arrow_right</span>
+<span class="text-on-surface font-semibold">Выйти</span>
 </div>
 </div>
 </div>
@@ -87,148 +107,112 @@
 <!-- Step 2 -->
 <div class="flex gap-space-md rounded-xl bg-surface-container p-space-lg shadow-sm">
 <div class="flex flex-col items-center">
-<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-container text-on-primary font-label-md text-label-md font-bold shadow-sm">
+<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-container text-on-primary-container font-label-md text-label-md font-bold shadow-sm">
           2
         </div>
 <div class="w-0.5 grow bg-surface-container-highest my-space-xs rounded-full"></div>
 </div>
-<div class="flex flex-col space-y-space-xs min-w-0 pb-space-xs">
-<span class="font-headline-sm text-headline-sm text-on-surface">Доверие сертификату разработчика</span>
+<div class="flex flex-col space-y-space-xs min-w-0 pb-space-xs grow">
+<span class="font-headline-sm text-headline-sm text-on-surface">Войдите по данным из заказа</span>
 <p class="font-body-sm text-body-sm text-on-surface-variant">
-          Откройте системные настройки вашего iPhone и перейдите по следующему маршруту:
+          Нажмите <strong class="text-on-surface font-semibold">«Получить логин и пароль»</strong>, скопируйте их и войдите в том же разделе «Медиаматериалы и покупки».
         </p>
-<!-- Apple Settings Path Visual -->
-<div class="flex flex-col rounded-lg bg-surface-container-low p-space-sm space-y-1 my-space-xs">
-<div class="flex items-center gap-space-xs text-on-surface-variant font-code-sm text-code-sm">
-<span class="material-symbols-outlined text-[16px] text-primary">settings</span>
-<span>Настройки iPhone</span>
+<div class="flex items-center gap-space-sm rounded-lg bg-surface-container-lowest px-space-md py-2.5">
+<div class="flex flex-col min-w-0 grow"><span class="font-label-sm text-label-sm text-outline uppercase">Логин</span><span class="font-code-sm text-[14px] text-on-surface truncate">appdrop.84920@icloud.com</span></div>
+<span class="material-symbols-outlined text-[20px] text-primary">content_copy</span>
 </div>
-<div class="flex items-center gap-space-xs text-on-surface-variant font-code-sm text-code-sm pl-4">
-<span class="material-symbols-outlined text-[14px] text-outline">subdirectory_arrow_right</span>
-<span>Основные</span>
+<div class="flex items-center gap-space-sm rounded-lg bg-surface-container-lowest px-space-md py-2.5">
+<div class="flex flex-col min-w-0 grow"><span class="font-label-sm text-label-sm text-outline uppercase">Пароль</span><span class="font-code-sm text-[14px] text-on-surface truncate">••••••••••</span></div>
+<span class="material-symbols-outlined text-[20px] text-primary">content_copy</span>
 </div>
-<div class="flex items-center gap-space-xs text-on-surface-variant font-code-sm text-code-sm pl-8">
-<span class="material-symbols-outlined text-[14px] text-outline">subdirectory_arrow_right</span>
-<span class="text-on-surface font-semibold">VPN и управление устройством</span>
-</div>
+<div class="flex items-start gap-space-xs rounded-md bg-[#F59E0B]/10 p-space-sm text-[#F59E0B]">
+<span class="material-symbols-outlined text-[18px] shrink-0">warning</span>
+<span class="font-body-sm text-body-sm font-medium">Входите только в «Медиаматериалы и покупки». Никогда не входите с этими данными в iCloud.</span>
 </div>
 </div>
 </div>
 <!-- Step 3 -->
 <div class="flex gap-space-md rounded-xl bg-surface-container p-space-lg shadow-sm">
 <div class="flex flex-col items-center">
-<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-container text-on-primary font-label-md text-label-md font-bold shadow-sm">
+<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-container text-on-primary-container font-label-md text-label-md font-bold shadow-sm">
           3
         </div>
 <div class="w-0.5 grow bg-surface-container-highest my-space-xs rounded-full"></div>
 </div>
-<div class="flex flex-col space-y-space-xs min-w-0 pb-space-xs">
-<span class="font-headline-sm text-headline-sm text-on-surface">Подтвердите «Доверять»</span>
+<div class="flex flex-col space-y-space-xs min-w-0 pb-space-xs grow">
+<span class="font-headline-sm text-headline-sm text-on-surface">Введите код подтверждения</span>
 <p class="font-body-sm text-body-sm text-on-surface-variant">
-          В разделе «Корпоративные приложения» нажмите на имя выданного сертификата и выберите <strong class="text-on-surface font-semibold">«Доверять [Имя Сертификата]»</strong>. Подтвердите действие во всплывающем меню.
+          Когда iPhone попросит код, нажмите <strong class="text-on-surface font-semibold">«Получить код»</strong> и сразу введите 6 цифр.
         </p>
-<div class="flex items-center gap-space-xs rounded-md bg-secondary-container/10 p-space-sm text-secondary">
-<span class="material-symbols-outlined text-[18px]">verified_user</span>
-<span class="font-body-sm text-body-sm font-medium">Сертификат валидирован и защищен</span>
+<div class="flex flex-col items-center gap-1 rounded-xl bg-surface-container-lowest p-space-lg ring-1 ring-primary-container/40">
+<span class="font-label-sm text-label-sm text-outline uppercase">Код подтверждения</span>
+<span class="font-display-mobile text-display-mobile text-on-surface tracking-[0.3em] tabular-nums">482913</span>
+<span class="font-label-md text-label-md text-outline">Новый код через 28 с</span>
 </div>
 </div>
 </div>
 <!-- Step 4 -->
 <div class="flex gap-space-md rounded-xl bg-surface-container p-space-lg shadow-sm">
 <div class="flex flex-col items-center">
-<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-container text-on-primary font-label-md text-label-md font-bold shadow-sm">
+<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-container text-on-primary-container font-label-md text-label-md font-bold shadow-sm">
           4
         </div>
+<div class="w-0.5 grow bg-surface-container-highest my-space-xs rounded-full"></div>
 </div>
-<div class="flex flex-col space-y-space-xs min-w-0">
-<div class="flex items-center gap-space-xs">
-<span class="font-headline-sm text-headline-sm text-on-surface">Режим разработчика</span>
-<span class="font-label-sm text-label-sm text-tertiary bg-tertiary-container/30 px-space-xs py-0.5 rounded">iOS 16+</span>
-</div>
+<div class="flex flex-col space-y-space-xs min-w-0 pb-space-xs grow">
+<span class="font-headline-sm text-headline-sm text-on-surface">Откройте приложение</span>
 <p class="font-body-sm text-body-sm text-on-surface-variant">
-          Если система запросит Developer Mode: перейдите в <strong class="text-on-surface font-semibold">Настройки → Конфиденциальность и безопасность → Режим разработчика</strong>. Включите тумблер и подтвердите перезагрузку iPhone.
+          Запустите приложение с экрана «Домой». Если оно открылось, нажмите <strong class="text-on-surface font-semibold">«Приложение работает»</strong>.
+        </p>
+<button class="w-full h-11 flex items-center justify-center gap-space-sm rounded-full bg-primary-container text-on-primary-container font-label-lg text-label-lg shadow-md" type="button">
+<span class="material-symbols-outlined text-[20px]">verified</span>
+<span>Приложение работает</span>
+</button>
+</div>
+</div>
+<!-- Step 5 -->
+<div class="flex gap-space-md rounded-xl bg-surface-container p-space-lg shadow-sm">
+<div class="flex flex-col items-center">
+<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-container text-on-primary-container font-label-md text-label-md font-bold shadow-sm">
+          5
+        </div>
+</div>
+<div class="flex flex-col space-y-space-xs min-w-0 pb-space-xs grow">
+<span class="font-headline-sm text-headline-sm text-on-surface">Верните свой Apple ID</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+          Снова выйдите в «Медиаматериалы и покупки» и войдите в свой Apple ID. Приложение останется на iPhone и продолжит работать.
         </p>
 </div>
 </div>
 </div>
-<!-- Visual Aid Screenshot Placeholders -->
-<div class="flex flex-col rounded-xl bg-surface-container p-space-lg space-y-space-md shadow-sm">
-<div class="flex items-center justify-between">
-<span class="font-headline-sm text-headline-sm text-on-surface">Наглядные скриншоты iOS</span>
-<span class="font-label-sm text-label-sm text-outline">Нажмите для зума</span>
-</div>
-<div class="grid grid-cols-2 gap-space-sm">
-<div class="flex flex-col space-y-space-xs">
-<div class="relative overflow-hidden rounded-lg bg-surface-container-lowest aspect-[9/16] shadow-sm">
-<img class="w-full h-full object-cover" data-alt="Screenshot interface representation of Apple iOS Settings app displaying VPN and Device Management screen with enterprise certificate highlighted under dark mode color scheme." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDIzUUGzOC4lCpcshvifaD-tiddv1I9twnrJ0PdmHl5Nd2tkyE4GZaJldqN7olP_EkLr5rHlfFO7pOQP6rVpAwFWVwBH4_AEqmeWFvbNoljq8kcu9RbhyAQ6g-Hhci3r8s8pmnxFuYIA6SPpdSbnK4AXa2oFYcOIR-4YHuXdv0n0BIUsp8eQxQSxJLIpyEdFbXtA0ggqKOAyR9RiRSuIZZrG9VmUFzrz573mZJ99TmAgiP-tr4IQogk"/>
-</div>
-<span class="font-label-sm text-label-sm text-on-surface-variant text-center">Пункт «Управление»</span>
-</div>
-<div class="flex flex-col space-y-space-xs">
-<div class="relative overflow-hidden rounded-lg bg-surface-container-lowest aspect-[9/16] shadow-sm">
-<img class="w-full h-full object-cover" data-alt="Screenshot interface simulation of Apple iOS alert dialog asking to Trust Enterprise Developer certificate with clean minimalist dark UI styling." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBZ3cF5VFpSKfPv592oN_yj9aDX7h4ea265U-RPSo9EzNm8Jm6khriHiS9Rq9-weZYwL9lAFzpDaJTkCY3ePAKLgSm6WIvCD60iCzi-nWGMpYw2bG67l3Bv84133fz2m5mrisL0wEoORIbFV61kKgd-RbkkVhtsWMApAz3SHggE9zDKo_YQ44DA_YarFdbANIDgx3yD7nKoEVSppQJyX7AILBAaOMDZpAZWJvgpCugRUC5-yce7ED94"/>
-</div>
-<span class="font-label-sm text-label-sm text-on-surface-variant text-center">Окно подтверждения</span>
-</div>
-</div>
-</div>
-<!-- Troubleshoot Callout Accordion -->
+<!-- Troubleshoot Callout -->
 <div class="flex flex-col rounded-xl bg-surface-container-high p-space-lg space-y-space-sm shadow-md">
 <div class="flex items-start gap-space-sm">
-<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-error-container text-error">
+<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-container/20 text-primary">
 <span class="material-symbols-outlined text-[18px]">help</span>
 </div>
 <div class="flex flex-col min-w-0">
-<span class="font-headline-sm text-headline-sm text-on-surface">Пишет «Ненадежный разработчик»?</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">Код не приходит или не подходит?</span>
 <p class="font-body-sm text-body-sm text-on-surface-variant pt-space-xs">
-          Это стандартное поведение iOS для всех программ, загруженных не из официального App Store.
+          Код действует недолго, поэтому вводите его сразу после получения.
         </p>
 </div>
 </div>
 <div class="rounded-lg bg-surface-container-lowest p-space-md text-on-surface font-body-sm text-body-sm space-y-1">
 <div class="flex items-center gap-space-xs text-primary font-label-md text-label-md">
 <span class="material-symbols-outlined text-[16px]">lightbulb</span>
-<span>Решение за 15 секунд:</span>
+<span>Что сделать:</span>
 </div>
 <p class="text-on-surface-variant">
-        Не удаляйте приложение. Перейдите в <strong class="text-on-surface">Настройки → Основные → VPN и управление устройством</strong>, кликните на выданный сертификат и нажмите кнопку <strong class="text-on-surface">«Доверять»</strong>. Приложение сразу запустится.
+        Подождите 30 секунд и нажмите <strong class="text-on-surface">«Запросить новый код»</strong>. Если приложение позже попросит войти снова, повторите шаги 1–3 с данными из того же заказа в «Мои загрузки».
       </p>
 </div>
 </div>
-<!-- Alternative IPA Download & Support Buttons -->
+<!-- Support -->
 <div class="flex flex-col space-y-space-sm pt-space-xs">
-<a class="w-full h-11 flex items-center justify-between px-space-lg rounded-full bg-surface-container-high text-on-surface hover:bg-surface-container-highest transition-colors shadow-sm" href="#">
-<div class="flex items-center gap-space-sm">
-<span class="material-symbols-outlined text-secondary text-[20px]">download</span>
-<span class="font-label-lg text-label-lg">Скачать резервный IPA файл</span>
-</div>
-<span class="font-label-sm text-label-sm text-outline">Scarlet / AltStore</span>
-</a>
 <a class="w-full h-11 flex items-center justify-center gap-space-sm rounded-full bg-tertiary-container text-on-tertiary-container font-label-lg text-label-lg transition-transform active:scale-[0.98] shadow-sm" href="#">
 <span class="material-symbols-outlined text-[20px]">support_agent</span>
-<span>Написать в поддержку Telegram 24/7</span>
+<span>Написать в поддержку Telegram</span>
 </a>
 </div>
-</div>
-<script>
-  (function() {
-    const installBtn = document.getElementById('install-trigger-btn');
-    const installAlert = document.getElementById('install-alert');
-
-    if (installBtn && installAlert) {
-      installBtn.addEventListener('click', function() {
-        installAlert.classList.remove('hidden');
-        installBtn.classList.add('opacity-90');
-        const textSpan = installBtn.querySelector('span:last-child');
-        if (textSpan) {
-          textSpan.textContent = 'Манифест отправлен...';
-        }
-        setTimeout(() => {
-          if (textSpan) {
-            textSpan.textContent = 'Установить на iPhone повторно';
-          }
-        }, 3000);
-      });
-    }
-  })();
-</script></main><nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface/85 backdrop-blur-xl shadow-[0_-2px_12px_rgba(0,0,0,0.3)]" data-active-classes="text-primary [&amp;_span.material-symbols-outlined]:text-primary"><div class="flex items-center justify-around h-16 px-space-xs"><a class="flex flex-col items-center justify-center min-w-[64px] min-h-[44px] gap-0.5 text-on-surface-variant transition-colors group" data-path="katalog" href="#"><span class="material-symbols-outlined text-[24px] group-hover:text-on-surface">apps</span><span class="font-label-sm text-label-sm">Каталог</span></a><a class="flex flex-col items-center justify-center min-w-[64px] min-h-[44px] gap-0.5 text-on-surface-variant transition-colors group" data-path="moi-zagruzki" href="#"><span class="material-symbols-outlined text-[24px] group-hover:text-on-surface">download_for_offline</span><span class="font-label-sm text-label-sm">Мои загрузки</span></a><a aria-current="page" class="flex flex-col items-center justify-center min-w-[64px] min-h-[44px] gap-0.5 transition-colors group text-primary [&amp;_span.material-symbols-outlined]:text-primary" data-path="instrukcii" href="#"><span class="material-symbols-outlined text-[24px] group-hover:text-on-surface">menu_book</span><span class="font-label-sm text-label-sm">Инструкции</span></a><a class="flex flex-col items-center justify-center min-w-[64px] min-h-[44px] gap-0.5 text-on-surface-variant transition-colors group" data-path="profil" href="#"><span class="material-symbols-outlined text-[24px] group-hover:text-on-surface">person</span><span class="font-label-sm text-label-sm">Профиль</span></a></div></nav></body></html>
+</div></main><nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface/85 backdrop-blur-xl shadow-[0_-2px_12px_rgba(0,0,0,0.3)]" data-active-classes="text-primary [&amp;_span.material-symbols-outlined]:text-primary"><div class="flex items-center justify-around h-16 px-space-xs"><a class="flex flex-col items-center justify-center min-w-[64px] min-h-[44px] gap-0.5 text-on-surface-variant transition-colors group" data-path="katalog" href="#"><span class="material-symbols-outlined text-[24px] group-hover:text-on-surface">apps</span><span class="font-label-sm text-label-sm">Каталог</span></a><a class="flex flex-col items-center justify-center min-w-[64px] min-h-[44px] gap-0.5 text-on-surface-variant transition-colors group" data-path="moi-zagruzki" href="#"><span class="material-symbols-outlined text-[24px] group-hover:text-on-surface">download_for_offline</span><span class="font-label-sm text-label-sm">Мои загрузки</span></a><a aria-current="page" class="flex flex-col items-center justify-center min-w-[64px] min-h-[44px] gap-0.5 transition-colors group text-primary [&amp;_span.material-symbols-outlined]:text-primary" data-path="instrukcii" href="#"><span class="material-symbols-outlined text-[24px] group-hover:text-on-surface">menu_book</span><span class="font-label-sm text-label-sm">Инструкции</span></a><a class="flex flex-col items-center justify-center min-w-[64px] min-h-[44px] gap-0.5 text-on-surface-variant transition-colors group" data-path="profil" href="#"><span class="material-symbols-outlined text-[24px] group-hover:text-on-surface">person</span><span class="font-label-sm text-label-sm">Профиль</span></a></div></nav></body></html>

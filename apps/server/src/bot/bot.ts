@@ -1,0 +1,147 @@
+import { Bot, GrammyError, InlineKeyboard, type Context } from 'grammy';
+import type { ChatMemberFetcher, SubscriptionService } from '../services/subscription-service.js';
+import type { MessageSender } from '../services/notification-service.js';
+import type { UserRepository } from '../repositories/repositories.js';
+import { AppError, getErrorMessage } from '../lib/app-error.js';
+import type { Logger } from '../lib/logger.js';
+import { BOT_TEXT } from './texts.js';
+
+const CHECK_SUBSCRIPTION = 'check_subscription';
+/** Callback data: check_subscription[:<orderId>], so a deep link survives the subscribe step. */
+const CHECK_SUBSCRIPTION_PATTERN = /^check_subscription(?::(\d+))?$/;
+const ORDER_PAYLOAD = /^\d+$/;
+const MENU_BUTTON_TEXT = 'Магазин';
+
+export interface BotDeps {
+  webAppUrl: string;
+  channelUrl: string;
+  supportUrl: string;
+  users: UserRepository;
+  subscription: SubscriptionService;
+  logger: Logger;
+}
+
+export function createBot(token: string): Bot {
+  return new Bot(token);
+}
+
+export function createChatMemberFetcher(bot: Bot): ChatMemberFetcher {
+  return async (chatId, userId) => {
+    const member = await bot.api.getChatMember(chatId, userId);
+    return { status: member.status, isMember: 'is_member' in member ? member.is_member : undefined };
+  };
+}
+
+export function createMessageSender(bot: Bot): MessageSender {
+  return {
+    async send(chatId, html, button) {
+      const keyboard = button
+        ? button.webAppUrl
+          ? new InlineKeyboard().webApp(button.text, button.webAppUrl)
+          : new InlineKeyboard().url(button.text, button.url ?? '')
+        : undefined;
+      await bot.api.sendMessage(chatId, html, {
+        parse_mode: 'HTML',
+        reply_markup: keyboard,
+        link_preview_options: { is_disabled: true },
+      });
+    },
+  };
+}
+
+function shopKeyboard(deps: BotDeps, startParam?: string): InlineKeyboard {
+  const url = startParam ? `${deps.webAppUrl}#/orders/${encodeURIComponent(startParam)}` : deps.webAppUrl;
+  return new InlineKeyboard().webApp('🛍 Открыть магазин', url).row().url('💬 Поддержка', deps.supportUrl);
+}
+
+function subscribeKeyboard(deps: BotDeps, orderId?: string): InlineKeyboard {
+  return new InlineKeyboard()
+    .url('📢 Подписаться на канал', deps.channelUrl)
+    .row()
+    .text('✅ Я подписался', orderId ? `${CHECK_SUBSCRIPTION}:${orderId}` : CHECK_SUBSCRIPTION);
+}
+
+/** Order id from `/start <id>` or from the callback data; anything else is ignored. */
+function orderPayload(match: Context['match']): string | undefined {
+  if (typeof match === 'string') return ORDER_PAYLOAD.test(match) ? match : undefined;
+  const captured = match?.[1];
+  return captured && ORDER_PAYLOAD.test(captured) ? captured : undefined;
+}
+
+async function safeIsSubscribed(deps: BotDeps, userId: number, force: boolean): Promise<boolean | null> {
+  try {
+    return await deps.subscription.isSubscribed(userId, { force });
+  } catch (error: unknown) {
+    if (error instanceof AppError) return null;
+    throw error;
+  }
+}
+
+export async function handleStart(ctx: Context, deps: BotDeps): Promise<void> {
+  const from = ctx.from;
+  if (!from || ctx.chat?.type !== 'private') return;
+
+  await deps.users.upsert({
+    id: from.id,
+    firstName: from.first_name,
+    lastName: from.last_name ?? null,
+    username: from.username ?? null,
+    photoUrl: null,
+  });
+
+  const payload = orderPayload(ctx.match);
+  const isSubscribed = await safeIsSubscribed(deps, from.id, true);
+  if (isSubscribed === null) {
+    await ctx.reply(BOT_TEXT.checkFailed);
+    return;
+  }
+  if (!isSubscribed) {
+    await ctx.reply(BOT_TEXT.subscribeFirst, { parse_mode: 'HTML', reply_markup: subscribeKeyboard(deps, payload) });
+    return;
+  }
+  await ctx.reply(BOT_TEXT.welcome(from.first_name), { parse_mode: 'HTML', reply_markup: shopKeyboard(deps, payload) });
+}
+
+export async function handleCheckSubscription(ctx: Context, deps: BotDeps): Promise<void> {
+  const isSubscribed = await safeIsSubscribed(deps, ctx.from?.id ?? 0, true);
+  if (!isSubscribed) {
+    await ctx.answerCallbackQuery({
+      text: isSubscribed === null ? BOT_TEXT.checkFailed : BOT_TEXT.stillNotSubscribed,
+      show_alert: true,
+    });
+    return;
+  }
+  await ctx.answerCallbackQuery({ text: BOT_TEXT.thanks });
+  await ctx.editMessageText(BOT_TEXT.welcome(ctx.from?.first_name ?? ''), {
+    parse_mode: 'HTML',
+    reply_markup: shopKeyboard(deps, orderPayload(ctx.match)),
+  });
+}
+
+export function registerBotHandlers(bot: Bot, deps: BotDeps): void {
+  bot.command('start', (ctx) => handleStart(ctx, deps));
+  bot.command('support', (ctx) =>
+    ctx.reply(BOT_TEXT.support, { reply_markup: new InlineKeyboard().url('💬 Написать в поддержку', deps.supportUrl) }),
+  );
+  bot.callbackQuery(CHECK_SUBSCRIPTION_PATTERN, (ctx) => handleCheckSubscription(ctx, deps));
+
+  bot.catch((error) => {
+    const description = error.error instanceof GrammyError ? error.error.description : getErrorMessage(error.error);
+    deps.logger.error({ updateId: error.ctx.update.update_id, err: description }, 'Bot handler failed');
+  });
+}
+
+/** One-time setup on startup: menu button and command list. Failures are logged, not fatal. */
+export async function configureBot(bot: Bot, deps: Pick<BotDeps, 'webAppUrl' | 'logger'>): Promise<void> {
+  try {
+    await bot.api.setMyCommands([
+      { command: 'start', description: 'Открыть магазин' },
+      { command: 'support', description: 'Поддержка' },
+    ]);
+    await bot.api.setChatMenuButton({
+      menu_button: { type: 'web_app', text: MENU_BUTTON_TEXT, web_app: { url: deps.webAppUrl } },
+    });
+  } catch (error: unknown) {
+    deps.logger.warn({ err: getErrorMessage(error) }, 'Bot setup failed (check BOT_TOKEN; the menu button also needs an https WEBAPP_URL)');
+  }
+}

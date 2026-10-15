@@ -1,0 +1,19 @@
+{
+  "name": "istockapps",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.10.0",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter ./apps/* dev",
+    "build": "pnpm --filter @istock/miniapp build && pnpm --filter @istock/server build",
+    "start": "pnpm --filter @istock/server start",
+    "test": "pnpm -r test",
+    "test:coverage": "pnpm -r test:coverage",
+    "typecheck": "pnpm -r typecheck",
+    "db:migrate": "pnpm --filter @istock/server db:migrate",
+    "db:deploy": "pnpm --filter @istock/server db:deploy"
+  }
+}

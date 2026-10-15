@@ -1,0 +1,75 @@
+import type { Config } from 'tailwindcss';
+
+/** Tokens from design/aetheric_native_engine/DESIGN.md and design/*\/code.html. */
+export default {
+  content: ['./index.html', './src/**/*.{ts,tsx}'],
+  theme: {
+    extend: {
+      colors: {
+        surface: '#10131a',
+        'surface-dim': '#10131a',
+        'surface-bright': '#363941',
+        'surface-container-lowest': '#0b0e15',
+        'surface-container-low': '#191b23',
+        'surface-container': '#1d1f27',
+        'surface-container-high': '#272a32',
+        'surface-container-highest': '#32353d',
+        'on-surface': '#e1e2ec',
+        'on-surface-variant': '#c3c6d7',
+        outline: '#8d90a0',
+        'outline-variant': '#434655',
+        primary: '#b4c5ff',
+        'on-primary': '#ffffff',
+        'primary-container': '#2563eb',
+        'on-primary-container': '#eeefff',
+        secondary: '#4cd7f6',
+        'secondary-container': '#03b5d3',
+        tertiary: '#c0c1ff',
+        'tertiary-container': '#585be6',
+        error: '#ffb4ab',
+        'error-container': '#93000a',
+        success: '#10b981',
+        warning: '#f59e0b',
+      },
+      borderRadius: {
+        DEFAULT: '0.25rem',
+        lg: '0.5rem',
+        xl: '0.75rem',
+        '2xl': '1rem',
+        full: '9999px',
+      },
+      spacing: {
+        'space-xs': '0.25rem',
+        'space-sm': '0.5rem',
+        'space-md': '0.75rem',
+        'space-lg': '1rem',
+        'space-xl': '1.5rem',
+        'space-2xl': '2rem',
+        margin: '1rem',
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+      },
+      fontSize: {
+        display: ['32px', { lineHeight: '40px', letterSpacing: '-0.015em', fontWeight: '700' }],
+        'headline-lg': ['24px', { lineHeight: '30px', letterSpacing: '-0.01em', fontWeight: '600' }],
+        'headline-md': ['20px', { lineHeight: '26px', letterSpacing: '-0.01em', fontWeight: '600' }],
+        'headline-sm': ['17px', { lineHeight: '22px', letterSpacing: '-0.005em', fontWeight: '600' }],
+        'body-lg': ['17px', { lineHeight: '24px' }],
+        'body-md': ['15px', { lineHeight: '20px' }],
+        'body-sm': ['13px', { lineHeight: '18px', letterSpacing: '0.005em' }],
+        'label-lg': ['14px', { lineHeight: '18px', letterSpacing: '0.01em', fontWeight: '600' }],
+        'label-md': ['12px', { lineHeight: '16px', letterSpacing: '0.02em', fontWeight: '600' }],
+        'label-sm': ['10px', { lineHeight: '12px', letterSpacing: '0.04em', fontWeight: '700' }],
+        'code-sm': ['12px', { lineHeight: '16px', letterSpacing: '0.01em', fontWeight: '500' }],
+      },
+      keyframes: {
+        shimmer: { '100%': { transform: 'translateX(100%)' } },
+      },
+      animation: {
+        shimmer: 'shimmer 1.4s infinite',
+      },
+    },
+  },
+  plugins: [],
+} satisfies Config;

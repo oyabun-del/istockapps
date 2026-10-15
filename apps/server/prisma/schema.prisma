@@ -1,0 +1,73 @@
+// SQLite for development. For production switch `provider` to "postgresql",
+// point DATABASE_URL at Postgres and re-create migrations (`pnpm db:migrate`).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         BigInt   @id // Telegram user id
+  firstName  String
+  lastName   String?
+  username   String?
+  photoUrl   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  orders     Order[]
+  tickets    Ticket[]
+}
+
+model Order {
+  id              Int          @id @default(autoincrement())
+  // Sent to CISPAY as order_id; random so it never collides after DB resets.
+  paymentOrderId  String       @unique
+  userId          BigInt
+  user            User         @relation(fields: [userId], references: [id])
+  appId           String
+  appName         String
+  appIconUrl      String
+  amountKopecks   Int
+  paymentMethod   String
+  status          String
+  paymentId       String?      @unique
+  paymentUrl      String?
+  paymentSyncedAt DateTime?
+  codeRequests    Int          @default(0)
+  lastCodeAt      DateTime?
+  paidAt          DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  events          OrderEvent[]
+  tickets         Ticket[]
+
+  @@index([userId, createdAt])
+}
+
+model OrderEvent {
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  order     Order    @relation(fields: [orderId], references: [id])
+  type      String
+  data      String?
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+}
+
+model Ticket {
+  id        Int      @id @default(autoincrement())
+  userId    BigInt
+  user      User     @relation(fields: [userId], references: [id])
+  orderId   Int?
+  order     Order?   @relation(fields: [orderId], references: [id])
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}

@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+    background-color: #10131a;
+  }
+
+  body {
+    @apply bg-surface font-sans text-body-md text-on-surface antialiased;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Tabular figures for prices, codes and order numbers (DESIGN.md). */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::-webkit-scrollbar {
+    display: none;
+  }
+
+  :focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+  }
+
+  /* Browser surfaces themed from the palette. */
+  ::selection {
+    background-color: rgb(37 99 235 / 0.45);
+    color: #eeefff;
+  }
+
+  input,
+  textarea,
+  select {
+    caret-color: #4cd7f6;
+    accent-color: #2563eb;
+    color-scheme: dark;
+  }
+
+  ::placeholder {
+    color: #8d90a0;
+    opacity: 1;
+  }
+}
+
+@layer components {
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    line-height: 1;
+    user-select: none;
+  }
+
+  .icon-filled {
+    font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+
+  .pt-safe {
+    padding-top: var(--tg-content-safe-area-inset-top, env(safe-area-inset-top, 0px));
+  }
+
+  .pb-safe {
+    padding-bottom: var(--tg-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

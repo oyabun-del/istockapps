@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BUYER, OTHER_USER, createPaidOrder, createTestContext, type TestContext } from '../test/fixtures.js';
+import { MOCK_CODE_TTL_SECONDS } from '../providers/delivery/mock-delivery-provider.js';
 import { CODE_COOLDOWN_MS, MAX_CODE_REQUESTS } from './delivery-service.js';
 
 let ctx: TestContext;
@@ -31,6 +32,7 @@ describe('DeliveryService happy path', () => {
     const code = await ctx.deliveryService.requestCode(BUYER.id, paid.id);
     expect(code.code).toMatch(/^\d{6}$/);
     expect(new Date(code.nextRequestAt).getTime()).toBe(ctx.clock.current.getTime() + CODE_COOLDOWN_MS);
+    expect(code.expiresAt).toBe(new Date(ctx.clock.current.getTime() + MOCK_CODE_TTL_SECONDS * 1000).toISOString());
 
     const completed = await ctx.deliveryService.complete(BUYER.id, paid.id);
     expect(completed.status).toBe('completed');
@@ -96,6 +98,17 @@ describe('DeliveryService guards', () => {
     const paid = await orderWithCredentials();
     vi.spyOn(ctx.repos.orders, 'recordCodeRequest').mockResolvedValueOnce(null);
     await expect(ctx.deliveryService.requestCode(BUYER.id, paid.id)).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+  });
+
+  it('leaves expiresAt empty when the delivery API does not say how long the code lives', async () => {
+    const paid = await orderWithCredentials();
+    vi.spyOn(ctx.delivery, 'requestLoginCode').mockResolvedValue({ code: '123456', ttlSeconds: null });
+
+    await expect(ctx.deliveryService.requestCode(BUYER.id, paid.id)).resolves.toEqual({
+      code: '123456',
+      nextRequestAt: new Date(ctx.clock.current.getTime() + CODE_COOLDOWN_MS).toISOString(),
+      expiresAt: null,
+    });
   });
 
   it('maps provider failures to DELIVERY_PROVIDER_ERROR', async () => {

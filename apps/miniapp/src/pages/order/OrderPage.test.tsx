@@ -29,6 +29,7 @@ describe('OrderPage while unpaid', () => {
 
     expect(await screen.findByText('Ожидание оплаты')).toBeInTheDocument();
     expect(screen.getByRole('timer')).toHaveTextContent('15:00');
+    expect(screen.getByText('Статус проверяется автоматически каждые 4 с')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Оплатить через СБП' }));
     expect(open).toHaveBeenCalledWith('https://pay.example.com/7', '_blank', 'noopener,noreferrer');
   });
@@ -130,7 +131,11 @@ describe('OrderPage', () => {
   it('requests a login code and completes the order', async () => {
     vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'credentials_issued' }));
     vi.spyOn(api, 'credentials').mockResolvedValue({ login: 'id@example.com', password: 'secret' });
-    vi.spyOn(api, 'code').mockResolvedValue({ code: '482913', nextRequestAt: new Date(Date.now() + 30_000).toISOString() });
+    vi.spyOn(api, 'code').mockResolvedValue({
+      code: '482913',
+      nextRequestAt: new Date(Date.now() + 30_000).toISOString(),
+      expiresAt: null,
+    });
     const complete = vi.spyOn(api, 'complete').mockResolvedValue(makeOrder({ status: 'completed' }));
 
     renderOrder();
@@ -143,6 +148,28 @@ describe('OrderPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /Приложение работает/ }));
     await waitFor(() => expect(complete).toHaveBeenCalledWith(7));
     expect(await screen.findByText('Приложение активировано')).toBeInTheDocument();
+  });
+
+  it('counts down how long the code stays valid, then asks for a new one', async () => {
+    vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'credentials_issued' }));
+    vi.spyOn(api, 'credentials').mockResolvedValue({ login: 'a', password: 'b' });
+    // Times are taken when the code is requested, so a slow test run cannot eat into the 5:00.
+    const issuedCode = (code: string, validMs: number) => async () => ({
+      code,
+      nextRequestAt: new Date(Date.now() - 1000).toISOString(),
+      expiresAt: new Date(Date.now() + validMs).toISOString(),
+    });
+    vi.spyOn(api, 'code')
+      .mockImplementationOnce(issuedCode('482913', 5 * 60 * 1000 - 500))
+      .mockImplementationOnce(issuedCode('111222', -1000));
+
+    renderOrder();
+    await userEvent.click(await screen.findByRole('button', { name: /Получить код/ }));
+    expect(await screen.findByRole('timer')).toHaveTextContent('Действует ещё 5:00');
+
+    await userEvent.click(screen.getByRole('button', { name: /Запросить новый код/ }));
+    expect(await screen.findByText('Код истёк, запросите новый')).toBeInTheDocument();
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument();
   });
 
   it('shows code request errors', async () => {

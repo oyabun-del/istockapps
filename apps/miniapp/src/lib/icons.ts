@@ -8,6 +8,7 @@ export const ICON_NAMES = [
   'apps',
   'arrow_back',
   'auto_fix_high',
+  'autorenew',
   'campaign',
   'cancel',
   'check',

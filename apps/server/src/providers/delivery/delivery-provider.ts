@@ -5,6 +5,12 @@ export interface AppCredentials {
   password: string;
 }
 
+export interface LoginCode {
+  code: string;
+  /** How long the code is valid, as reported by the API; null if it does not say. */
+  ttlSeconds: number | null;
+}
+
 /**
  * Port for the external delivery API: download link, Apple ID credentials and login code.
  * Replace MockDeliveryProvider with an HTTP implementation once the API is available.
@@ -12,5 +18,5 @@ export interface AppCredentials {
 export interface DeliveryProvider {
   getDownloadUrl(order: Order): Promise<string>;
   getCredentials(order: Order): Promise<AppCredentials>;
-  requestLoginCode(order: Order): Promise<string>;
+  requestLoginCode(order: Order): Promise<LoginCode>;
 }

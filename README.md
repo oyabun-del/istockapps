@@ -16,7 +16,7 @@ design/         исходные макеты
 
 **Заглушки до появления вашего API** (`apps/server/src/providers/`):
 - `catalog/mock-catalog-provider.ts` — список приложений и иконки;
-- `delivery/mock-delivery-provider.ts` — ссылка на скачивание, логин/пароль, код.
+- `delivery/mock-delivery-provider.ts` — ссылка на скачивание, логин/пароль, код. `requestLoginCode` возвращает код и срок его жизни в секундах (`ttlSeconds`); если API срок не сообщает, верните `null`, и таймер под кодом не появится.
 
 Чтобы подключить API, напишите реализации интерфейсов `CatalogProvider` и `DeliveryProvider` и подключите их в `apps/server/src/container.ts`. Экраны и бизнес-логику менять не нужно. Иконка категории (`icon`) должна быть из списка `apps/miniapp/src/lib/icons.ts`, иначе Mini App покажет запасную.
 

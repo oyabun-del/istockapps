@@ -29,6 +29,14 @@ describe('ProfilePage', () => {
     expect(screen.getByTestId('stat-activated')).toHaveTextContent('1');
   });
 
+  it('shows the app version at the bottom', async () => {
+    vi.spyOn(api, 'orders').mockResolvedValue([]);
+
+    renderProfile();
+
+    expect(await screen.findByText(`AppDrop v${__APP_VERSION__}`)).toBeInTheDocument();
+  });
+
   it('opens support and the channel inside Telegram', async () => {
     vi.spyOn(api, 'orders').mockResolvedValue([]);
     const open = vi.spyOn(window, 'open').mockReturnValue(null);

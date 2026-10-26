@@ -94,6 +94,8 @@ export interface CodeDto {
   code: string;
   /** When the user may request a new code (ISO). */
   nextRequestAt: string;
+  /** When the code stops working (ISO); null if the delivery API does not say. */
+  expiresAt: string | null;
 }
 
 // ---------- User ----------

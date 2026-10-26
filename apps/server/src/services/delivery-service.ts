@@ -80,9 +80,14 @@ export class DeliveryService {
     const recorded = await this.deps.repos.orders.recordCodeRequest(order.id, order.codeRequests, now);
     if (!recorded) throw new AppError('TOO_MANY_REQUESTS', 'Код уже запрошен, подождите немного');
 
-    const code = await this.callProvider(order, 'code', () => this.deps.delivery.requestLoginCode(order));
+    const { code, ttlSeconds } = await this.callProvider(order, 'code', () => this.deps.delivery.requestLoginCode(order));
     await this.deps.repos.orderEvents.add(order.id, 'code_issued', { attempt: recorded.codeRequests });
-    return { code, nextRequestAt: new Date(now.getTime() + CODE_COOLDOWN_MS).toISOString() };
+    return {
+      code,
+      nextRequestAt: new Date(now.getTime() + CODE_COOLDOWN_MS).toISOString(),
+      // Our clock, not the API's: the TTL is relative, so clock skew between servers does not matter.
+      expiresAt: ttlSeconds === null ? null : new Date(now.getTime() + ttlSeconds * 1000).toISOString(),
+    };
   }
 
   async complete(userId: number, orderId: number): Promise<Order> {

@@ -10,11 +10,12 @@ import { api, errorMessage } from '../../lib/api';
 import { formatCountdown } from '../../lib/format';
 import { REVEAL } from '../../lib/motion';
 import { PAYMENT_METHOD_META } from '../../lib/order-status';
-import { queryKeys } from '../../lib/queries';
+import { ORDER_POLL_MS, queryKeys } from '../../lib/queries';
 import { hapticImpact, hapticNotify, openExternalLink } from '../../lib/telegram';
 
 /** Under two minutes the timer turns red: the buyer should finish now or start over. */
 const URGENT_SECONDS = 120;
+const POLL_SECONDS = Math.round(ORDER_POLL_MS / 1000);
 
 type Props = {
   order: OrderDto;
@@ -133,6 +134,10 @@ export function AwaitingPayment({ order, isRefreshing, onRefresh }: Props) {
         )}
         <p className="relative max-w-[34ch] text-body-sm text-on-surface-variant">
           Оплатите счёт на странице CISPAY. Статус обновится сам, как только платёж подтвердится, эту страницу можно не закрывать.
+        </p>
+        <p className="relative flex items-center gap-1.5 text-label-md text-on-surface-variant">
+          <Icon name="autorenew" className="text-[18px] text-secondary" />
+          {`Статус проверяется автоматически каждые ${POLL_SECONDS} с`}
         </p>
       </section>
 

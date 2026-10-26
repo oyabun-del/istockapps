@@ -43,7 +43,8 @@ const envSchema = z
     TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 
-    BOT_TOKEN: z.string().regex(/^\d+:[\w-]{30,}$/, 'BOT_TOKEN looks invalid'),
+    /** Required unless TELEGRAM_OFFLINE=true (checked in superRefine). */
+    BOT_TOKEN: z.string().regex(/^\d+:[\w-]{30,}$/, 'BOT_TOKEN looks invalid').optional(),
     BOT_USERNAME: usernameSchema.optional(),
     WEBAPP_URL: webUrl,
     PUBLIC_URL: webUrl,
@@ -76,8 +77,30 @@ const envSchema = z
       .enum(['true', 'false'])
       .default('true')
       .transform((value) => value === 'true'),
+    /** Development only: run without a bot. Everyone counts as subscribed, notifications go to the log. */
+    TELEGRAM_OFFLINE: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
   })
   .superRefine((env, ctx) => {
+    if (!env.TELEGRAM_OFFLINE && !env.BOT_TOKEN) {
+      ctx.addIssue({ code: 'custom', path: ['BOT_TOKEN'], message: 'BOT_TOKEN is required (or TELEGRAM_OFFLINE=true in development)' });
+    }
+    if (env.TELEGRAM_OFFLINE && (env.NODE_ENV !== 'development' || env.PAYMENT_PROVIDER !== 'mock')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['TELEGRAM_OFFLINE'],
+        message: 'TELEGRAM_OFFLINE is allowed only with NODE_ENV=development and PAYMENT_PROVIDER=mock',
+      });
+    }
+    if (env.TELEGRAM_OFFLINE && env.DEV_USER_ID === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['DEV_USER_ID'],
+        message: 'TELEGRAM_OFFLINE requires DEV_USER_ID: without a bot nobody can sign in through Telegram',
+      });
+    }
     if (env.PAYMENT_PROVIDER === 'cispay' && (!env.CISPAY_SHOP_ID || !env.CISPAY_API_KEY)) {
       ctx.addIssue({
         code: 'custom',

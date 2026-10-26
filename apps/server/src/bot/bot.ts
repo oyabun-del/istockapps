@@ -33,6 +33,21 @@ export function createChatMemberFetcher(bot: Bot): ChatMemberFetcher {
   };
 }
 
+/** Everything the services need from Telegram; swapped for createOfflineTelegram in TELEGRAM_OFFLINE mode. */
+export interface TelegramAdapters {
+  fetchMember: ChatMemberFetcher;
+  fetchChannel: ChannelFetcher;
+  sender: MessageSender;
+}
+
+export function createBotTelegram(bot: Bot): TelegramAdapters {
+  return {
+    fetchMember: createChatMemberFetcher(bot),
+    fetchChannel: createChannelFetcher(bot),
+    sender: createMessageSender(bot),
+  };
+}
+
 export function createChannelFetcher(bot: Bot): ChannelFetcher {
   return async (chatId) => {
     const [chat, memberCount] = await Promise.all([bot.api.getChat(chatId), bot.api.getChatMemberCount(chatId)]);

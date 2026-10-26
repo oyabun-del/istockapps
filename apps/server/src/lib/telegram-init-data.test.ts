@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOT_TOKEN } from '../test/fixtures.js';
-import { INIT_DATA_MAX_AGE_SECONDS, signInitData, validateInitData } from './telegram-init-data.js';
+import { INIT_DATA_MAX_AGE_SECONDS, initDataSecret, signInitData, validateInitData } from './telegram-init-data.js';
 
 const NOW = 1_800_000_000;
 const USER = JSON.stringify({ id: 42, first_name: 'Иван', username: 'ivan', photo_url: 'https://t.me/i/a.jpg' });
@@ -72,5 +72,19 @@ describe('validateInitData', () => {
       ok: false,
       reason: 'bad auth_date',
     });
+  });
+});
+
+describe('initDataSecret', () => {
+  it('uses the bot token when there is one', () => {
+    expect(initDataSecret(BOT_TOKEN)).toBe(BOT_TOKEN);
+  });
+
+  it('falls back to a random secret that nobody can sign with', () => {
+    const first = initDataSecret(undefined);
+
+    expect(first).toMatch(/^[a-f0-9]{64}$/);
+    expect(initDataSecret(undefined)).not.toBe(first);
+    expect(validateInitData(makeInitData(), first, NOW)).toEqual({ ok: false, reason: 'bad signature' });
   });
 });

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { signInitData } from '../lib/telegram-init-data.js';
+import { initDataSecret, signInitData } from '../lib/telegram-init-data.js';
 import { CisPayProvider, signCisPayBody } from '../providers/payment/cispay-provider.js';
 import { BOT_TOKEN, BUYER, OTHER_USER, createTestContext, type TestContext } from '../test/fixtures.js';
 import { buildApp, type AppDeps } from './app.js';
@@ -94,6 +94,17 @@ describe('auth and subscription gate', () => {
     app = await buildApp(baseDeps({ devUserId: BUYER.id }));
     const response = await app.inject({ method: 'GET', url: '/api/catalog/categories' });
     expect(response.statusCode).toBe(200);
+  });
+
+  it('rejects any initData when there is no bot token (TELEGRAM_OFFLINE)', async () => {
+    await app.close();
+    app = await buildApp(baseDeps({ botToken: initDataSecret(undefined), devUserId: BUYER.id }));
+
+    const signed = await app.inject({ method: 'GET', url: '/api/catalog/categories', headers: authHeader() });
+    expect(signed.statusCode).toBe(401);
+
+    const devUser = await app.inject({ method: 'GET', url: '/api/catalog/categories' });
+    expect(devUser.statusCode).toBe(200);
   });
 });
 

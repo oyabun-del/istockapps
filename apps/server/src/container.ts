@@ -1,10 +1,10 @@
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
-import type { Bot } from 'grammy';
-import { createChannelFetcher, createChatMemberFetcher, createMessageSender } from './bot/bot.js';
+import type { TelegramAdapters } from './bot/bot.js';
 import { channelUrl, supportUrl, type Env } from './config/env.js';
 import type { AppDeps } from './http/app.js';
 import type { Logger } from './lib/logger.js';
+import { initDataSecret } from './lib/telegram-init-data.js';
 import { MockCatalogProvider } from './providers/catalog/mock-catalog-provider.js';
 import { MockDeliveryProvider } from './providers/delivery/mock-delivery-provider.js';
 import { CisPayProvider } from './providers/payment/cispay-provider.js';
@@ -38,7 +38,7 @@ function createPayments(env: Env): { payments: PaymentProvider; mockPayments?: M
   return { payments: mockPayments, mockPayments };
 }
 
-export function createContainer(env: Env, bot: Bot, logger: Logger): Container {
+export function createContainer(env: Env, telegram: TelegramAdapters, logger: Logger): Container {
   const db = new PrismaClient();
   const repos = createPrismaRepositories(db);
   const catalog = new MockCatalogProvider();
@@ -46,14 +46,14 @@ export function createContainer(env: Env, bot: Bot, logger: Logger): Container {
   const { payments, mockPayments } = createPayments(env);
 
   const notifications = new NotificationService({
-    sender: createMessageSender(bot),
+    sender: telegram.sender,
     adminIds: env.ADMIN_IDS,
     webAppUrl: env.WEBAPP_URL,
     logger,
   });
   const subscription = new SubscriptionService({
     channel: env.REQUIRED_CHANNEL,
-    fetchMember: createChatMemberFetcher(bot),
+    fetchMember: telegram.fetchMember,
     logger,
   });
   const orders = new OrderService({
@@ -67,12 +67,12 @@ export function createContainer(env: Env, bot: Bot, logger: Logger): Container {
   });
 
   const appDeps: AppDeps = {
-    botToken: env.BOT_TOKEN,
+    botToken: initDataSecret(env.BOT_TOKEN),
     trustProxyHops: env.TRUST_PROXY_HOPS,
     devUserId: env.DEV_USER_ID,
     allowedOrigin: new URL(env.WEBAPP_URL).origin,
     links: { channelUrl: channelUrl(env), supportUrl: supportUrl(env), termsUrl: env.TERMS_URL ?? null },
-    channel: new ChannelInfoService({ channel: env.REQUIRED_CHANNEL, fetchChannel: createChannelFetcher(bot), logger }),
+    channel: new ChannelInfoService({ channel: env.REQUIRED_CHANNEL, fetchChannel: telegram.fetchChannel, logger }),
     repos,
     catalog,
     payments,

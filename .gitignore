@@ -8,3 +8,6 @@ coverage/
 *.db-journal
 .DS_Store
 *.log
+
+# Local reference screenshots, not part of the project
+screenshots/

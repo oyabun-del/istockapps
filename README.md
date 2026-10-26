@@ -39,11 +39,13 @@ Telegram открывает Mini App только по HTTPS, поэтому д�
 
 После смены `WEBAPP_URL` перезапустите сервер: кнопка меню бота настраивается при старте.
 
-### Проверка в обычном браузере
-1. В `.env`: `NODE_ENV=development`, `PAYMENT_PROVIDER=mock`, `DEV_USER_ID=<ваш Telegram id>` (узнать: @userinfobot), `WEBAPP_URL` и `PUBLIC_URL` = `http://localhost:5173`.
-2. `pnpm dev` и откройте http://localhost:5173 (мобильный экран в DevTools: `Ctrl+Shift+M`).
+### Проверка в обычном браузере (без бота)
+1. В `.env`: `NODE_ENV=development`, `PAYMENT_PROVIDER=mock`, `DEV_USER_ID=111111111`, `TELEGRAM_OFFLINE=true`, `WEBAPP_URL` и `PUBLIC_URL` = `http://localhost:5173`. `BOT_TOKEN` не нужен.
+2. `pnpm db:migrate`, затем `pnpm dev` и откройте http://localhost:5173 (мобильный экран в DevTools: `Ctrl+Shift+M`).
 
-Подписка на канал проверяется и здесь, поэтому нужны настоящий `BOT_TOKEN`, бот-админ канала и подписка аккаунта из `DEV_USER_ID`. Иначе вместо магазина будет «Не удалось проверить подписку».
+В офлайн-режиме бот не запускается, подписка на канал считается оформленной, а сообщения админам и покупателю пишутся в лог сервера. Работает весь путь: каталог, заказ, тестовая оплата, логин и пароль, код, отмена. Режим запрещён в production и с реальной оплатой.
+
+Чтобы проверить вместе с настоящим ботом и подпиской, уберите `TELEGRAM_OFFLINE`, укажите `BOT_TOKEN`, добавьте бота админом канала и подпишите на канал аккаунт из `DEV_USER_ID`.
 
 Для отладки внутри Telegram Desktop: Настройки → Продвинутые → Экспериментальные настройки → «Enable webview inspecting», затем правый клик в Mini App.
 

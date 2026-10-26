@@ -25,6 +25,37 @@ describe('parseEnv', () => {
     expect(env.SERVE_MINIAPP).toBe(true);
   });
 
+  describe('TELEGRAM_OFFLINE', () => {
+    const { BOT_TOKEN: _token, ...WITHOUT_TOKEN } = BASE;
+    const OFFLINE = { ...WITHOUT_TOKEN, TELEGRAM_OFFLINE: 'true', DEV_USER_ID: '1' };
+
+    it('lets development run without a bot token', () => {
+      const env = parseEnv(OFFLINE);
+      expect(env.TELEGRAM_OFFLINE).toBe(true);
+      expect(env.BOT_TOKEN).toBeUndefined();
+    });
+
+    it('still requires a bot token when Telegram is online', () => {
+      expect(() => parseEnv(WITHOUT_TOKEN)).toThrow(/BOT_TOKEN/);
+    });
+
+    it('needs DEV_USER_ID, because nobody can sign in through Telegram', () => {
+      expect(() => parseEnv({ ...OFFLINE, DEV_USER_ID: undefined })).toThrow(/TELEGRAM_OFFLINE requires DEV_USER_ID/);
+    });
+
+    it('is refused in production and with real payments', () => {
+      expect(() => parseEnv({ ...OFFLINE, NODE_ENV: 'production' })).toThrow(/TELEGRAM_OFFLINE/);
+      expect(() =>
+        parseEnv({
+          ...OFFLINE,
+          PAYMENT_PROVIDER: 'cispay',
+          CISPAY_SHOP_ID: '0192a4b8-0000-7000-8000-000000000001',
+          CISPAY_API_KEY: 'cis_sec_x',
+        }),
+      ).toThrow(/TELEGRAM_OFFLINE/);
+    });
+  });
+
   it('accepts an optional https terms of service link', () => {
     expect(parseEnv(BASE).TERMS_URL).toBeUndefined();
     expect(parseEnv({ ...BASE, TERMS_URL: 'https://telegra.ph/terms' }).TERMS_URL).toBe('https://telegra.ph/terms');

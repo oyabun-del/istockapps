@@ -1,5 +1,6 @@
 import { pino } from 'pino';
-import { configureBot, createBot, registerBotHandlers } from './bot/bot.js';
+import { configureBot, createBot, createBotTelegram, registerBotHandlers } from './bot/bot.js';
+import { createOfflineTelegram } from './bot/offline-telegram.js';
 import { channelUrl, parseEnv, supportUrl } from './config/env.js';
 import { createContainer } from './container.js';
 import { buildApp } from './http/app.js';
@@ -15,22 +16,26 @@ async function main(): Promise<void> {
     transport: env.NODE_ENV === 'development' ? { target: 'pino-pretty' } : undefined,
   });
 
-  const bot = createBot(env.BOT_TOKEN);
-  const container = createContainer(env, bot, logger);
-  registerBotHandlers(bot, {
-    webAppUrl: env.WEBAPP_URL,
-    channelUrl: channelUrl(env),
-    supportUrl: supportUrl(env),
-    users: container.repos.users,
-    subscription: container.subscription,
-    logger,
-  });
+  // TELEGRAM_OFFLINE wins even when a token is set: the bot is neither created nor started.
+  const bot = env.BOT_TOKEN && !env.TELEGRAM_OFFLINE ? createBot(env.BOT_TOKEN) : null;
+  const telegram = bot ? createBotTelegram(bot) : createOfflineTelegram({ channel: env.REQUIRED_CHANNEL, logger });
+  const container = createContainer(env, telegram, logger);
+  if (bot) {
+    registerBotHandlers(bot, {
+      webAppUrl: env.WEBAPP_URL,
+      channelUrl: channelUrl(env),
+      supportUrl: supportUrl(env),
+      users: container.repos.users,
+      subscription: container.subscription,
+      logger,
+    });
+  }
 
   const app = await buildApp(container.appDeps, logger);
 
   const shutdown = async (signal: string): Promise<void> => {
     logger.info({ signal }, 'Shutting down');
-    await Promise.allSettled([bot.stop(), app.close()]);
+    await Promise.allSettled([bot?.stop(), app.close()]);
     await container.db.$disconnect();
     process.exit(0);
   };
@@ -38,9 +43,17 @@ async function main(): Promise<void> {
   process.once('SIGTERM', () => void shutdown('SIGTERM'));
 
   await app.listen({ port: env.PORT, host: env.HOST });
-  await configureBot(bot, { webAppUrl: env.WEBAPP_URL, logger });
   if (env.PAYMENT_PROVIDER === 'mock') logger.warn('PAYMENT_PROVIDER=mock: payments are simulated');
 
+  if (!bot) {
+    logger.warn(
+      { devUserId: env.DEV_USER_ID },
+      'TELEGRAM_OFFLINE: no bot, everyone is subscribed, messages go to this log. Open the Mini App in a regular browser.',
+    );
+    return;
+  }
+
+  await configureBot(bot, { webAppUrl: env.WEBAPP_URL, logger });
   // Long polling; runs until bot.stop(). The HTTP API keeps working if the bot fails.
   bot
     .start({

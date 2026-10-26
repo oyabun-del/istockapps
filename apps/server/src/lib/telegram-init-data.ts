@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 
 /** initData older than this is rejected (replay protection). */
@@ -90,6 +90,11 @@ export function validateInitData(
       },
     },
   };
+}
+
+/** Offline mode has no bot token; a random secret makes every forged initData signature fail. */
+export function initDataSecret(botToken: string | undefined): string {
+  return botToken ?? randomBytes(32).toString('hex');
 }
 
 /** Test helper / dev tool: builds a correctly signed initData string. */

@@ -17,7 +17,10 @@ export const queryKeys = {
   paymentMethods: ['payment-methods'] as const,
   orders: ['orders'] as const,
   order: (id: number) => ['order', id] as const,
-  credentials: (id: number) => ['credentials', id] as const,
+  delivery: (id: number) => ['delivery', id] as const,
+  /** Keyed by the current group ids, so a replaced group never reuses old credentials. */
+  credentials: (id: number, groupIds: string) => ['credentials', id, groupIds] as const,
+  codeWait: (id: number, waitId: string) => ['code-wait', id, waitId] as const,
 };
 
 function shouldRetry(failureCount: number, error: unknown): boolean {

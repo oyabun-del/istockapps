@@ -1,7 +1,6 @@
 import type { AppDto, CatalogQuery, CategoryDto } from '@istock/shared';
-import type { CatalogProvider } from './catalog-provider.js';
-
-const ALL_CATEGORY = 'all';
+import { ALL_CATEGORY, type CatalogProvider } from './catalog-provider.js';
+import { placeholderIcon } from './placeholder-icon.js';
 
 const CATEGORIES: readonly CategoryDto[] = [
   { id: ALL_CATEGORY, title: 'Все', icon: 'grid_view' },
@@ -9,18 +8,6 @@ const CATEGORIES: readonly CategoryDto[] = [
   { id: 'games', title: 'Игры', icon: 'sports_esports' },
   { id: 'services', title: 'Сервисы и фото', icon: 'auto_fix_high' },
 ];
-
-/** Generates a placeholder icon until real icons come from the catalog API. */
-function placeholderIcon(label: string, from: string, to: string): string {
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">` +
-    `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
-    `<stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs>` +
-    `<rect width="120" height="120" fill="url(#g)"/>` +
-    `<text x="60" y="76" font-family="Inter,Arial,sans-serif" font-size="46" font-weight="700" ` +
-    `fill="#fff" text-anchor="middle">${label}</text></svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
 
 const APPS: readonly AppDto[] = [
   {

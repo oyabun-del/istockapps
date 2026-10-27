@@ -5,6 +5,7 @@ import type { MessageSender } from '../services/notification-service.js';
 import type { UserRepository } from '../repositories/repositories.js';
 import { AppError, getErrorMessage } from '../lib/app-error.js';
 import type { Logger } from '../lib/logger.js';
+import type { PartnerAdminService } from '../services/partner-admin-service.js';
 import { BOT_TEXT } from './texts.js';
 
 const CHECK_SUBSCRIPTION = 'check_subscription';
@@ -20,6 +21,10 @@ export interface BotDeps {
   users: UserRepository;
   subscription: SubscriptionService;
   logger: Logger;
+  /** Only these users may run admin commands; everyone else gets no answer. */
+  adminIds?: readonly number[];
+  /** null when the Install-IOS integration is off. */
+  partnerAdmin?: Pick<PartnerAdminService, 'balanceText' | 'syncText'> | null;
 }
 
 export function createBot(token: string): Bot {
@@ -141,12 +146,36 @@ export async function handleCheckSubscription(ctx: Context, deps: BotDeps): Prom
   });
 }
 
+type PartnerAdmin = NonNullable<BotDeps['partnerAdmin']>;
+
+/** Admin-only: other users get no reply, so the command stays invisible to them. */
+export async function handleAdminCommand(
+  ctx: Context,
+  deps: BotDeps,
+  run: (admin: PartnerAdmin) => Promise<string>,
+): Promise<void> {
+  const userId = ctx.from?.id;
+  if (userId === undefined || !deps.adminIds?.includes(userId)) return;
+  if (!deps.partnerAdmin) {
+    await ctx.reply(BOT_TEXT.partnerDisabled);
+    return;
+  }
+  try {
+    await ctx.reply(await run(deps.partnerAdmin), { parse_mode: 'HTML' });
+  } catch (error: unknown) {
+    deps.logger.error({ err: getErrorMessage(error) }, 'Admin command failed');
+    await ctx.reply(BOT_TEXT.partnerFailed);
+  }
+}
+
 export function registerBotHandlers(bot: Bot, deps: BotDeps): void {
   bot.command('start', (ctx) => handleStart(ctx, deps));
   bot.command('support', (ctx) =>
     ctx.reply(BOT_TEXT.support, { reply_markup: new InlineKeyboard().url('💬 Написать в поддержку', deps.supportUrl) }),
   );
   bot.callbackQuery(CHECK_SUBSCRIPTION_PATTERN, (ctx) => handleCheckSubscription(ctx, deps));
+  bot.command('balance', (ctx) => handleAdminCommand(ctx, deps, (admin) => admin.balanceText()));
+  bot.command('sync', (ctx) => handleAdminCommand(ctx, deps, (admin) => admin.syncText()));
 
   bot.catch((error) => {
     const description = error.error instanceof GrammyError ? error.error.description : getErrorMessage(error.error);

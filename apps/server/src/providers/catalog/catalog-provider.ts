@@ -1,9 +1,9 @@
 import type { AppDto, CatalogQuery, CategoryDto } from '@istock/shared';
 
-/**
- * Port for the external catalog API (apps list, icons, prices).
- * Replace MockCatalogProvider with an HTTP implementation once the API is available.
- */
+/** Category id that means "no filter". */
+export const ALL_CATEGORY = 'all';
+
+/** Port for the external catalog API (apps list, icons, prices). */
 export interface CatalogProvider {
   listCategories(): Promise<CategoryDto[]>;
   listApps(query: CatalogQuery): Promise<AppDto[]>;

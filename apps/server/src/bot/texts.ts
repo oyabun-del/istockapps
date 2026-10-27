@@ -12,4 +12,6 @@ export const BOT_TEXT = {
   thanks: 'Спасибо за подписку!',
   checkFailed: 'Не удалось проверить подписку. Попробуйте чуть позже.',
   support: 'Если что-то пошло не так, напишите в поддержку. Мы поможем.',
+  partnerDisabled: 'Install-IOS не подключён: CATALOG_PROVIDER и DELIVERY_PROVIDER работают в режиме mock.',
+  partnerFailed: 'Install-IOS сейчас не отвечает. Попробуйте позже, подробности в логе сервера.',
 } as const;

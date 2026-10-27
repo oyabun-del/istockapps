@@ -1,6 +1,16 @@
 import type { OrderStatus } from '@istock/shared';
-import type { NewOrder, NewTicket, Order, OrderPatch, Ticket, User } from '../../domain/models.js';
 import type {
+  CodeWaitAttempt,
+  NewCodeWaitAttempt,
+  NewOrder,
+  NewTicket,
+  Order,
+  OrderPatch,
+  Ticket,
+  User,
+} from '../../domain/models.js';
+import type {
+  CodeWaitAttemptRepository,
   OrderEventRepository,
   OrderRepository,
   Repositories,
@@ -38,8 +48,8 @@ class MemoryOrderRepository implements OrderRepository {
       paymentId: null,
       paymentUrl: null,
       paymentSyncedAt: null,
-      codeRequests: 0,
-      lastCodeAt: null,
+      deliveryRef: null,
+      deliveryExpiresAt: null,
       paidAt: null,
       completedAt: null,
       createdAt: this.now(),
@@ -99,13 +109,34 @@ class MemoryOrderRepository implements OrderRepository {
     this.orders.set(id, updated);
     return { ...updated };
   }
+}
 
-  async recordCodeRequest(id: number, expectedCount: number, at: Date): Promise<Order | null> {
-    const current = this.orders.get(id);
-    if (!current || current.codeRequests !== expectedCount) return null;
-    const updated = { ...current, codeRequests: expectedCount + 1, lastCodeAt: at };
-    this.orders.set(id, updated);
-    return { ...updated };
+class MemoryCodeWaitAttemptRepository implements CodeWaitAttemptRepository {
+  private attempts: readonly CodeWaitAttempt[] = [];
+
+  constructor(private readonly now: Now) {}
+
+  async create(input: NewCodeWaitAttempt): Promise<CodeWaitAttempt> {
+    if (this.attempts.some((item) => item.idempotencyKey === input.idempotencyKey)) {
+      throw new Error('Duplicate idempotency key');
+    }
+    const attempt: CodeWaitAttempt = { ...input, id: this.attempts.length + 1, waitId: null, createdAt: this.now() };
+    this.attempts = [...this.attempts, attempt];
+    return { ...attempt };
+  }
+
+  async findLatest(orderId: number, groupId: string): Promise<CodeWaitAttempt | null> {
+    const found = this.attempts.filter((item) => item.orderId === orderId && item.groupId === groupId).at(-1);
+    return found ? { ...found } : null;
+  }
+
+  async findByWaitId(orderId: number, waitId: string): Promise<CodeWaitAttempt | null> {
+    const found = this.attempts.find((item) => item.orderId === orderId && item.waitId === waitId);
+    return found ? { ...found } : null;
+  }
+
+  async setWaitId(id: number, waitId: string): Promise<void> {
+    this.attempts = this.attempts.map((item) => (item.id === id ? { ...item, waitId } : item));
   }
 }
 
@@ -146,6 +177,7 @@ export function createMemoryRepositories(now: Now = () => new Date()): MemoryRep
     users: new MemoryUserRepository(),
     orders: new MemoryOrderRepository(now),
     orderEvents: new MemoryOrderEventRepository(),
+    codeWaits: new MemoryCodeWaitAttemptRepository(now),
     tickets: new MemoryTicketRepository(now),
   };
 }

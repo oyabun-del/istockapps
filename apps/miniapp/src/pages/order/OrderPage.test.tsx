@@ -1,3 +1,4 @@
+import type { CodeWaitDto, CredentialsDto, DeliveryAppDto, DeliveryDto, DeliveryGroupDto } from '@istock/shared';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -79,27 +80,135 @@ describe('OrderPage after the invoice closed', () => {
   });
 });
 
-describe('OrderPage', () => {
 
-  it('downloads and confirms the download', async () => {
+const IN_6_HOURS = () => new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+
+function appEntry(id: string, state: DeliveryAppDto['state'] = 'available'): DeliveryAppDto {
+  return {
+    id,
+    name: id.toUpperCase(),
+    state,
+    links: state === 'available' ? { main: `https://install.example/${id}`, reserve: `https://reserve.example/${id}` } : null,
+  };
+}
+
+function deliveryGroup(id: string, apps: DeliveryAppDto[], overrides: Partial<DeliveryGroupDto> = {}): DeliveryGroupDto {
+  return {
+    id,
+    state: apps[0]?.state ?? 'available',
+    expiresAt: IN_6_HOURS(),
+    message: null,
+    codesLeft: 3,
+    apps,
+    ...overrides,
+  };
+}
+
+function delivery(groups: DeliveryGroupDto[] = [deliveryGroup('grp_1', [appEntry('app_sber')])]): DeliveryDto {
+  return { expiresAt: IN_6_HOURS(), isSandbox: false, groups, isReplacing: groups.some((g) => g.state === 'replacing') };
+}
+
+function credentialsFor(groupId = 'grp_1', login = 'id@example.com', password = 'secret'): CredentialsDto {
+  return { groups: [{ groupId, login, password }] };
+}
+
+function codeWait(overrides: Partial<CodeWaitDto> = {}): CodeWaitDto {
+  return {
+    id: 'wait_1',
+    groupId: 'grp_1',
+    status: 'active',
+    code: null,
+    codeExpiresAt: null,
+    deadlineAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    ...overrides,
+  };
+}
+
+function issuedOrder() {
+  vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'credentials_issued' }));
+  vi.spyOn(api, 'delivery').mockResolvedValue(delivery());
+  vi.spyOn(api, 'credentials').mockResolvedValue(credentialsFor());
+}
+
+describe('OrderPage delivery', () => {
+  it('opens the main and reserve links and confirms the download', async () => {
     vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'paid' }));
-    vi.spyOn(api, 'download').mockResolvedValue({ url: 'https://cdn.example.com/app' });
+    vi.spyOn(api, 'delivery').mockResolvedValue(delivery());
     const confirm = vi.spyOn(api, 'confirmDownload').mockResolvedValue(makeOrder({ status: 'download_confirmed' }));
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
 
     renderOrder();
 
     await userEvent.click(await screen.findByRole('button', { name: 'Скачать' }));
-    await waitFor(() => expect(open).toHaveBeenCalledWith('https://cdn.example.com/app', '_blank', 'noopener,noreferrer'));
+    expect(open).toHaveBeenCalledWith('https://install.example/app_sber', '_blank', 'noopener,noreferrer');
+    await userEvent.click(screen.getByRole('button', { name: /Резервная ссылка/ }));
+    expect(open).toHaveBeenCalledWith('https://reserve.example/app_sber', '_blank', 'noopener,noreferrer');
+    expect(screen.getByText(/Ссылки действуют до/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Я скачал/ }));
 
     await waitFor(() => expect(confirm).toHaveBeenCalledWith(7));
     expect(await screen.findByRole('button', { name: /Получить логин и пароль/ })).toBeInTheDocument();
   });
 
+  it('keeps the working app available while another one waits for a replacement', async () => {
+    vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'paid' }));
+    vi.spyOn(api, 'delivery').mockResolvedValue(
+      delivery([
+        deliveryGroup('grp_blocked', [appEntry('app_a', 'replacing')]),
+        deliveryGroup('grp_ok', [appEntry('app_b')]),
+      ]),
+    );
+
+    renderOrder();
+
+    expect(await screen.findByText(/Подбираем замену бесплатно/)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Скачать' })).toHaveLength(1);
+    expect(screen.getByText('APP_B')).toBeInTheDocument();
+  });
+
+  it('shows the revocation message without any link', async () => {
+    vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'paid' }));
+    vi.spyOn(api, 'delivery').mockResolvedValue(
+      delivery([deliveryGroup('grp_1', [appEntry('app_a', 'revoked')], { message: 'Учётка заблокирована' })]),
+    );
+
+    renderOrder();
+
+    expect(await screen.findByText('Учётка заблокирована')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Скачать' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Я скачал/ })).not.toBeInTheDocument();
+  });
+
+  it('marks the sandbox mode', async () => {
+    vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'paid' }));
+    vi.spyOn(api, 'delivery').mockResolvedValue({ ...delivery(), isSandbox: true });
+
+    renderOrder();
+
+    expect(await screen.findByText(/Тестовый режим/)).toBeInTheDocument();
+  });
+
+  it('shows delivery errors with a retry', async () => {
+    vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'paid' }));
+    const load = vi
+      .spyOn(api, 'delivery')
+      .mockRejectedValueOnce(new ApiError('TOO_MANY_REQUESTS', 'Слишком много запросов', 429))
+      .mockResolvedValue(delivery());
+
+    renderOrder();
+    expect(await screen.findByText('Слишком много запросов')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Повторить/ }));
+
+    expect(await screen.findByRole('button', { name: 'Скачать' })).toBeInTheDocument();
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('OrderPage credentials', () => {
   it('reveals credentials after download confirmation', async () => {
     vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'download_confirmed' }));
-    const credentials = vi.spyOn(api, 'credentials').mockResolvedValue({ login: 'id@example.com', password: 'secret' });
+    vi.spyOn(api, 'delivery').mockResolvedValue(delivery());
+    const credentials = vi.spyOn(api, 'credentials').mockResolvedValue(credentialsFor());
 
     renderOrder();
     await userEvent.click(await screen.findByRole('button', { name: /Получить логин и пароль/ }));
@@ -113,10 +222,11 @@ describe('OrderPage', () => {
 
   it('retries the credentials request after a delivery error', async () => {
     vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'download_confirmed' }));
+    vi.spyOn(api, 'delivery').mockResolvedValue(delivery());
     const credentials = vi
       .spyOn(api, 'credentials')
       .mockRejectedValueOnce(new ApiError('DELIVERY_PROVIDER_ERROR', 'Сервис выдачи временно недоступен', 502))
-      .mockResolvedValueOnce({ login: 'id@example.com', password: 'secret' });
+      .mockResolvedValueOnce(credentialsFor());
 
     renderOrder();
     await userEvent.click(await screen.findByRole('button', { name: /Получить логин и пароль/ }));
@@ -128,58 +238,98 @@ describe('OrderPage', () => {
     expect(credentials).toHaveBeenCalledTimes(2);
   });
 
-  it('requests a login code and completes the order', async () => {
+  it('does not ask for credentials while no account is available', async () => {
     vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'credentials_issued' }));
-    vi.spyOn(api, 'credentials').mockResolvedValue({ login: 'id@example.com', password: 'secret' });
-    vi.spyOn(api, 'code').mockResolvedValue({
-      code: '482913',
-      nextRequestAt: new Date(Date.now() + 30_000).toISOString(),
-      expiresAt: null,
-    });
-    const complete = vi.spyOn(api, 'complete').mockResolvedValue(makeOrder({ status: 'completed' }));
+    vi.spyOn(api, 'delivery').mockResolvedValue(delivery([deliveryGroup('grp_1', [appEntry('app_a', 'replacing')])]));
+    const credentials = vi.spyOn(api, 'credentials');
 
     renderOrder();
 
+    expect(await screen.findByText(/Код станет доступен/)).toBeInTheDocument();
+    expect(credentials).not.toHaveBeenCalled();
+  });
+});
+
+describe('OrderPage login code', () => {
+  it('turns on the wait, shows the fresh code and completes the order', async () => {
+    issuedOrder();
+    const start = vi.spyOn(api, 'startCode').mockResolvedValue(codeWait());
+    vi.spyOn(api, 'codeWait')
+      .mockResolvedValueOnce(codeWait())
+      .mockImplementation(async () =>
+        codeWait({ status: 'succeeded', code: '482913', codeExpiresAt: new Date(Date.now() + 60_000).toISOString() }),
+      );
+    const complete = vi.spyOn(api, 'complete').mockResolvedValue(makeOrder({ status: 'completed' }));
+
+    renderOrder();
     expect(await screen.findByText('id@example.com')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /Получить код/ }));
-    expect(await screen.findByText('482913')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Новый код через/ })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: /Включить ожидание кода/ }));
+
+    expect(start).toHaveBeenCalledWith(7, 'grp_1');
+    expect(await screen.findByText(/Ждём код/)).toBeInTheDocument();
+    expect(await screen.findByText('482913', {}, { timeout: 4000 })).toBeInTheDocument();
+    expect(screen.getByText(/Действует ещё/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Включить ожидание кода/ })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: /Приложение работает/ }));
     await waitFor(() => expect(complete).toHaveBeenCalledWith(7));
     expect(await screen.findByText('Приложение активировано')).toBeInTheDocument();
   });
 
-  it('counts down how long the code stays valid, then asks for a new one', async () => {
-    vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'credentials_issued' }));
-    vi.spyOn(api, 'credentials').mockResolvedValue({ login: 'a', password: 'b' });
-    // Times are taken when the code is requested, so a slow test run cannot eat into the 5:00.
-    const issuedCode = (code: string, validMs: number) => async () => ({
-      code,
-      nextRequestAt: new Date(Date.now() - 1000).toISOString(),
-      expiresAt: new Date(Date.now() + validMs).toISOString(),
-    });
-    vi.spyOn(api, 'code')
-      .mockImplementationOnce(issuedCode('482913', 5 * 60 * 1000 - 500))
-      .mockImplementationOnce(issuedCode('111222', -1000));
+  it('removes an expired code and offers a new attempt', async () => {
+    issuedOrder();
+    vi.spyOn(api, 'startCode').mockResolvedValue(
+      codeWait({ status: 'succeeded', code: '111222', codeExpiresAt: new Date(Date.now() - 1000).toISOString() }),
+    );
 
     renderOrder();
-    await userEvent.click(await screen.findByRole('button', { name: /Получить код/ }));
-    expect(await screen.findByRole('timer')).toHaveTextContent('Действует ещё 5:00');
+    await userEvent.click(await screen.findByRole('button', { name: /Включить ожидание кода/ }));
 
-    await userEvent.click(screen.getByRole('button', { name: /Запросить новый код/ }));
-    expect(await screen.findByText('Код истёк, запросите новый')).toBeInTheDocument();
-    expect(screen.queryByRole('timer')).not.toBeInTheDocument();
+    expect(await screen.findByText(/Код истёк/)).toBeInTheDocument();
+    expect(screen.queryByText('111222')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Включить ожидание кода/ })).toBeEnabled();
+  });
+
+  it('stops after a timeout and lets the buyer try again', async () => {
+    issuedOrder();
+    vi.spyOn(api, 'startCode').mockResolvedValue(codeWait({ status: 'timed_out' }));
+
+    renderOrder();
+    await userEvent.click(await screen.findByRole('button', { name: /Включить ожидание кода/ }));
+
+    expect(await screen.findByText(/не пришёл за 5 минут/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Включить ожидание кода/ })).toBeInTheDocument();
+  });
+
+  it('re-reads the delivery when the wait is cancelled', async () => {
+    issuedOrder();
+    vi.spyOn(api, 'startCode').mockResolvedValue(codeWait({ status: 'cancelled' }));
+
+    renderOrder();
+    await userEvent.click(await screen.findByRole('button', { name: /Включить ожидание кода/ }));
+
+    expect(await screen.findByText(/доступ к аккаунту изменился/)).toBeInTheDocument();
+    await waitFor(() => expect(vi.mocked(api.delivery).mock.calls.length).toBeGreaterThanOrEqual(2));
+  });
+
+  it('blocks the button when the code limit is used up', async () => {
+    vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'credentials_issued' }));
+    vi.spyOn(api, 'delivery').mockResolvedValue(delivery([deliveryGroup('grp_1', [appEntry('app_a')], { codesLeft: 0 })]));
+    vi.spyOn(api, 'credentials').mockResolvedValue(credentialsFor());
+
+    renderOrder();
+
+    expect(await screen.findByRole('button', { name: /Лимит кодов исчерпан/ })).toBeDisabled();
   });
 
   it('shows code request errors', async () => {
-    vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'credentials_issued' }));
-    vi.spyOn(api, 'credentials').mockResolvedValue({ login: 'a', password: 'b' });
-    vi.spyOn(api, 'code').mockRejectedValue(new ApiError('TOO_MANY_REQUESTS', 'Подождите немного', 429));
+    issuedOrder();
+    vi.spyOn(api, 'startCode').mockRejectedValue(new ApiError('INVALID_STATE', 'Доступ к этому аккаунту отозван', 409));
 
     renderOrder();
-    await userEvent.click(await screen.findByRole('button', { name: /Получить код/ }));
-    expect(await screen.findByText('Подождите немного')).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: /Включить ожидание кода/ }));
+
+    expect(await screen.findByText('Доступ к этому аккаунту отозван')).toBeInTheDocument();
   });
 
   it('shows not found errors', async () => {

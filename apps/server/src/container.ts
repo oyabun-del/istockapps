@@ -1,12 +1,17 @@
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import type { TelegramAdapters } from './bot/bot.js';
-import { channelUrl, supportUrl, type Env } from './config/env.js';
+import { channelUrl, installiosPriceOf, supportUrl, type Env } from './config/env.js';
 import type { AppDeps } from './http/app.js';
 import type { Logger } from './lib/logger.js';
 import { initDataSecret } from './lib/telegram-init-data.js';
+import type { CatalogProvider } from './providers/catalog/catalog-provider.js';
+import { InstalliosCatalogProvider } from './providers/catalog/installios-catalog-provider.js';
 import { MockCatalogProvider } from './providers/catalog/mock-catalog-provider.js';
+import type { DeliveryProvider } from './providers/delivery/delivery-provider.js';
 import { MockDeliveryProvider } from './providers/delivery/mock-delivery-provider.js';
+import { InstalliosClient } from './providers/installios/installios-client.js';
+import { InstalliosDeliveryProvider } from './providers/installios/installios-delivery-provider.js';
 import { CisPayProvider } from './providers/payment/cispay-provider.js';
 import { MockPaymentProvider } from './providers/payment/mock-payment-provider.js';
 import type { PaymentProvider } from './providers/payment/payment-provider.js';
@@ -16,6 +21,7 @@ import { ChannelInfoService } from './services/channel-info-service.js';
 import { DeliveryService } from './services/delivery-service.js';
 import { NotificationService } from './services/notification-service.js';
 import { OrderService } from './services/order-service.js';
+import { PartnerAdminService } from './services/partner-admin-service.js';
 import { SubscriptionService } from './services/subscription-service.js';
 import { TicketService } from './services/ticket-service.js';
 
@@ -26,6 +32,37 @@ export interface Container {
   repos: Repositories;
   appDeps: AppDeps;
   subscription: SubscriptionService;
+  /** null when the shop runs on mock catalog and delivery. */
+  partnerAdmin: PartnerAdminService | null;
+  /** Background jobs: start after the server listens, stop on shutdown. */
+  background: { start(): void; stop(): void };
+}
+
+interface Supply {
+  catalog: CatalogProvider;
+  delivery: DeliveryProvider;
+  installiosCatalog: InstalliosCatalogProvider | null;
+  partnerAdmin: PartnerAdminService | null;
+}
+
+/** Catalog and delivery always come from the same source (checked in env). */
+function createSupply(env: Env, logger: Logger): Supply {
+  if (env.DELIVERY_PROVIDER !== 'installios' || !env.INSTALLIOS_API_KEY) {
+    return {
+      catalog: new MockCatalogProvider(),
+      delivery: new MockDeliveryProvider(),
+      installiosCatalog: null,
+      partnerAdmin: null,
+    };
+  }
+  const client = new InstalliosClient({ apiBase: env.INSTALLIOS_API_BASE, apiKey: env.INSTALLIOS_API_KEY, logger });
+  const catalog = new InstalliosCatalogProvider({ client, priceOf: installiosPriceOf(env), logger });
+  return {
+    catalog,
+    delivery: new InstalliosDeliveryProvider(client),
+    installiosCatalog: catalog,
+    partnerAdmin: new PartnerAdminService({ client, catalog }),
+  };
 }
 
 function createPayments(env: Env): { payments: PaymentProvider; mockPayments?: MockPaymentProvider } {
@@ -41,8 +78,7 @@ function createPayments(env: Env): { payments: PaymentProvider; mockPayments?: M
 export function createContainer(env: Env, telegram: TelegramAdapters, logger: Logger): Container {
   const db = new PrismaClient();
   const repos = createPrismaRepositories(db);
-  const catalog = new MockCatalogProvider();
-  const delivery = new MockDeliveryProvider();
+  const { catalog, delivery, installiosCatalog, partnerAdmin } = createSupply(env, logger);
   const { payments, mockPayments } = createPayments(env);
 
   const notifications = new NotificationService({
@@ -84,5 +120,10 @@ export function createContainer(env: Env, telegram: TelegramAdapters, logger: Lo
     miniappDir: env.SERVE_MINIAPP ? MINIAPP_DIST : null,
   };
 
-  return { db, repos, appDeps, subscription };
+  const background = {
+    start: () => installiosCatalog?.start(),
+    stop: () => installiosCatalog?.stop(),
+  };
+
+  return { db, repos, appDeps, subscription, partnerAdmin, background };
 }

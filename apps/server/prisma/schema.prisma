@@ -37,16 +37,31 @@ model Order {
   paymentId       String?      @unique
   paymentUrl      String?
   paymentSyncedAt DateTime?
-  codeRequests    Int          @default(0)
-  lastCodeAt      DateTime?
+  // Install-IOS order id and deadline. Links, credentials and codes are never stored.
+  deliveryRef       String?   @unique
+  deliveryExpiresAt DateTime?
   paidAt          DateTime?
   completedAt     DateTime?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   events          OrderEvent[]
   tickets         Ticket[]
+  codeWaits       CodeWaitAttempt[]
 
   @@index([userId, createdAt])
+}
+
+// One explicit attempt to receive a login code: ids only, the code itself is never stored.
+model CodeWaitAttempt {
+  id             Int      @id @default(autoincrement())
+  orderId        Int
+  order          Order    @relation(fields: [orderId], references: [id])
+  groupId        String
+  idempotencyKey String   @unique
+  waitId         String?  @unique
+  createdAt      DateTime @default(now())
+
+  @@index([orderId, groupId])
 }
 
 model OrderEvent {

@@ -6,6 +6,7 @@ import {
   type CatalogQuery,
   type CreateOrderInput,
   type CreateTicketInput,
+  type StartCodeInput,
 } from './api.js';
 
 /** Server-side request validation. Kept out of the main entry so zod is not bundled into the Mini App. */
@@ -35,4 +36,14 @@ export const catalogQuerySchema: z.ZodType<CatalogQuery> = z.object({
 
 export const orderIdParamSchema = z.object({
   id: z.coerce.number().int().positive(),
+});
+
+/** Opaque ids of the delivery API (grp_…, wait_…); same safety rules as app ids. */
+const deliveryIdSchema = appIdSchema;
+
+export const startCodeSchema: z.ZodType<StartCodeInput> = z.object({ groupId: deliveryIdSchema });
+
+export const codeWaitParamSchema = z.object({
+  id: z.coerce.number().int().positive(),
+  waitId: deliveryIdSchema,
 });

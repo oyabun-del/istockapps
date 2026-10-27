@@ -1,5 +1,14 @@
 import type { OrderStatus } from '@istock/shared';
-import type { NewOrder, NewTicket, Order, OrderPatch, Ticket, User } from '../domain/models.js';
+import type {
+  CodeWaitAttempt,
+  NewCodeWaitAttempt,
+  NewOrder,
+  NewTicket,
+  Order,
+  OrderPatch,
+  Ticket,
+  User,
+} from '../domain/models.js';
 
 export interface UserRepository {
   upsert(user: User): Promise<User>;
@@ -19,8 +28,14 @@ export interface OrderRepository {
    * Returns the updated order, or null if the status did not match (concurrent change).
    */
   transition(id: number, from: readonly OrderStatus[], patch: OrderPatch & { status: OrderStatus }): Promise<Order | null>;
-  /** Atomic increment used for code-request throttling; null when the order changed concurrently. */
-  recordCodeRequest(id: number, expectedCount: number, at: Date): Promise<Order | null>;
+}
+
+export interface CodeWaitAttemptRepository {
+  create(attempt: NewCodeWaitAttempt): Promise<CodeWaitAttempt>;
+  /** Newest attempt for the group, or null. */
+  findLatest(orderId: number, groupId: string): Promise<CodeWaitAttempt | null>;
+  findByWaitId(orderId: number, waitId: string): Promise<CodeWaitAttempt | null>;
+  setWaitId(id: number, waitId: string): Promise<void>;
 }
 
 export interface OrderEventRepository {
@@ -37,5 +52,6 @@ export interface Repositories {
   users: UserRepository;
   orders: OrderRepository;
   orderEvents: OrderEventRepository;
+  codeWaits: CodeWaitAttemptRepository;
   tickets: TicketRepository;
 }

@@ -65,7 +65,7 @@ export function createTestContext(): TestContext {
   const sender = new FakeSender();
   const payments = new MockPaymentProvider('https://api.example.com');
   const catalog = new MockCatalogProvider();
-  const delivery = new MockDeliveryProvider();
+  const delivery = new MockDeliveryProvider(clock.now);
   const members = new Map<number, ChatMemberInfo>();
 
   const notifications = new NotificationService({ sender, adminIds: ADMIN_IDS, webAppUrl: WEBAPP_URL, logger: silentLogger });

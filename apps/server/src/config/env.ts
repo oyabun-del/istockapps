@@ -30,6 +30,23 @@ const usernameSchema = z
   .pipe(z.string().regex(/^[A-Za-z0-9_]{4,}$/, 'Expected Telegram username'));
 
 const httpsUrl = z.url({ protocol: /^https$/ });
+
+const MAX_PRICE_RUB = 1_000_000;
+const rublesSchema = z.coerce.number().positive().max(MAX_PRICE_RUB).multipleOf(0.01);
+
+/** JSON object of app id → price in rubles. */
+const pricesSchema = z
+  .string()
+  .trim()
+  .transform((raw, ctx) => {
+    try {
+      return JSON.parse(raw) as unknown;
+    } catch {
+      ctx.addIssue({ code: 'custom', message: 'INSTALLIOS_PRICES must be a JSON object like {"app_x": 299}' });
+      return z.NEVER;
+    }
+  })
+  .pipe(z.record(z.string().min(1), z.number().positive().max(MAX_PRICE_RUB).multipleOf(0.01)));
 /** http is allowed outside production (local dev); production is checked in superRefine. */
 const webUrl = z.url({ protocol: /^https?$/ });
 
@@ -68,8 +85,15 @@ const envSchema = z
       .default('false')
       .transform((value) => value === 'true'),
 
-    CATALOG_PROVIDER: z.enum(['mock']).default('mock'),
-    DELIVERY_PROVIDER: z.enum(['mock']).default('mock'),
+    CATALOG_PROVIDER: z.enum(['mock', 'installios']).default('mock'),
+    DELIVERY_PROVIDER: z.enum(['mock', 'installios']).default('mock'),
+    INSTALLIOS_API_BASE: httpsUrl.default('https://api.installios.ru/v1'),
+    /** Partner key; server-to-server only, never sent to the Mini App. */
+    INSTALLIOS_API_KEY: z.string().trim().min(16, 'INSTALLIOS_API_KEY looks too short').optional(),
+    /** Price of every Install-IOS app in rubles, unless INSTALLIOS_PRICES overrides it. */
+    INSTALLIOS_DEFAULT_PRICE_RUB: rublesSchema.optional(),
+    /** Per-app prices in rubles: {"app_…": 299}. */
+    INSTALLIOS_PRICES: pricesSchema.default({}),
 
     /** Development only: lets the Mini App work in a regular browser without Telegram initData. */
     DEV_USER_ID: z.coerce.number().int().positive().optional(),
@@ -132,6 +156,28 @@ const envSchema = z
         message: 'Mock catalog/delivery would hand out fake credentials; connect the real API before production',
       });
     }
+    const usesInstallios = env.CATALOG_PROVIDER === 'installios' || env.DELIVERY_PROVIDER === 'installios';
+    if (usesInstallios && !env.INSTALLIOS_API_KEY) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['INSTALLIOS_API_KEY'],
+        message: 'INSTALLIOS_API_KEY is required when CATALOG_PROVIDER or DELIVERY_PROVIDER is installios',
+      });
+    }
+    if (env.CATALOG_PROVIDER === 'installios' && env.INSTALLIOS_DEFAULT_PRICE_RUB === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['INSTALLIOS_DEFAULT_PRICE_RUB'],
+        message: 'INSTALLIOS_DEFAULT_PRICE_RUB is required: Install-IOS does not send prices',
+      });
+    }
+    if (env.CATALOG_PROVIDER !== env.DELIVERY_PROVIDER) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['DELIVERY_PROVIDER'],
+        message: 'CATALOG_PROVIDER and DELIVERY_PROVIDER must match: app ids of one are unknown to the other',
+      });
+    }
     if (env.REQUIRED_CHANNEL.startsWith('-100') && !env.REQUIRED_CHANNEL_URL) {
       ctx.addIssue({
         code: 'custom',
@@ -157,6 +203,17 @@ export function parseEnv(source: Record<string, string | undefined>): Env {
 export function channelUrl(env: Pick<Env, 'REQUIRED_CHANNEL' | 'REQUIRED_CHANNEL_URL'>): string {
   if (env.REQUIRED_CHANNEL_URL) return env.REQUIRED_CHANNEL_URL;
   return `https://t.me/${env.REQUIRED_CHANNEL.replace(/^@/, '')}`;
+}
+
+const KOPECKS_PER_RUBLE = 100;
+
+/** Price in kopecks of an Install-IOS app: its override, else the default price. */
+export function installiosPriceOf(
+  env: Pick<Env, 'INSTALLIOS_DEFAULT_PRICE_RUB' | 'INSTALLIOS_PRICES'>,
+): (appId: string) => number {
+  const fallback = env.INSTALLIOS_DEFAULT_PRICE_RUB;
+  if (fallback === undefined) throw new Error('INSTALLIOS_DEFAULT_PRICE_RUB is not set');
+  return (appId) => Math.round((env.INSTALLIOS_PRICES[appId] ?? fallback) * KOPECKS_PER_RUBLE);
 }
 
 export function supportUrl(env: Pick<Env, 'SUPPORT_USERNAME'>): string {

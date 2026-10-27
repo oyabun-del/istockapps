@@ -128,10 +128,13 @@ export function LoginCodeBox({ orderId, groupId, codesLeft }: Props) {
     setIsStale(true);
   }, [isCodeOver, waitId, orderId, queryClient]);
 
+  // The server marks the code step done on this read: re-read the order to open the last step.
   const isSucceeded = wait?.status === 'succeeded';
   useEffect(() => {
-    if (isSucceeded) hapticNotify('success');
-  }, [isSucceeded]);
+    if (!isSucceeded) return;
+    hapticNotify('success');
+    void queryClient.invalidateQueries({ queryKey: queryKeys.order(orderId) });
+  }, [isSucceeded, orderId, queryClient]);
 
   // A cancelled wait means the account changed: re-read the delivery before anything else.
   const isCancelled = wait?.status === 'cancelled';

@@ -137,12 +137,22 @@ export class DeliveryService {
     if (!attempt) throw new AppError('NOT_FOUND', 'Ожидание кода не найдено');
     const wait = await this.pollWait(order, waitId);
     await this.saveExpiry(order, wait.orderExpiresAt);
+    if (wait.status === 'succeeded') await this.markCodeStepDone(order, 'code_received');
     return toCodeWaitDto(wait, attempt.groupId, this.now());
+  }
+
+  /** Apple does not always ask for a code: the buyer may finish the code step without one. */
+  async skipCode(userId: number, orderId: number): Promise<Order> {
+    const order = await this.codeOrder(userId, orderId);
+    return this.markCodeStepDone(order, 'code_skipped');
   }
 
   async complete(userId: number, orderId: number): Promise<Order> {
     const order = await getOwnedOrder(this.deps.repos.orders, userId, orderId);
     if (order.status === 'completed') return order;
+    if (order.status === 'credentials_issued' && !order.codeReceivedAt) {
+      throw new AppError('INVALID_STATE', 'Сначала введите код подтверждения');
+    }
     const updated = await this.deps.repos.orders.transition(order.id, ['credentials_issued'], {
       status: 'completed',
       completedAt: this.now(),
@@ -158,6 +168,14 @@ export class DeliveryService {
       throw new AppError('INVALID_STATE', 'Код доступен после получения данных для входа');
     }
     return order;
+  }
+
+  /** Unlocks the last step once; repeated calls keep the first time. */
+  private async markCodeStepDone(order: Order, event: 'code_received' | 'code_skipped'): Promise<Order> {
+    if (order.codeReceivedAt) return order;
+    const updated = await this.deps.repos.orders.update(order.id, { codeReceivedAt: this.now() });
+    await this.deps.repos.orderEvents.add(order.id, event);
+    return updated;
   }
 
   /** Fresh credentials matched by the ids of the groups that are usable right now. */

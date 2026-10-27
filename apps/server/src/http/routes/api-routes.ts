@@ -4,7 +4,6 @@ import {
   catalogQuerySchema,
   codeWaitParamSchema,
   createOrderSchema,
-  createTicketSchema,
   orderIdParamSchema,
   startCodeSchema,
 } from '@istock/shared/schemas';
@@ -16,7 +15,6 @@ import type { ChannelInfoService } from '../../services/channel-info-service.js'
 import type { DeliveryService } from '../../services/delivery-service.js';
 import type { OrderService } from '../../services/order-service.js';
 import type { SubscriptionService } from '../../services/subscription-service.js';
-import type { TicketService } from '../../services/ticket-service.js';
 import { requireUser } from '../auth.js';
 import { toOrderDto } from '../dto.js';
 import { ok } from '../envelope.js';
@@ -25,7 +23,6 @@ import { parseInput } from '../validation.js';
 const CODE_RATE_LIMIT = { max: 6, timeWindow: '1 minute' };
 /** The Mini App polls a running wait about once a second for up to five minutes. */
 const CODE_POLL_RATE_LIMIT = { max: 90, timeWindow: '1 minute' };
-const CARD_MIN_KOPECKS = 5000;
 const NO_STORE = 'no-store';
 
 export interface ApiRoutesDeps {
@@ -33,7 +30,6 @@ export interface ApiRoutesDeps {
   catalog: CatalogProvider;
   orders: OrderService;
   delivery: DeliveryService;
-  tickets: TicketService;
   subscription: SubscriptionService;
   links: { channelUrl: string; supportUrl: string; termsUrl: string | null };
   channel: ChannelInfoService;
@@ -89,10 +85,7 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiRoutesDeps): vo
 
   app.get('/payment-methods', async () => {
     const methods = await deps.orders.listPaymentMethods();
-    const dto: PaymentMethodDto[] = methods.map((method) => ({
-      method,
-      minAmountKopecks: method === 'CARD' ? CARD_MIN_KOPECKS : null,
-    }));
+    const dto: PaymentMethodDto[] = methods.map((method) => ({ method }));
     return ok(dto);
   });
 
@@ -148,15 +141,14 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiRoutesDeps): vo
     return ok(await deps.delivery.getCodeWait(requireUser(request).id, id, waitId));
   });
 
+  app.post('/orders/:id/skip-code', async (request) => {
+    const { id } = parseInput(orderIdParamSchema, request.params);
+    return ok(toOrderDto(await deps.delivery.skipCode(requireUser(request).id, id)));
+  });
+
   app.post('/orders/:id/complete', async (request) => {
     const { id } = parseInput(orderIdParamSchema, request.params);
     return ok(toOrderDto(await deps.delivery.complete(requireUser(request).id, id)));
   });
 
-  // ---------- Support ----------
-  app.post('/tickets', async (request) => {
-    const input = parseInput(createTicketSchema, request.body);
-    const ticket = await deps.tickets.create(requireUser(request), input);
-    return ok({ id: ticket.id, createdAt: ticket.createdAt.toISOString() });
-  });
 }

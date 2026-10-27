@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatRub, isPaidStatus, isTerminalStatus, rubToKopecks } from './index.js';
-import { appIdParamSchema, createOrderSchema, createTicketSchema } from './schemas.js';
+import { appIdParamSchema, createOrderSchema } from './schemas.js';
 
 describe('formatRub', () => {
   it('formats whole rubles without fraction', () => {
@@ -38,9 +38,11 @@ describe('order status helpers', () => {
 });
 
 describe('request schemas', () => {
-  it('rejects unknown payment methods', () => {
-    const result = createOrderSchema.safeParse({ appId: 'sber', paymentMethod: 'TPAY' });
-    expect(result.success).toBe(false);
+  it('accepts only SBP for new orders', () => {
+    expect(createOrderSchema.safeParse({ appId: 'sber', paymentMethod: 'SBP' }).success).toBe(true);
+    for (const paymentMethod of ['CARD', 'CRYPTO', 'TPAY']) {
+      expect(createOrderSchema.safeParse({ appId: 'sber', paymentMethod }).success).toBe(false);
+    }
   });
 
   it('accepts catalog-style app ids and rejects path-like ones', () => {
@@ -52,11 +54,5 @@ describe('request schemas', () => {
       expect(appIdParamSchema.safeParse({ appId }).success).toBe(false);
       expect(createOrderSchema.safeParse({ appId, paymentMethod: 'SBP' }).success).toBe(false);
     }
-  });
-
-  it('trims ticket message and enforces minimum length', () => {
-    expect(createTicketSchema.safeParse({ message: '   hi   ' }).success).toBe(false);
-    const ok = createTicketSchema.safeParse({ message: '  Не приходит код  ' });
-    expect(ok.success && ok.data.message).toBe('Не приходит код');
   });
 });

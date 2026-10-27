@@ -6,7 +6,6 @@ import { ME, SBER, makeOrder, renderWithProviders } from '../test/render';
 import { AppPage } from './app/AppPage';
 import { CatalogPage } from './catalog/CatalogPage';
 import { GuidePage } from './guide/GuidePage';
-import { TicketPage } from './support/TicketPage';
 
 const CATEGORIES = [
   { id: 'all', title: 'Все', icon: 'grid_view' },
@@ -53,12 +52,9 @@ describe('CatalogPage', () => {
 });
 
 describe('AppPage', () => {
-  it('creates an order with the chosen method and opens the payment page', async () => {
+  it('pays by SBP and opens the payment page', async () => {
     vi.spyOn(api, 'app').mockResolvedValue(SBER);
-    vi.spyOn(api, 'paymentMethods').mockResolvedValue([
-      { method: 'SBP', minAmountKopecks: null },
-      { method: 'CARD', minAmountKopecks: 5000 },
-    ]);
+    vi.spyOn(api, 'paymentMethods').mockResolvedValue([{ method: 'SBP' }]);
     const createOrder = vi
       .spyOn(api, 'createOrder')
       .mockResolvedValue(makeOrder({ status: 'awaiting_payment', paymentUrl: 'https://pay.example.com/1' }));
@@ -66,45 +62,35 @@ describe('AppPage', () => {
 
     renderWithProviders(<AppPage />, { route: '/apps/sberbank', path: '/apps/:appId' });
 
-    await userEvent.click(await screen.findByRole('button', { name: /Карта РФ/ }));
+    expect(await screen.findByText('СБП')).toBeInTheDocument();
+    expect(screen.queryByText(/Карта РФ|USDT/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Оплатить 349 ₽/ }));
 
-    await waitFor(() => expect(createOrder).toHaveBeenCalledWith({ appId: 'sberbank', paymentMethod: 'CARD' }));
+    await waitFor(() => expect(createOrder).toHaveBeenCalledWith({ appId: 'sberbank', paymentMethod: 'SBP' }));
     expect(open).toHaveBeenCalledWith('https://pay.example.com/1', '_blank', 'noopener,noreferrer');
     expect(await screen.findByTestId('navigated')).toBeInTheDocument();
   });
 
-  it('hides methods below their minimum and shows checkout errors', async () => {
-    vi.spyOn(api, 'app').mockResolvedValue({ ...SBER, priceKopecks: 3000 });
-    vi.spyOn(api, 'paymentMethods').mockResolvedValue([
-      { method: 'SBP', minAmountKopecks: null },
-      { method: 'CARD', minAmountKopecks: 5000 },
-    ]);
+  it('blocks checkout while SBP is unavailable', async () => {
+    vi.spyOn(api, 'app').mockResolvedValue(SBER);
+    vi.spyOn(api, 'paymentMethods').mockResolvedValue([]);
+
+    renderWithProviders(<AppPage />, { route: '/apps/sberbank', path: '/apps/:appId' });
+
+    expect(await screen.findByText(/Оплата временно недоступна/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Оплатить/ })).toBeDisabled();
+  });
+
+  it('shows checkout errors', async () => {
+    vi.spyOn(api, 'app').mockResolvedValue(SBER);
+    vi.spyOn(api, 'paymentMethods').mockResolvedValue([{ method: 'SBP' }]);
     vi.spyOn(api, 'createOrder').mockRejectedValue(new ApiError('PAYMENT_PROVIDER_ERROR', 'Не удалось создать платёж', 502));
 
     renderWithProviders(<AppPage />, { route: '/apps/sberbank', path: '/apps/:appId' });
 
-    expect(await screen.findByRole('button', { name: /СБП/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Карта РФ/ })).not.toBeInTheDocument();
+    await screen.findByText('СБП');
     await userEvent.click(screen.getByRole('button', { name: /Оплатить/ }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось создать платёж');
-  });
-});
-
-describe('TicketPage', () => {
-  it('submits a ticket linked to the order from the URL', async () => {
-    vi.spyOn(api, 'orders').mockResolvedValue([makeOrder()]);
-    const createTicket = vi.spyOn(api, 'createTicket').mockResolvedValue({ id: 3, createdAt: '2026-10-14T12:00:00Z' });
-
-    renderWithProviders(<TicketPage />, { route: '/support?order=7', path: '/support' });
-
-    const submit = screen.getByRole('button', { name: /Отправить/ });
-    expect(submit).toBeDisabled();
-    await userEvent.type(screen.getByRole('textbox'), 'Не приходит код');
-    await userEvent.click(submit);
-
-    await waitFor(() => expect(createTicket).toHaveBeenCalledWith({ message: 'Не приходит код', orderId: 7 }));
-    expect(await screen.findByText('Обращение #3 отправлено')).toBeInTheDocument();
   });
 });
 

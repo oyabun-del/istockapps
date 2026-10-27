@@ -1,6 +1,5 @@
-import { formatRub, type PaymentMethod } from '@istock/shared';
+import { ACTIVE_PAYMENT_METHOD, formatRub } from '@istock/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Page } from '../../components/layout/Page';
 import { AppIcon } from '../../components/ui/AppIcon';
@@ -11,25 +10,19 @@ import { QUICK_STEPS } from '../../content/guide';
 import { api, errorMessage } from '../../lib/api';
 import { queryKeys } from '../../lib/queries';
 import { hapticNotify, openExternalLink } from '../../lib/telegram';
-import { PaymentMethodPicker } from './PaymentMethodPicker';
+import { SbpPaymentRow } from './SbpPaymentRow';
 
 export function AppPage() {
   const { appId = '' } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<PaymentMethod | null>(null);
 
   const app = useQuery({ queryKey: queryKeys.app(appId), queryFn: () => api.app(appId) });
   const methods = useQuery({ queryKey: queryKeys.paymentMethods, queryFn: api.paymentMethods, staleTime: 5 * 60_000 });
-
-  const available = (methods.data ?? []).filter(
-    (item) => !app.data || item.minAmountKopecks === null || app.data.priceKopecks >= item.minAmountKopecks,
-  );
-  // A stale choice (e.g. card below its minimum) falls back to the first available method.
-  const method = available.find((item) => item.method === selected)?.method ?? available[0]?.method ?? null;
+  const isSbpAvailable = methods.data?.some((item) => item.method === ACTIVE_PAYMENT_METHOD) ?? false;
 
   const checkout = useMutation({
-    mutationFn: (paymentMethod: PaymentMethod) => api.createOrder({ appId, paymentMethod }),
+    mutationFn: () => api.createOrder({ appId, paymentMethod: ACTIVE_PAYMENT_METHOD }),
     onSuccess: (order) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.orders });
       queryClient.setQueryData(queryKeys.order(order.id), order);
@@ -93,12 +86,10 @@ export function AppPage() {
             </ol>
           </details>
 
-          <PaymentMethodPicker
-            methods={available}
+          <SbpPaymentRow
+            isAvailable={isSbpAvailable}
             isLoading={methods.isPending}
             error={methods.isError ? errorMessage(methods.error) : null}
-            selected={method}
-            onSelect={setSelected}
           />
 
           <div className="mt-6">
@@ -106,9 +97,9 @@ export function AppPage() {
               size="lg"
               isFullWidth
               icon="lock"
-              disabled={!method}
+              disabled={!isSbpAvailable}
               isLoading={checkout.isPending}
-              onClick={() => method && checkout.mutate(method)}
+              onClick={() => checkout.mutate()}
             >
               Оплатить {formatRub(app.data.priceKopecks)}
             </Button>

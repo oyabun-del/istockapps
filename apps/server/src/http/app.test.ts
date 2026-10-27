@@ -4,7 +4,7 @@ import { initDataSecret, signInitData } from '../lib/telegram-init-data.js';
 import { MOCK_CODE_AFTER_POLLS } from '../providers/delivery/mock-delivery-provider.js';
 import { CisPayProvider, signCisPayBody } from '../providers/payment/cispay-provider.js';
 import { CODE_POLL_MIN_INTERVAL_MS } from '../services/delivery-service.js';
-import { BOT_TOKEN, BUYER, OTHER_USER, createTestContext, type TestContext } from '../test/fixtures.js';
+import { BOT_TOKEN, BUYER, OTHER_USER, createPaidOrder, createTestContext, type TestContext } from '../test/fixtures.js';
 import { buildApp, type AppDeps } from './app.js';
 
 const CISPAY_KEY = 'cis_sec_test';
@@ -35,7 +35,6 @@ function baseDeps(overrides: Partial<AppDeps> = {}): AppDeps {
     mockPayments: ctx.payments,
     orders: ctx.orders,
     delivery: ctx.deliveryService,
-    tickets: ctx.tickets,
     subscription: ctx.subscription,
     ...overrides,
   };
@@ -135,9 +134,9 @@ describe('catalog', () => {
     expect(failed.json().error.code).toBe('CATALOG_PROVIDER_ERROR');
   });
 
-  it('lists payment methods with the card minimum', async () => {
+  it('lists SBP as the only payment method', async () => {
     const response = await app.inject({ method: 'GET', url: '/api/payment-methods', headers: authHeader() });
-    expect(response.json().data).toContainEqual({ method: 'CARD', minAmountKopecks: 5000 });
+    expect(response.json().data).toEqual([{ method: 'SBP' }]);
   });
 });
 
@@ -257,6 +256,8 @@ describe('purchase flow through HTTP', () => {
       code = status.json().data.code;
     }
     expect(code).toMatch(/^\d{6}$/);
+    const afterCode = await app.inject({ method: 'GET', url: `/api/orders/${order.id}`, headers: authHeader() });
+    expect(afterCode.json().data.isCodeReceived).toBe(true);
 
     const done = await app.inject({ method: 'POST', url: `/api/orders/${order.id}/complete`, headers: authHeader() });
     expect(done.json().data.status).toBe('completed');
@@ -266,14 +267,16 @@ describe('purchase flow through HTTP', () => {
   });
 
   it('validates input and hides other users orders', async () => {
-    const invalid = await app.inject({
-      method: 'POST',
-      url: '/api/orders',
-      headers: authHeader(),
-      payload: { appId: 'sberbank', paymentMethod: 'TPAY' },
-    });
-    expect(invalid.statusCode).toBe(400);
-    expect(invalid.json().error.code).toBe('VALIDATION_ERROR');
+    for (const paymentMethod of ['TPAY', 'CARD', 'CRYPTO']) {
+      const invalid = await app.inject({
+        method: 'POST',
+        url: '/api/orders',
+        headers: authHeader(),
+        payload: { appId: 'sberbank', paymentMethod },
+      });
+      expect(invalid.statusCode).toBe(400);
+      expect(invalid.json().error.code).toBe('VALIDATION_ERROR');
+    }
 
     const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
     const foreign = await app.inject({
@@ -287,15 +290,29 @@ describe('purchase flow through HTTP', () => {
     expect(badId.statusCode).toBe(400);
   });
 
-  it('creates support tickets', async () => {
+  it('lets the buyer skip the code when Apple did not ask for one', async () => {
+    const paid = await createPaidOrder(ctx);
+    await ctx.deliveryService.confirmDownload(BUYER.id, paid.id);
+    await ctx.deliveryService.getCredentials(BUYER.id, paid.id);
+
+    const locked = await app.inject({ method: 'POST', url: `/api/orders/${paid.id}/complete`, headers: authHeader() });
+    expect(locked.statusCode).toBe(409);
+
+    const skipped = await app.inject({ method: 'POST', url: `/api/orders/${paid.id}/skip-code`, headers: authHeader() });
+    expect(skipped.json().data).toMatchObject({ status: 'credentials_issued', isCodeReceived: true });
+
+    const done = await app.inject({ method: 'POST', url: `/api/orders/${paid.id}/complete`, headers: authHeader() });
+    expect(done.json().data.status).toBe('completed');
+  });
+
+  it('no longer accepts support tickets', async () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/tickets',
       headers: authHeader(),
       payload: { message: 'Код не приходит уже 10 минут' },
     });
-    expect(response.json()).toMatchObject({ success: true, data: { id: 1 } });
-    expect(ctx.sender.sent).toHaveLength(2);
+    expect(response.statusCode).toBe(404);
   });
 
   it('answers the mock pay page for unknown payments', async () => {

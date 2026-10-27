@@ -25,6 +25,8 @@ export interface Order {
   deliveryRef: string | null;
   /** Last known delivery deadline from the delivery API. */
   deliveryExpiresAt: Date | null;
+  /** The buyer received a login code (or said Apple did not ask for one); unlocks the last step. */
+  codeReceivedAt: Date | null;
   paidAt: Date | null;
   completedAt: Date | null;
   createdAt: Date;
@@ -44,6 +46,7 @@ export type OrderPatch = Partial<
     | 'paymentSyncedAt'
     | 'deliveryRef'
     | 'deliveryExpiresAt'
+    | 'codeReceivedAt'
     | 'paidAt'
     | 'completedAt'
   >
@@ -62,13 +65,3 @@ export interface CodeWaitAttempt {
 }
 
 export type NewCodeWaitAttempt = Pick<CodeWaitAttempt, 'orderId' | 'groupId' | 'idempotencyKey'>;
-
-export interface Ticket {
-  id: number;
-  userId: number;
-  orderId: number | null;
-  message: string;
-  createdAt: Date;
-}
-
-export type NewTicket = Pick<Ticket, 'userId' | 'orderId' | 'message'>;

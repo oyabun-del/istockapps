@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { AppDto, CreateOrderInput, PaymentMethod } from '@istock/shared';
+import { ACTIVE_PAYMENT_METHOD, type ActivePaymentMethod, type AppDto, type CreateOrderInput } from '@istock/shared';
 import type { Order, User } from '../domain/models.js';
 import { allowedSourcesFor, INVOICE_TTL_MS } from '../domain/order-transitions.js';
 import { AppError, getErrorMessage } from '../lib/app-error.js';
@@ -15,8 +15,6 @@ const PENDING_REUSE_WINDOW_MS = INVOICE_TTL_MS;
 /** Fallback polling of CISPAY when the webhook is late. */
 export const PAYMENT_SYNC_INTERVAL_MS = 15_000;
 const ORDER_LIST_LIMIT = 50;
-/** CISPAY: minimum for CARD is 50 ₽. */
-const MIN_AMOUNT_KOPECKS: Partial<Record<PaymentMethod, number>> = { CARD: 5000 };
 
 export interface PaymentUpdate {
   paymentId: string;
@@ -48,9 +46,11 @@ export class OrderService {
     this.now = deps.now ?? (() => new Date());
   }
 
-  async listPaymentMethods(): Promise<PaymentMethod[]> {
+  /** SBP when CISPAY has it enabled for the shop, otherwise nothing: other methods are not offered. */
+  async listPaymentMethods(): Promise<ActivePaymentMethod[]> {
     try {
-      return await this.deps.payments.listMethods();
+      const methods = await this.deps.payments.listMethods();
+      return methods.filter((method): method is ActivePaymentMethod => method === ACTIVE_PAYMENT_METHOD);
     } catch (error: unknown) {
       this.deps.logger.error({ err: getErrorMessage(error) }, 'Failed to load payment methods');
       throw new AppError('PAYMENT_PROVIDER_ERROR', 'Платёжный сервис временно недоступен', { cause: error });
@@ -62,8 +62,7 @@ export class OrderService {
     const app = await this.loadApp(input.appId);
 
     const methods = await this.listPaymentMethods();
-    const minAmount = MIN_AMOUNT_KOPECKS[input.paymentMethod] ?? 0;
-    if (!methods.includes(input.paymentMethod) || app.priceKopecks < minAmount) {
+    if (!methods.includes(input.paymentMethod)) {
       throw new AppError('PAYMENT_METHOD_UNAVAILABLE', 'Этот способ оплаты сейчас недоступен');
     }
 
@@ -123,7 +122,7 @@ export class OrderService {
   /** Reuses a fresh unpaid invoice only if CISPAY still considers it payable. */
   private async reusablePendingOrder(
     pending: Order | null,
-    method: PaymentMethod,
+    method: ActivePaymentMethod,
     priceKopecks: number,
   ): Promise<Order | null> {
     if (!pending || pending.paymentMethod !== method || pending.amountKopecks !== priceKopecks) return null;

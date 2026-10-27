@@ -1,14 +1,5 @@
 import type { OrderStatus } from '@istock/shared';
-import type {
-  CodeWaitAttempt,
-  NewCodeWaitAttempt,
-  NewOrder,
-  NewTicket,
-  Order,
-  OrderPatch,
-  Ticket,
-  User,
-} from '../domain/models.js';
+import type { CodeWaitAttempt, NewCodeWaitAttempt, NewOrder, Order, OrderPatch, User } from '../domain/models.js';
 
 export interface UserRepository {
   upsert(user: User): Promise<User>;
@@ -43,15 +34,9 @@ export interface OrderEventRepository {
   has(orderId: number, type: string): Promise<boolean>;
 }
 
-export interface TicketRepository {
-  create(ticket: NewTicket): Promise<Ticket>;
-  countByUserSince(userId: number, since: Date): Promise<number>;
-}
-
 export interface Repositories {
   users: UserRepository;
   orders: OrderRepository;
   orderEvents: OrderEventRepository;
   codeWaits: CodeWaitAttemptRepository;
-  tickets: TicketRepository;
 }

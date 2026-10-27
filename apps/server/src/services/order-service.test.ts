@@ -32,20 +32,23 @@ describe('OrderService.createOrder', () => {
     });
   });
 
-  it('rejects disabled payment methods', async () => {
-    vi.spyOn(ctx.payments, 'listMethods').mockResolvedValue(['SBP']);
-    await expect(ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'CARD' })).rejects.toMatchObject({
+  it('rejects orders when CISPAY has SBP disabled', async () => {
+    vi.spyOn(ctx.payments, 'listMethods').mockResolvedValue(['CARD', 'CRYPTO']);
+    await expect(ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' })).rejects.toMatchObject({
       code: 'PAYMENT_METHOD_UNAVAILABLE',
     });
   });
 
-  it('reuses a fresh unpaid order for the same app and method', async () => {
+  it('offers SBP only, even when CISPAY enables other methods', async () => {
+    vi.spyOn(ctx.payments, 'listMethods').mockResolvedValue(['CARD', 'SBP', 'CRYPTO']);
+    expect(await ctx.orders.listPaymentMethods()).toEqual(['SBP']);
+  });
+
+  it('reuses a fresh unpaid order for the same app', async () => {
     const first = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
     const second = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
-    const otherMethod = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'CARD' });
 
     expect(second.id).toBe(first.id);
-    expect(otherMethod.id).not.toBe(first.id);
   });
 
   it('does not reuse an invoice that CISPAY already expired', async () => {
@@ -125,8 +128,8 @@ describe('OrderService payment webhooks', () => {
     expect((await ctx.repos.orders.findById(order.id))?.status).toBe('awaiting_payment');
   });
 
-  it('confirms through the payment API when the webhook amount is not in rubles (CRYPTO)', async () => {
-    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'CRYPTO' });
+  it('confirms through the payment API when the webhook amount is not in rubles', async () => {
+    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
     ctx.payments.setStatus(order.paymentId as string, 'PAID');
     const getPayment = vi.spyOn(ctx.payments, 'getPayment');
 
@@ -141,8 +144,8 @@ describe('OrderService payment webhooks', () => {
     expect((await ctx.repos.orders.findById(order.id))?.status).toBe('paid');
   });
 
-  it('does not deliver a CRYPTO payment when the confirmed amount differs', async () => {
-    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'CRYPTO' });
+  it('does not deliver a payment when the confirmed amount differs', async () => {
+    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
     vi.spyOn(ctx.payments, 'getPayment').mockResolvedValue({
       paymentId: order.paymentId as string,
       orderId: order.paymentOrderId,

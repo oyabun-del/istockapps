@@ -53,6 +53,7 @@ export function makeOrder(overrides: Partial<OrderDto> = {}): OrderDto {
     paymentUrl: null,
     expiresAt: null,
     createdAt: '2026-10-14T12:00:00.000Z',
+    isCodeReceived: false,
     paidAt: '2026-10-14T12:01:00.000Z',
     completedAt: null,
     ...overrides,

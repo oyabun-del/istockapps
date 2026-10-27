@@ -35,14 +35,16 @@ export type ErrorCode = (typeof ERROR_CODES)[number];
 
 // ---------- Payment ----------
 
-/** Methods supported by CISPAY (see docs/cispay-openapi.json). */
+/** Methods supported by CISPAY (see docs/cispay-openapi.json); older orders may carry any of them. */
 export const PAYMENT_METHODS = ['SBP', 'CARD', 'CRYPTO'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
+/** The shop accepts new payments by SBP only. */
+export const ACTIVE_PAYMENT_METHOD = 'SBP' satisfies PaymentMethod;
+export type ActivePaymentMethod = typeof ACTIVE_PAYMENT_METHOD;
+
 export interface PaymentMethodDto {
-  method: PaymentMethod;
-  /** Minimum amount in kopecks, null when unlimited. */
-  minAmountKopecks: number | null;
+  method: ActivePaymentMethod;
 }
 
 // ---------- Catalog ----------
@@ -77,6 +79,8 @@ export interface OrderDto {
   /** When the unpaid invoice expires (ISO); null once the order is no longer awaiting payment. */
   expiresAt: string | null;
   createdAt: string;
+  /** The login code step is done (code received or not asked by Apple); unlocks the last step. */
+  isCodeReceived: boolean;
   paidAt: string | null;
   completedAt: string | null;
 }
@@ -158,15 +162,7 @@ export interface SubscriptionDto {
   isSubscribed: boolean;
 }
 
-export interface TicketDto {
-  id: number;
-  createdAt: string;
-}
-
-// ---------- Limits (shared by client validation and server schemas) ----------
-
-export const TICKET_MESSAGE_MAX = 2000;
-export const TICKET_MESSAGE_MIN = 5;
+// ---------- Requests ----------
 
 export interface CatalogQuery {
   q?: string;
@@ -175,10 +171,5 @@ export interface CatalogQuery {
 
 export interface CreateOrderInput {
   appId: string;
-  paymentMethod: PaymentMethod;
-}
-
-export interface CreateTicketInput {
-  orderId?: number | null;
-  message: string;
+  paymentMethod: ActivePaymentMethod;
 }

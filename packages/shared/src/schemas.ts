@@ -1,13 +1,5 @@
 import { z } from 'zod';
-import {
-  PAYMENT_METHODS,
-  TICKET_MESSAGE_MAX,
-  TICKET_MESSAGE_MIN,
-  type CatalogQuery,
-  type CreateOrderInput,
-  type CreateTicketInput,
-  type StartCodeInput,
-} from './api.js';
+import { ACTIVE_PAYMENT_METHOD, type CatalogQuery, type CreateOrderInput, type StartCodeInput } from './api.js';
 
 /** Server-side request validation. Kept out of the main entry so zod is not bundled into the Mini App. */
 
@@ -21,12 +13,7 @@ export const appIdParamSchema = z.object({ appId: appIdSchema });
 
 export const createOrderSchema: z.ZodType<CreateOrderInput> = z.object({
   appId: appIdSchema,
-  paymentMethod: z.enum(PAYMENT_METHODS),
-});
-
-export const createTicketSchema: z.ZodType<CreateTicketInput> = z.object({
-  orderId: z.number().int().positive().nullable().optional(),
-  message: z.string().trim().min(TICKET_MESSAGE_MIN).max(TICKET_MESSAGE_MAX),
+  paymentMethod: z.literal(ACTIVE_PAYMENT_METHOD),
 });
 
 export const catalogQuerySchema: z.ZodType<CatalogQuery> = z.object({

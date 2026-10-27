@@ -1,5 +1,5 @@
 import { formatRub, type PaymentMethod } from '@istock/shared';
-import type { Order, Ticket, User } from '../domain/models.js';
+import type { Order, User } from '../domain/models.js';
 import { getErrorMessage } from '../lib/app-error.js';
 import { escapeHtml } from '../lib/html.js';
 import type { Logger } from '../lib/logger.js';
@@ -60,17 +60,6 @@ export class NotificationService {
       `⚠️ <b>Сумма оплаты не совпала</b>\nЗаказ <b>#${order.id}</b>: ожидали ${formatRub(order.amountKopecks)}, ` +
         `пришло ${formatRub(receivedKopecks)}. Заказ не выдан, проверьте вручную.`,
     );
-  }
-
-  async ticketCreated(ticket: Ticket, user: User | null): Promise<void> {
-    const lines = [
-      `🆘 <b>Новое обращение #${ticket.id}</b>`,
-      `От: ${describeUser(user, ticket.userId)}`,
-      ticket.orderId ? `Заказ: <b>#${ticket.orderId}</b>` : null,
-      '',
-      escapeHtml(ticket.message),
-    ].filter((line): line is string => line !== null);
-    await this.notifyAdmins(lines.join('\n'));
   }
 
   async notifyBuyerPaid(order: Order): Promise<void> {

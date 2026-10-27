@@ -1,6 +1,6 @@
 import { formatRub, isPaidStatus, type OrderDto } from '@istock/shared';
 import { useCallback, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { Page } from '../../components/layout/Page';
 import { AppIcon } from '../../components/ui/AppIcon';
 import { Badge } from '../../components/ui/Badge';
@@ -34,16 +34,14 @@ function OrderHeader({ order }: { order: OrderDto }) {
   );
 }
 
-function SupportRow({ orderId }: { orderId: number }) {
+function SupportRow() {
   const { data: me } = useMe();
   return (
     <section className="flex items-center gap-space-md rounded-xl bg-surface-container p-space-md">
       <Icon name="support_agent" className="text-[24px] text-tertiary" />
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="text-label-lg text-on-surface">Возникла трудность?</span>
-        <Link to={`/support?order=${orderId}`} className="text-body-sm text-primary">
-          Создать обращение
-        </Link>
+        <span className="text-body-sm text-on-surface-variant">Поддержка ответит в Telegram</span>
       </div>
       {me && (
         <button
@@ -99,7 +97,7 @@ export function OrderPage() {
               <AwaitingPayment order={data} isRefreshing={isChecking} onRefresh={handleRefresh} />
             )}
             {isPaidStatus(data.status) && <DeliverySteps order={data} />}
-            <SupportRow orderId={data.id} />
+            <SupportRow />
           </>
         )}
       </div>

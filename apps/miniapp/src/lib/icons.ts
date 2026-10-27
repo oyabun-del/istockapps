@@ -22,7 +22,6 @@ export const ICON_NAMES = [
   'download',
   'download_done',
   'download_for_offline',
-  'edit_note',
   'error',
   'expand_more',
   'grid_view',

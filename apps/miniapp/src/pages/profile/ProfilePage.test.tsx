@@ -48,7 +48,7 @@ describe('ProfilePage', () => {
     expect(open).toHaveBeenNthCalledWith(1, 'https://t.me/support', '_blank', 'noopener,noreferrer');
     expect(open).toHaveBeenNthCalledWith(2, 'https://t.me/test_channel', '_blank', 'noopener,noreferrer');
     expect(screen.getByRole('link', { name: /Частые вопросы/ })).toHaveAttribute('href', '/guide');
-    expect(screen.getByRole('link', { name: /Создать обращение/ })).toHaveAttribute('href', '/support');
+    expect(screen.queryByText(/Создать обращение/)).not.toBeInTheDocument();
   });
 
   it('shows the terms of service only when the shop published them', async () => {

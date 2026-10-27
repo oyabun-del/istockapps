@@ -1,21 +1,11 @@
 import type { PrismaClient, Order as OrderRow, User as UserRow } from '@prisma/client';
 import type { OrderStatus, PaymentMethod } from '@istock/shared';
-import type {
-  CodeWaitAttempt,
-  NewCodeWaitAttempt,
-  NewOrder,
-  NewTicket,
-  Order,
-  OrderPatch,
-  Ticket,
-  User,
-} from '../../domain/models.js';
+import type { CodeWaitAttempt, NewCodeWaitAttempt, NewOrder, Order, OrderPatch, User } from '../../domain/models.js';
 import type {
   CodeWaitAttemptRepository,
   OrderEventRepository,
   OrderRepository,
   Repositories,
-  TicketRepository,
   UserRepository,
 } from '../repositories.js';
 
@@ -46,6 +36,7 @@ function toOrder(row: OrderRow): Order {
     paymentSyncedAt: row.paymentSyncedAt,
     deliveryRef: row.deliveryRef,
     deliveryExpiresAt: row.deliveryExpiresAt,
+    codeReceivedAt: row.codeReceivedAt,
     paidAt: row.paidAt,
     completedAt: row.completedAt,
     createdAt: row.createdAt,
@@ -169,27 +160,11 @@ class PrismaOrderEventRepository implements OrderEventRepository {
   }
 }
 
-class PrismaTicketRepository implements TicketRepository {
-  constructor(private readonly db: PrismaClient) {}
-
-  async create(ticket: NewTicket): Promise<Ticket> {
-    const row = await this.db.ticket.create({
-      data: { ...ticket, userId: BigInt(ticket.userId) },
-    });
-    return { ...row, userId: Number(row.userId) };
-  }
-
-  async countByUserSince(userId: number, since: Date): Promise<number> {
-    return this.db.ticket.count({ where: { userId: BigInt(userId), createdAt: { gte: since } } });
-  }
-}
-
 export function createPrismaRepositories(db: PrismaClient): Repositories {
   return {
     users: new PrismaUserRepository(db),
     orders: new PrismaOrderRepository(db),
     orderEvents: new PrismaOrderEventRepository(db),
     codeWaits: new PrismaCodeWaitAttemptRepository(db),
-    tickets: new PrismaTicketRepository(db),
   };
 }

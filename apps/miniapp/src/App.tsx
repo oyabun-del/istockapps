@@ -11,7 +11,6 @@ import { SubscriptionGate } from './pages/gate/SubscriptionGate';
 import { GuidePage } from './pages/guide/GuidePage';
 import { OrderPage } from './pages/order/OrderPage';
 import { ProfilePage } from './pages/profile/ProfilePage';
-import { TicketPage } from './pages/support/TicketPage';
 
 /** Opens `/orders/:id` when the Mini App was launched with ?startapp=<orderId>. */
 function StartParamRedirect() {
@@ -42,7 +41,6 @@ export function AppRoutes() {
         <Route path="/orders/:orderId" element={<OrderPage />} />
         <Route path="/guide" element={<GuidePage />} />
         <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/support" element={<TicketPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>

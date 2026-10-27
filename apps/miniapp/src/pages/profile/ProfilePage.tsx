@@ -122,7 +122,6 @@ export function ProfilePage() {
               onClick={() => openTelegramLink(me.supportUrl)}
             />
           )}
-          <ActionRow icon="edit_note" title="Создать обращение" hint="Опишите проблему с заказом" to="/support" />
           <ActionRow icon="help" title="Частые вопросы" hint="Активация, коды и оплата" to="/guide" />
           {me && (
             <ActionRow

@@ -23,7 +23,6 @@ import { NotificationService } from './services/notification-service.js';
 import { OrderService } from './services/order-service.js';
 import { PartnerAdminService } from './services/partner-admin-service.js';
 import { SubscriptionService } from './services/subscription-service.js';
-import { TicketService } from './services/ticket-service.js';
 
 const MINIAPP_DIST = fileURLToPath(new URL('../../miniapp/dist', import.meta.url));
 
@@ -115,7 +114,6 @@ export function createContainer(env: Env, telegram: TelegramAdapters, logger: Lo
     mockPayments,
     orders,
     delivery: new DeliveryService({ repos, delivery, logger }),
-    tickets: new TicketService({ repos, notifications }),
     subscription,
     miniappDir: env.SERVE_MINIAPP ? MINIAPP_DIST : null,
   };

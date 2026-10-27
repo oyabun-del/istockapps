@@ -5,7 +5,6 @@ import type {
   CategoryDto,
   CodeWaitDto,
   CreateOrderInput,
-  CreateTicketInput,
   CredentialsDto,
   DeliveryDto,
   ErrorCode,
@@ -13,7 +12,6 @@ import type {
   OrderDto,
   PaymentMethodDto,
   SubscriptionDto,
-  TicketDto,
 } from '@istock/shared';
 import { getInitData } from './telegram';
 
@@ -87,9 +85,8 @@ export const api = {
   startCode: (id: number, groupId: string) => request<CodeWaitDto>('POST', `/orders/${id}/code`, { groupId }),
   codeWait: (id: number, waitId: string) =>
     request<CodeWaitDto>('GET', `/orders/${id}/code/${encodeURIComponent(waitId)}`),
+  skipCode: (id: number) => request<OrderDto>('POST', `/orders/${id}/skip-code`),
   complete: (id: number) => request<OrderDto>('POST', `/orders/${id}/complete`),
-
-  createTicket: (input: CreateTicketInput) => request<TicketDto>('POST', '/tickets', input),
 };
 
 export function errorMessage(error: unknown): string {

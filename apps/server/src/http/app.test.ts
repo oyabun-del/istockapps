@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initDataSecret, signInitData } from '../lib/telegram-init-data.js';
+import { MOCK_CODE_AFTER_POLLS } from '../providers/delivery/mock-delivery-provider.js';
 import { CisPayProvider, signCisPayBody } from '../providers/payment/cispay-provider.js';
+import { CODE_POLL_MIN_INTERVAL_MS } from '../services/delivery-service.js';
 import { BOT_TOKEN, BUYER, OTHER_USER, createTestContext, type TestContext } from '../test/fixtures.js';
 import { buildApp, type AppDeps } from './app.js';
 
@@ -216,8 +218,10 @@ describe('purchase flow through HTTP', () => {
     const paid = await app.inject({ method: 'GET', url: `/api/orders/${order.id}`, headers: authHeader() });
     expect(paid.json().data).toMatchObject({ status: 'paid', paymentUrl: null });
 
-    const download = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/download`, headers: authHeader() });
-    expect(download.headers['cache-control']).toBe('no-store');
+    const delivery = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/delivery`, headers: authHeader() });
+    expect(delivery.headers['cache-control']).toBe('no-store');
+    const groupId = delivery.json().data.groups[0].id;
+    expect(delivery.json().data.groups[0].apps[0].links.main).toContain('/mock-install/sberbank');
 
     await app.inject({ method: 'POST', url: `/api/orders/${order.id}/confirm-download`, headers: authHeader() });
     const credentials = await app.inject({
@@ -225,10 +229,34 @@ describe('purchase flow through HTTP', () => {
       url: `/api/orders/${order.id}/credentials`,
       headers: authHeader(),
     });
-    expect(credentials.json().data).toHaveProperty('password');
+    expect(credentials.headers['cache-control']).toBe('no-store');
+    expect(credentials.json().data.groups[0]).toHaveProperty('password');
 
-    const code = await app.inject({ method: 'POST', url: `/api/orders/${order.id}/code`, headers: authHeader() });
-    expect(code.json().data.code).toMatch(/^\d{6}$/);
+    const badGroup = await app.inject({
+      method: 'POST',
+      url: `/api/orders/${order.id}/code`,
+      headers: authHeader(),
+      payload: { groupId: '../other' },
+    });
+    expect(badGroup.statusCode).toBe(400);
+
+    const started = await app.inject({
+      method: 'POST',
+      url: `/api/orders/${order.id}/code`,
+      headers: authHeader(),
+      payload: { groupId },
+    });
+    expect(started.json().data).toMatchObject({ status: 'active', code: null });
+    const waitId = started.json().data.id;
+
+    let code = started.json().data.code;
+    for (let poll = 0; poll < MOCK_CODE_AFTER_POLLS; poll += 1) {
+      ctx.clock.advance(CODE_POLL_MIN_INTERVAL_MS);
+      const status = await app.inject({ method: 'GET', url: `/api/orders/${order.id}/code/${waitId}`, headers: authHeader() });
+      expect(status.headers['cache-control']).toBe('no-store');
+      code = status.json().data.code;
+    }
+    expect(code).toMatch(/^\d{6}$/);
 
     const done = await app.inject({ method: 'POST', url: `/api/orders/${order.id}/complete`, headers: authHeader() });
     expect(done.json().data.status).toBe('completed');

@@ -1,7 +1,17 @@
 import type { PrismaClient, Order as OrderRow, User as UserRow } from '@prisma/client';
 import type { OrderStatus, PaymentMethod } from '@istock/shared';
-import type { NewOrder, NewTicket, Order, OrderPatch, Ticket, User } from '../../domain/models.js';
 import type {
+  CodeWaitAttempt,
+  NewCodeWaitAttempt,
+  NewOrder,
+  NewTicket,
+  Order,
+  OrderPatch,
+  Ticket,
+  User,
+} from '../../domain/models.js';
+import type {
+  CodeWaitAttemptRepository,
   OrderEventRepository,
   OrderRepository,
   Repositories,
@@ -34,8 +44,8 @@ function toOrder(row: OrderRow): Order {
     paymentId: row.paymentId,
     paymentUrl: row.paymentUrl,
     paymentSyncedAt: row.paymentSyncedAt,
-    codeRequests: row.codeRequests,
-    lastCodeAt: row.lastCodeAt,
+    deliveryRef: row.deliveryRef,
+    deliveryExpiresAt: row.deliveryExpiresAt,
     paidAt: row.paidAt,
     completedAt: row.completedAt,
     createdAt: row.createdAt,
@@ -123,14 +133,25 @@ class PrismaOrderRepository implements OrderRepository {
     if (result.count === 0) return null;
     return this.findById(id);
   }
+}
 
-  async recordCodeRequest(id: number, expectedCount: number, at: Date): Promise<Order | null> {
-    const result = await this.db.order.updateMany({
-      where: { id, codeRequests: expectedCount },
-      data: { codeRequests: expectedCount + 1, lastCodeAt: at },
-    });
-    if (result.count === 0) return null;
-    return this.findById(id);
+class PrismaCodeWaitAttemptRepository implements CodeWaitAttemptRepository {
+  constructor(private readonly db: PrismaClient) {}
+
+  async create(attempt: NewCodeWaitAttempt): Promise<CodeWaitAttempt> {
+    return this.db.codeWaitAttempt.create({ data: attempt });
+  }
+
+  async findLatest(orderId: number, groupId: string): Promise<CodeWaitAttempt | null> {
+    return this.db.codeWaitAttempt.findFirst({ where: { orderId, groupId }, orderBy: { id: 'desc' } });
+  }
+
+  async findByWaitId(orderId: number, waitId: string): Promise<CodeWaitAttempt | null> {
+    return this.db.codeWaitAttempt.findFirst({ where: { orderId, waitId } });
+  }
+
+  async setWaitId(id: number, waitId: string): Promise<void> {
+    await this.db.codeWaitAttempt.update({ where: { id }, data: { waitId } });
   }
 }
 
@@ -168,6 +189,7 @@ export function createPrismaRepositories(db: PrismaClient): Repositories {
     users: new PrismaUserRepository(db),
     orders: new PrismaOrderRepository(db),
     orderEvents: new PrismaOrderEventRepository(db),
+    codeWaits: new PrismaCodeWaitAttemptRepository(db),
     tickets: new PrismaTicketRepository(db),
   };
 }

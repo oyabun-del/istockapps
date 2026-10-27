@@ -14,11 +14,28 @@ design/         исходные макеты
 
 **Готово:** бот (`/start`, `/support`, проверка подписки, кнопка магазина), уведомления всем админам о покупках, возвратах и обращениях, оплата CISPAY (создание счёта, webhook с проверкой подписи, опрос статуса как запасной вариант), заказ со статусами, все экраны Mini App.
 
-**Заглушки до появления вашего API** (`apps/server/src/providers/`):
-- `catalog/mock-catalog-provider.ts` — список приложений и иконки;
-- `delivery/mock-delivery-provider.ts` — ссылка на скачивание, логин/пароль, код. `requestLoginCode` возвращает код и срок его жизни в секундах (`ttlSeconds`); если API срок не сообщает, верните `null`, и таймер под кодом не появится.
+**Каталог и выдача** (`apps/server/src/providers/`): `CATALOG_PROVIDER` и `DELIVERY_PROVIDER` (оба одинаковые):
+- `mock` — заглушки для разработки (`catalog/mock-catalog-provider.ts`, `delivery/mock-delivery-provider.ts`);
+- `installios` — [Install-IOS Partner API](https://api.installios.ru/docs), см. ниже.
 
-Чтобы подключить API, напишите реализации интерфейсов `CatalogProvider` и `DeliveryProvider` и подключите их в `apps/server/src/container.ts`. Экраны и бизнес-логику менять не нужно. Иконка категории (`icon`) должна быть из списка `apps/miniapp/src/lib/icons.ts`, иначе Mini App покажет запасную.
+### Install-IOS
+Серверная интеграция: ключ не покидает сервер, логины, пароли, коды и ссылки не пишутся в базу и логи.
+
+```dotenv
+CATALOG_PROVIDER=installios
+DELIVERY_PROVIDER=installios
+INSTALLIOS_API_KEY=...            # ключ партнёра, только в .env на сервере
+INSTALLIOS_DEFAULT_PRICE_RUB=199  # Install-IOS не передаёт цены
+INSTALLIOS_PRICES={"app_…": 299}  # необязательно: цены отдельных приложений
+# INSTALLIOS_API_BASE=https://installios.ru/api/partner/v1  # резервный адрес
+```
+
+- **Каталог** — один общий список из всех каталогов Install-IOS, объединённый по `application.id`. Загружается при старте и каждые 5 минут; витрина меняется, только когда загрузились все каталоги, иначе остаётся прежний полный список. Категория одна — «Все».
+- **Выдача.** Заявка Install-IOS создаётся при первом открытии оплаченного заказа (`external_order_id = istock-<paymentOrderId>`, `source_mode: auto`); повтор возвращает ту же заявку. Начисление поставщика — при первом переходе по ссылке установки. Каждый показ ссылок и реквизитов заново читает заявку: блокировка учётки, бесплатная автозамена и смена пароля видны сразу, без webhook.
+- **Код.** Покупатель сначала включает ожидание, потом запрашивает код на iPhone; Mini App опрашивает статус раз в 1,5 с, код живёт до 60 с и затем стирается. Лимит — 3 успешных кода на аккаунт (берётся из API). Старт ожидания сокращает срок заявки (в sandbox: 12 ч → 6 ч), он показывается под ссылками.
+- **Админ-команды бота** (только `ADMIN_IDS`): `/balance` — долг и аванс перед Install-IOS, `/sync` — обновить каталог сейчас.
+- Не реализовано: повторная выдача (`set_extend`/`extend`), webhook Install-IOS, сообщение о блокировке (`report-blocked`), возвраты Install-IOS.
+- **Откат:** `CATALOG_PROVIDER=mock`, `DELIVERY_PROVIDER=mock` (только вне production). Код — `git revert` коммита интеграции; миграция `20261027120000_installios_delivery` добавляет таблицу `CodeWaitAttempt` и поля `deliveryRef`/`deliveryExpiresAt` и удаляет устаревшие `codeRequests`/`lastCodeAt`.
 
 ## Запуск локально
 

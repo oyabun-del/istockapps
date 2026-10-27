@@ -2,9 +2,11 @@ import type { MeDto, PaymentMethodDto } from '@istock/shared';
 import {
   appIdParamSchema,
   catalogQuerySchema,
+  codeWaitParamSchema,
   createOrderSchema,
   createTicketSchema,
   orderIdParamSchema,
+  startCodeSchema,
 } from '@istock/shared/schemas';
 import type { FastifyInstance } from 'fastify';
 import { AppError, getErrorMessage } from '../../lib/app-error.js';
@@ -21,6 +23,8 @@ import { ok } from '../envelope.js';
 import { parseInput } from '../validation.js';
 
 const CODE_RATE_LIMIT = { max: 6, timeWindow: '1 minute' };
+/** The Mini App polls a running wait about once a second for up to five minutes. */
+const CODE_POLL_RATE_LIMIT = { max: 90, timeWindow: '1 minute' };
 const CARD_MIN_KOPECKS = 5000;
 const NO_STORE = 'no-store';
 
@@ -114,10 +118,10 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiRoutesDeps): vo
     return ok(toOrderDto(await deps.orders.cancelOrder(requireUser(request).id, id)));
   });
 
-  app.get('/orders/:id/download', async (request, reply) => {
+  app.get('/orders/:id/delivery', async (request, reply) => {
     const { id } = parseInput(orderIdParamSchema, request.params);
     reply.header('cache-control', NO_STORE);
-    return ok({ url: await deps.delivery.getDownloadUrl(requireUser(request).id, id) });
+    return ok(await deps.delivery.getDelivery(requireUser(request).id, id));
   });
 
   app.post('/orders/:id/confirm-download', async (request) => {
@@ -133,8 +137,15 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiRoutesDeps): vo
 
   app.post('/orders/:id/code', { config: { rateLimit: CODE_RATE_LIMIT } }, async (request, reply) => {
     const { id } = parseInput(orderIdParamSchema, request.params);
+    const { groupId } = parseInput(startCodeSchema, request.body);
     reply.header('cache-control', NO_STORE);
-    return ok(await deps.delivery.requestCode(requireUser(request).id, id));
+    return ok(await deps.delivery.startCode(requireUser(request).id, id, groupId));
+  });
+
+  app.get('/orders/:id/code/:waitId', { config: { rateLimit: CODE_POLL_RATE_LIMIT } }, async (request, reply) => {
+    const { id, waitId } = parseInput(codeWaitParamSchema, request.params);
+    reply.header('cache-control', NO_STORE);
+    return ok(await deps.delivery.getCodeWait(requireUser(request).id, id, waitId));
   });
 
   app.post('/orders/:id/complete', async (request) => {

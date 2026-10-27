@@ -21,8 +21,10 @@ export interface Order {
   paymentId: string | null;
   paymentUrl: string | null;
   paymentSyncedAt: Date | null;
-  codeRequests: number;
-  lastCodeAt: Date | null;
+  /** Order id in the delivery API; null until the delivery is created after payment. */
+  deliveryRef: string | null;
+  /** Last known delivery deadline from the delivery API. */
+  deliveryExpiresAt: Date | null;
   paidAt: Date | null;
   completedAt: Date | null;
   createdAt: Date;
@@ -40,12 +42,26 @@ export type OrderPatch = Partial<
     | 'paymentId'
     | 'paymentUrl'
     | 'paymentSyncedAt'
-    | 'codeRequests'
-    | 'lastCodeAt'
+    | 'deliveryRef'
+    | 'deliveryExpiresAt'
     | 'paidAt'
     | 'completedAt'
   >
 >;
+
+/** One explicit attempt to receive a login code. Holds no code, only ids to resume the attempt. */
+export interface CodeWaitAttempt {
+  id: number;
+  orderId: number;
+  groupId: string;
+  /** Reused by network retries of this attempt so the API never starts a second wait. */
+  idempotencyKey: string;
+  /** Known once the API accepted the attempt. */
+  waitId: string | null;
+  createdAt: Date;
+}
+
+export type NewCodeWaitAttempt = Pick<CodeWaitAttempt, 'orderId' | 'groupId' | 'idempotencyKey'>;
 
 export interface Ticket {
   id: number;

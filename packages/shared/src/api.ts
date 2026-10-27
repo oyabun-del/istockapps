@@ -81,21 +81,64 @@ export interface OrderDto {
   completedAt: string | null;
 }
 
-export interface DownloadDto {
-  url: string;
+/**
+ * available — links work; replacing — the account was blocked and a free replacement is being found;
+ * revoked — access was withdrawn for good; expired — the delivery window is over;
+ * unavailable — no links right now for another reason.
+ */
+export const DELIVERY_STATES = ['available', 'replacing', 'revoked', 'expired', 'unavailable'] as const;
+export type DeliveryState = (typeof DELIVERY_STATES)[number];
+
+export interface DeliveryAppDto {
+  id: string;
+  name: string;
+  state: DeliveryState;
+  /** Only present while the app is available. */
+  links: { main: string; reserve: string } | null;
+}
+
+/** One Apple account; its apps share login, password and confirmation codes. */
+export interface DeliveryGroupDto {
+  id: string;
+  state: DeliveryState;
+  expiresAt: string;
+  /** Explanation from the delivery API when access was revoked. */
+  message: string | null;
+  codesLeft: number;
+  apps: DeliveryAppDto[];
+}
+
+/** Fresh snapshot of the delivery: always replaces the previous one as a whole. */
+export interface DeliveryDto {
+  expiresAt: string;
+  /** Test mode of the delivery API: nothing is really charged. */
+  isSandbox: boolean;
+  groups: DeliveryGroupDto[];
+  /** Some apps are waiting for a replacement account; the client should poll. */
+  isReplacing: boolean;
 }
 
 export interface CredentialsDto {
-  login: string;
-  password: string;
+  groups: Array<{ groupId: string; login: string; password: string }>;
 }
 
-export interface CodeDto {
-  code: string;
-  /** When the user may request a new code (ISO). */
-  nextRequestAt: string;
-  /** When the code stops working (ISO); null if the delivery API does not say. */
-  expiresAt: string | null;
+export const CODE_WAIT_STATUSES = ['active', 'succeeded', 'code_expired', 'timed_out', 'cancelled'] as const;
+export type CodeWaitStatus = (typeof CODE_WAIT_STATUSES)[number];
+
+export interface CodeWaitDto {
+  id: string;
+  groupId: string;
+  status: CodeWaitStatus;
+  /** Present only while status is "succeeded" and the code is still fresh. */
+  code: string | null;
+  /** When the code stops working (ISO). */
+  codeExpiresAt: string | null;
+  /** When the wait for a code ends (ISO). */
+  deadlineAt: string | null;
+}
+
+export interface StartCodeInput {
+  groupId: string;
 }
 
 // ---------- User ----------

@@ -7,6 +7,7 @@ import {
   configureBot,
   createChatMemberFetcher,
   createMessageSender,
+  handleAdminCommand,
   handleCheckSubscription,
   handleStart,
   type BotDeps,
@@ -134,5 +135,38 @@ describe('Bot API adapters', () => {
       logger: { ...silentLogger, warn },
     });
     expect(warn).toHaveBeenCalled();
+  });
+});
+
+describe('admin commands', () => {
+  const admin = { balanceText: vi.fn(async () => '<b>баланс</b>'), syncText: vi.fn(async () => 'ok') };
+
+  it('stays silent for regular users', async () => {
+    const { context, reply } = fakeContext();
+
+    await handleAdminCommand(context, { ...deps, adminIds: [1], partnerAdmin: admin }, (a) => a.balanceText());
+
+    expect(reply).not.toHaveBeenCalled();
+    expect(admin.balanceText).not.toHaveBeenCalled();
+  });
+
+  it('answers admins with HTML and explains when the integration is off', async () => {
+    const { context, reply } = fakeContext();
+    const adminDeps = { ...deps, adminIds: [BUYER.id] };
+
+    await handleAdminCommand(context, { ...adminDeps, partnerAdmin: admin }, (a) => a.balanceText());
+    await handleAdminCommand(context, { ...adminDeps, partnerAdmin: null }, (a) => a.balanceText());
+
+    expect(reply.mock.calls[0]).toEqual(['<b>баланс</b>', { parse_mode: 'HTML' }]);
+    expect(reply.mock.calls[1]?.[0]).toContain('не подключён');
+  });
+
+  it('reports a failure without leaking details', async () => {
+    const { context, reply } = fakeContext();
+    const failing = { ...admin, balanceText: vi.fn(async () => Promise.reject(new Error('HTTP 503 secret'))) };
+
+    await handleAdminCommand(context, { ...deps, adminIds: [BUYER.id], partnerAdmin: failing }, (a) => a.balanceText());
+
+    expect(reply.mock.calls[0]?.[0]).not.toContain('secret');
   });
 });

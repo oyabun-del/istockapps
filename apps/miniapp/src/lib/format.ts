@@ -32,6 +32,13 @@ export function formatOrderDate(iso: string, now: Date = new Date()): string {
   return format.format(date).replace(/\s?г\.$/, '');
 }
 
+/** "18:30" today, otherwise "15 октября, 18:30". */
+export function formatDeadline(iso: string, now: Date = new Date()): string {
+  const date = new Date(iso);
+  const time = TIME.format(date);
+  return startOfDay(date) === startOfDay(now) ? time : `${DAY_MONTH.format(date)}, ${time}`;
+}
+
 /** 886 → "14:46". */
 export function formatCountdown(totalSeconds: number): string {
   const seconds = Math.max(0, Math.floor(totalSeconds));

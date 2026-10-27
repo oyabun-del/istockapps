@@ -28,6 +28,8 @@ async function main(): Promise<void> {
       users: container.repos.users,
       subscription: container.subscription,
       logger,
+      adminIds: env.ADMIN_IDS,
+      partnerAdmin: container.partnerAdmin,
     });
   }
 
@@ -35,6 +37,7 @@ async function main(): Promise<void> {
 
   const shutdown = async (signal: string): Promise<void> => {
     logger.info({ signal }, 'Shutting down');
+    container.background.stop();
     await Promise.allSettled([bot?.stop(), app.close()]);
     await container.db.$disconnect();
     process.exit(0);
@@ -43,6 +46,7 @@ async function main(): Promise<void> {
   process.once('SIGTERM', () => void shutdown('SIGTERM'));
 
   await app.listen({ port: env.PORT, host: env.HOST });
+  container.background.start();
   if (env.PAYMENT_PROVIDER === 'mock') logger.warn('PAYMENT_PROVIDER=mock: payments are simulated');
 
   if (!bot) {

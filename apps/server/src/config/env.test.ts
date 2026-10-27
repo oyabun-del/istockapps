@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { channelUrl, parseEnv, supportUrl } from './env.js';
+import { channelUrl, installiosPriceOf, parseEnv, supportUrl } from './env.js';
 
 const BASE = {
   BOT_TOKEN: '123456:ABCdefGHIjklMNOpqrSTUvwxYZ0123456789',
@@ -110,5 +110,49 @@ describe('links', () => {
       'https://t.me/+invite',
     );
     expect(supportUrl({ SUPPORT_USERNAME: 'support_acc' })).toBe('https://t.me/support_acc');
+  });
+});
+
+describe('Install-IOS settings', () => {
+  const INSTALLIOS = {
+    ...BASE,
+    CATALOG_PROVIDER: 'installios',
+    DELIVERY_PROVIDER: 'installios',
+    INSTALLIOS_API_KEY: 'iosp_test_key_0123456789',
+    INSTALLIOS_DEFAULT_PRICE_RUB: '199',
+  };
+
+  it('parses the key, default base url and per-app prices', () => {
+    const env = parseEnv({ ...INSTALLIOS, INSTALLIOS_PRICES: '{"app_vk": 299.5}' });
+
+    expect(env.INSTALLIOS_API_BASE).toBe('https://api.installios.ru/v1');
+    const priceOf = installiosPriceOf(env);
+    expect(priceOf('app_vk')).toBe(29950);
+    expect(priceOf('app_other')).toBe(19900);
+  });
+
+  it('requires the key and a default price', () => {
+    const { INSTALLIOS_API_KEY: _key, ...withoutKey } = INSTALLIOS;
+    const { INSTALLIOS_DEFAULT_PRICE_RUB: _price, ...withoutPrice } = INSTALLIOS;
+
+    expect(() => parseEnv(withoutKey)).toThrow(/INSTALLIOS_API_KEY/);
+    expect(() => parseEnv(withoutPrice)).toThrow(/INSTALLIOS_DEFAULT_PRICE_RUB/);
+  });
+
+  it('rejects broken price JSON and mixed providers', () => {
+    expect(() => parseEnv({ ...INSTALLIOS, INSTALLIOS_PRICES: '{oops' })).toThrow(/INSTALLIOS_PRICES/);
+    expect(() => parseEnv({ ...INSTALLIOS, INSTALLIOS_PRICES: '{"app_vk": -1}' })).toThrow(/INSTALLIOS_PRICES/);
+    expect(() => parseEnv({ ...INSTALLIOS, CATALOG_PROVIDER: 'mock' })).toThrow(/must match/);
+  });
+
+  it('lets production run on Install-IOS', () => {
+    const env = parseEnv({
+      ...INSTALLIOS,
+      NODE_ENV: 'production',
+      PAYMENT_PROVIDER: 'cispay',
+      CISPAY_SHOP_ID: '0192a4b8-0000-7000-8000-000000000001',
+      CISPAY_API_KEY: 'cis_sec_x',
+    });
+    expect(env.DELIVERY_PROVIDER).toBe('installios');
   });
 });

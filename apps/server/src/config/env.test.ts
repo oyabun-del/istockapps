@@ -23,6 +23,13 @@ describe('parseEnv', () => {
     expect(env.ALLOW_SANDBOX_PAYMENTS).toBe(false);
     expect(env.PORT).toBe(3000);
     expect(env.SERVE_MINIAPP).toBe(true);
+    expect(env.BROADCAST_RATE_PER_SEC).toBe(25);
+  });
+
+  it('keeps the broadcast rate within Telegram limits', () => {
+    expect(parseEnv({ ...BASE, BROADCAST_RATE_PER_SEC: '10' }).BROADCAST_RATE_PER_SEC).toBe(10);
+    expect(() => parseEnv({ ...BASE, BROADCAST_RATE_PER_SEC: '50' })).toThrow(/BROADCAST_RATE_PER_SEC/);
+    expect(() => parseEnv({ ...BASE, BROADCAST_RATE_PER_SEC: '0' })).toThrow(/BROADCAST_RATE_PER_SEC/);
   });
 
   describe('TELEGRAM_OFFLINE', () => {

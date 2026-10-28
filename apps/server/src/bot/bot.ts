@@ -5,7 +5,11 @@ import type { MessageSender } from '../services/notification-service.js';
 import type { UserRepository } from '../repositories/repositories.js';
 import { AppError, getErrorMessage } from '../lib/app-error.js';
 import type { Logger } from '../lib/logger.js';
+import type { BroadcastTelegram } from '../services/broadcast-port.js';
+import type { BroadcastService } from '../services/broadcast-service.js';
 import type { PartnerAdminService } from '../services/partner-admin-service.js';
+import { createBroadcastTelegram } from './broadcast-adapter.js';
+import { registerBroadcastHandlers } from './broadcast-handlers.js';
 import { BOT_TEXT } from './texts.js';
 
 const CHECK_SUBSCRIPTION = 'check_subscription';
@@ -13,6 +17,17 @@ const CHECK_SUBSCRIPTION = 'check_subscription';
 const CHECK_SUBSCRIPTION_PATTERN = /^check_subscription(?::(\d+))?$/;
 const ORDER_PAYLOAD = /^\d+$/;
 const MENU_BUTTON_TEXT = 'Магазин';
+const PUBLIC_COMMANDS = [
+  { command: 'start', description: 'Открыть магазин' },
+  { command: 'support', description: 'Поддержка' },
+];
+/** Shown only in the admins' own chats. */
+const ADMIN_COMMANDS = [
+  ...PUBLIC_COMMANDS,
+  { command: 'broadcast', description: 'Рассылка пользователям' },
+  { command: 'balance', description: 'Баланс Install-IOS' },
+  { command: 'sync', description: 'Обновить каталог' },
+];
 
 export interface BotDeps {
   webAppUrl: string;
@@ -25,6 +40,8 @@ export interface BotDeps {
   adminIds?: readonly number[];
   /** null when the Install-IOS integration is off. */
   partnerAdmin?: Pick<PartnerAdminService, 'balanceText' | 'syncText'> | null;
+  /** Admin broadcasts; absent in tests that do not need them. */
+  broadcasts?: BroadcastService | null;
 }
 
 export function createBot(token: string): Bot {
@@ -43,6 +60,7 @@ export interface TelegramAdapters {
   fetchMember: ChatMemberFetcher;
   fetchChannel: ChannelFetcher;
   sender: MessageSender;
+  broadcast: BroadcastTelegram;
 }
 
 export function createBotTelegram(bot: Bot): TelegramAdapters {
@@ -50,6 +68,7 @@ export function createBotTelegram(bot: Bot): TelegramAdapters {
     fetchMember: createChatMemberFetcher(bot),
     fetchChannel: createChannelFetcher(bot),
     sender: createMessageSender(bot),
+    broadcast: createBroadcastTelegram(bot),
   };
 }
 
@@ -116,6 +135,8 @@ export async function handleStart(ctx: Context, deps: BotDeps): Promise<void> {
     username: from.username ?? null,
     photoUrl: null,
   });
+  // A blocked user can only write again after unblocking the bot, which sends /start.
+  await deps.users.setBotBlockedAt(from.id, null);
 
   const payload = orderPayload(ctx.match);
   const isSubscribed = await safeIsSubscribed(deps, from.id, true);
@@ -176,6 +197,7 @@ export function registerBotHandlers(bot: Bot, deps: BotDeps): void {
   bot.callbackQuery(CHECK_SUBSCRIPTION_PATTERN, (ctx) => handleCheckSubscription(ctx, deps));
   bot.command('balance', (ctx) => handleAdminCommand(ctx, deps, (admin) => admin.balanceText()));
   bot.command('sync', (ctx) => handleAdminCommand(ctx, deps, (admin) => admin.syncText()));
+  registerBroadcastHandlers(bot, deps);
 
   bot.catch((error) => {
     const description = error.error instanceof GrammyError ? error.error.description : getErrorMessage(error.error);
@@ -183,17 +205,30 @@ export function registerBotHandlers(bot: Bot, deps: BotDeps): void {
   });
 }
 
-/** One-time setup on startup: menu button and command list. Failures are logged, not fatal. */
-export async function configureBot(bot: Bot, deps: Pick<BotDeps, 'webAppUrl' | 'logger'>): Promise<void> {
+/** One-time setup on startup: menu button and command lists. Failures are logged, not fatal. */
+export async function configureBot(bot: Bot, deps: Pick<BotDeps, 'webAppUrl' | 'logger' | 'adminIds'>): Promise<void> {
+  await configureAdminCommands(bot, deps);
   try {
-    await bot.api.setMyCommands([
-      { command: 'start', description: 'Открыть магазин' },
-      { command: 'support', description: 'Поддержка' },
-    ]);
+    await bot.api.setMyCommands(PUBLIC_COMMANDS);
     await bot.api.setChatMenuButton({
       menu_button: { type: 'web_app', text: MENU_BUTTON_TEXT, web_app: { url: deps.webAppUrl } },
     });
   } catch (error: unknown) {
     deps.logger.warn({ err: getErrorMessage(error) }, 'Bot setup failed (check BOT_TOKEN; the menu button also needs an https WEBAPP_URL)');
   }
+}
+
+async function configureAdminCommands(bot: Bot, deps: Pick<BotDeps, 'logger' | 'adminIds'>): Promise<void> {
+  const adminIds = deps.adminIds ?? [];
+  const results = await Promise.allSettled(
+    adminIds.map((chatId) => bot.api.setMyCommands(ADMIN_COMMANDS, { scope: { type: 'chat', chat_id: chatId } })),
+  );
+  results.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      deps.logger.warn(
+        { adminId: adminIds[index], err: getErrorMessage(result.reason) },
+        'Admin commands not set (has the admin pressed /start in the bot?)',
+      );
+    }
+  });
 }

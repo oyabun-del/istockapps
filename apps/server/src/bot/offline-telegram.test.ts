@@ -28,4 +28,16 @@ describe('createOfflineTelegram', () => {
       'Telegram offline: message not sent',
     );
   });
+
+  it('logs broadcast copies and admin messages as delivered', async () => {
+    const info = vi.fn();
+    const telegram = createOfflineTelegram({ channel: '@test_channel', logger: { ...silentLogger, info } });
+
+    expect(await telegram.broadcast.copy(42, { chatId: 7, messageId: 1 }, [])).toEqual({ kind: 'sent' });
+    await telegram.broadcast.sendText(7, '<b>Рассылка</b>');
+    await telegram.broadcast.editText(7, 2, 'Готово');
+
+    expect(info).toHaveBeenCalledTimes(3);
+    expect(info).toHaveBeenCalledWith({ chatId: 7, text: 'Рассылка' }, 'Telegram offline: message not sent');
+  });
 });

@@ -47,6 +47,9 @@ const pricesSchema = z
     }
   })
   .pipe(z.record(z.string().min(1), z.number().positive().max(MAX_PRICE_RUB).multipleOf(0.01)));
+const MAX_BROADCAST_RATE = 30;
+const DEFAULT_BROADCAST_RATE = 25;
+
 /** http is allowed outside production (local dev); production is checked in superRefine. */
 const webUrl = z.url({ protocol: /^https?$/ });
 
@@ -72,6 +75,8 @@ const envSchema = z
     SUPPORT_USERNAME: usernameSchema,
     /** Terms of service page shown in the profile (e.g. a Telegraph article). */
     TERMS_URL: httpsUrl.optional(),
+    /** Broadcast copies per second; Telegram allows about 30 for bulk messages. */
+    BROADCAST_RATE_PER_SEC: z.coerce.number().int().min(1).max(MAX_BROADCAST_RATE).default(DEFAULT_BROADCAST_RATE),
 
     DATABASE_URL: z.string().min(1),
 

@@ -1,7 +1,21 @@
-import type { Prisma, PrismaClient, User as UserRow } from '@prisma/client';
+import type { Broadcast as BroadcastRow, Prisma, PrismaClient, User as UserRow } from '@prisma/client';
 import type { OrderStatus, PaymentMethod } from '@istock/shared';
-import type { CodeWaitAttempt, NewCodeWaitAttempt, NewOrder, Order, OrderPatch, User } from '../../domain/models.js';
+import { DRAFT_STATUSES } from '../../domain/broadcast-status.js';
 import type {
+  Broadcast,
+  BroadcastButton,
+  BroadcastPatch,
+  BroadcastStatus,
+  CodeWaitAttempt,
+  Keyboard,
+  NewCodeWaitAttempt,
+  NewOrder,
+  Order,
+  OrderPatch,
+  User,
+} from '../../domain/models.js';
+import type {
+  BroadcastRepository,
   CodeWaitAttemptRepository,
   OrderEventRepository,
   OrderRepository,
@@ -77,6 +91,25 @@ class PrismaUserRepository implements UserRepository {
   async findById(id: number): Promise<User | null> {
     const row = await this.db.user.findUnique({ where: { id: BigInt(id) } });
     return row ? toUser(row) : null;
+  }
+
+  async listRecipients(afterId: number | null, limit: number): Promise<number[]> {
+    const rows = await this.db.user.findMany({
+      where: { botBlockedAt: null, ...(afterId === null ? {} : { id: { gt: BigInt(afterId) } }) },
+      orderBy: { id: 'asc' },
+      take: limit,
+      select: { id: true },
+    });
+    return rows.map((row) => Number(row.id));
+  }
+
+  async countRecipients(): Promise<number> {
+    return this.db.user.count({ where: { botBlockedAt: null } });
+  }
+
+  async setBotBlockedAt(id: number, at: Date | null): Promise<void> {
+    // updateMany: a user unknown to the database is not an error here.
+    await this.db.user.updateMany({ where: { id: BigInt(id) }, data: { botBlockedAt: at } });
   }
 }
 
@@ -182,11 +215,90 @@ class PrismaOrderEventRepository implements OrderEventRepository {
   }
 }
 
+function toBroadcast(row: BroadcastRow): Broadcast {
+  return {
+    id: row.id,
+    authorId: Number(row.authorId),
+    // Values are written only through the typed domain layer.
+    status: row.status as BroadcastStatus,
+    source:
+      row.sourceChatId !== null && row.sourceMessageId !== null
+        ? { chatId: Number(row.sourceChatId), messageId: row.sourceMessageId }
+        : null,
+    buttons: row.buttons as unknown as Keyboard<BroadcastButton>,
+    progressMessageId: row.progressMessageId,
+    cursorUserId: row.cursorUserId === null ? null : Number(row.cursorUserId),
+    total: row.total,
+    sent: row.sent,
+    blocked: row.blocked,
+    failed: row.failed,
+    startedAt: row.startedAt,
+    finishedAt: row.finishedAt,
+    createdAt: row.createdAt,
+  };
+}
+
+function toBroadcastData(patch: BroadcastPatch): Prisma.BroadcastUpdateManyMutationInput {
+  const { source, buttons, cursorUserId, ...fields } = patch;
+  return {
+    ...fields,
+    ...(source === undefined
+      ? {}
+      : { sourceChatId: source ? BigInt(source.chatId) : null, sourceMessageId: source?.messageId ?? null }),
+    ...(buttons === undefined ? {} : { buttons: buttons as unknown as Prisma.InputJsonValue }),
+    ...(cursorUserId === undefined ? {} : { cursorUserId: cursorUserId === null ? null : BigInt(cursorUserId) }),
+  };
+}
+
+class PrismaBroadcastRepository implements BroadcastRepository {
+  constructor(private readonly db: PrismaClient) {}
+
+  async create(authorId: number): Promise<Broadcast> {
+    return toBroadcast(await this.db.broadcast.create({ data: { authorId: BigInt(authorId), status: 'awaiting_content' } }));
+  }
+
+  async findById(id: number): Promise<Broadcast | null> {
+    const row = await this.db.broadcast.findUnique({ where: { id } });
+    return row ? toBroadcast(row) : null;
+  }
+
+  async findOpenDraft(authorId: number): Promise<Broadcast | null> {
+    const row = await this.db.broadcast.findFirst({
+      where: { authorId: BigInt(authorId), status: { in: [...DRAFT_STATUSES] } },
+      orderBy: { id: 'desc' },
+    });
+    return row ? toBroadcast(row) : null;
+  }
+
+  async listByStatus(status: BroadcastStatus): Promise<Broadcast[]> {
+    const rows = await this.db.broadcast.findMany({ where: { status }, orderBy: { id: 'asc' } });
+    return rows.map(toBroadcast);
+  }
+
+  async update(id: number, patch: Omit<BroadcastPatch, 'status'>): Promise<Broadcast> {
+    return toBroadcast(await this.db.broadcast.update({ where: { id }, data: toBroadcastData(patch) }));
+  }
+
+  async transition(
+    id: number,
+    from: readonly BroadcastStatus[],
+    patch: BroadcastPatch & { status: BroadcastStatus },
+  ): Promise<Broadcast | null> {
+    const result = await this.db.broadcast.updateMany({
+      where: { id, status: { in: [...from] } },
+      data: toBroadcastData(patch),
+    });
+    if (result.count === 0) return null;
+    return this.findById(id);
+  }
+}
+
 export function createPrismaRepositories(db: PrismaClient): Repositories {
   return {
     users: new PrismaUserRepository(db),
     orders: new PrismaOrderRepository(db),
     orderEvents: new PrismaOrderEventRepository(db),
     codeWaits: new PrismaCodeWaitAttemptRepository(db),
+    broadcasts: new PrismaBroadcastRepository(db),
   };
 }

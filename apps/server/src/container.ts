@@ -17,6 +17,8 @@ import { MockPaymentProvider } from './providers/payment/mock-payment-provider.j
 import type { PaymentProvider } from './providers/payment/payment-provider.js';
 import { createPrismaRepositories } from './repositories/prisma/prisma-repositories.js';
 import type { Repositories } from './repositories/repositories.js';
+import { BroadcastRunner } from './services/broadcast-runner.js';
+import { BroadcastService } from './services/broadcast-service.js';
 import { ChannelInfoService } from './services/channel-info-service.js';
 import { DeliveryService } from './services/delivery-service.js';
 import { NotificationService } from './services/notification-service.js';
@@ -33,8 +35,9 @@ export interface Container {
   subscription: SubscriptionService;
   /** null when the shop runs on mock catalog and delivery. */
   partnerAdmin: PartnerAdminService | null;
-  /** Background jobs: start after the server listens, stop on shutdown. */
-  background: { start(): void; stop(): void };
+  broadcasts: BroadcastService;
+  /** Background jobs: start after the server listens, stop (and let the current step finish) on shutdown. */
+  background: { start(): void; stop(): Promise<void> };
 }
 
 interface Supply {
@@ -118,10 +121,33 @@ export function createContainer(env: Env, telegram: TelegramAdapters, logger: Lo
     miniappDir: env.SERVE_MINIAPP ? MINIAPP_DIST : null,
   };
 
+  const broadcastRunner = new BroadcastRunner({
+    broadcasts: repos.broadcasts,
+    users: repos.users,
+    telegram: telegram.broadcast,
+    logger,
+    ratePerSecond: env.BROADCAST_RATE_PER_SEC,
+  });
+  const broadcasts = new BroadcastService({
+    broadcasts: repos.broadcasts,
+    users: repos.users,
+    telegram: telegram.broadcast,
+    runner: broadcastRunner,
+    webAppUrl: env.WEBAPP_URL,
+    logger,
+  });
+
   const background = {
-    start: () => installiosCatalog?.start(),
-    stop: () => installiosCatalog?.stop(),
+    start: () => {
+      installiosCatalog?.start();
+      broadcastRunner.start();
+    },
+    stop: async () => {
+      installiosCatalog?.stop();
+      broadcastRunner.stop();
+      await broadcastRunner.idle();
+    },
   };
 
-  return { db, repos, appDeps, subscription, partnerAdmin, background };
+  return { db, repos, appDeps, subscription, partnerAdmin, broadcasts, background };
 }

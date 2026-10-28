@@ -30,6 +30,7 @@ async function main(): Promise<void> {
       logger,
       adminIds: env.ADMIN_IDS,
       partnerAdmin: container.partnerAdmin,
+      broadcasts: container.broadcasts,
     });
   }
 
@@ -37,8 +38,7 @@ async function main(): Promise<void> {
 
   const shutdown = async (signal: string): Promise<void> => {
     logger.info({ signal }, 'Shutting down');
-    container.background.stop();
-    await Promise.allSettled([bot?.stop(), app.close()]);
+    await Promise.allSettled([container.background.stop(), bot?.stop(), app.close()]);
     await container.db.$disconnect();
     process.exit(0);
   };
@@ -57,7 +57,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  await configureBot(bot, { webAppUrl: env.WEBAPP_URL, logger });
+  await configureBot(bot, { webAppUrl: env.WEBAPP_URL, logger, adminIds: env.ADMIN_IDS });
   // Long polling; runs until bot.stop(). The HTTP API keeps working if the bot fails.
   bot
     .start({

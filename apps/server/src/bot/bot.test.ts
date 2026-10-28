@@ -68,6 +68,16 @@ describe('/start', () => {
     expect(keyboardJson(reply.mock.calls[0])).toContain('https://shop.example.com#/orders/15');
   });
 
+  it('makes a user who blocked the bot a broadcast recipient again', async () => {
+    await ctx.repos.users.upsert(BUYER);
+    await ctx.repos.users.setBotBlockedAt(BUYER.id, new Date());
+    const { context } = fakeContext();
+
+    await handleStart(context, deps);
+
+    expect(await ctx.repos.users.listRecipients(null, 10)).toEqual([BUYER.id]);
+  });
+
   it('reports when the subscription cannot be checked', async () => {
     vi.spyOn(ctx.subscription, 'isSubscribed').mockRejectedValue(new AppError('SUBSCRIPTION_CHECK_FAILED', 'x'));
     const { context, reply } = fakeContext();
@@ -135,6 +145,27 @@ describe('Bot API adapters', () => {
       logger: { ...silentLogger, warn },
     });
     expect(warn).toHaveBeenCalled();
+  });
+
+  it("shows admin commands only in the admins' chats", async () => {
+    const setMyCommands = vi.fn().mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('chat not found'));
+    const setChatMenuButton = vi.fn().mockResolvedValue(true);
+    const warn = vi.fn();
+
+    await configureBot({ api: { setMyCommands, setChatMenuButton } } as unknown as Bot, {
+      webAppUrl: 'https://shop.example.com',
+      logger: { ...silentLogger, warn },
+      adminIds: [111, 222],
+    });
+
+    const scoped = setMyCommands.mock.calls.filter((call) => call[1]?.scope);
+    expect(scoped.map((call) => call[1].scope)).toEqual([
+      { type: 'chat', chat_id: 111 },
+      { type: 'chat', chat_id: 222 },
+    ]);
+    expect(JSON.stringify(scoped[0]?.[0])).toContain('broadcast');
+    expect(JSON.stringify(setMyCommands.mock.calls.at(-1)?.[0])).not.toContain('broadcast');
+    expect(warn).toHaveBeenCalledWith(expect.objectContaining({ adminId: 222 }), expect.any(String));
   });
 });
 

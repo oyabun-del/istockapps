@@ -15,6 +15,8 @@ model User {
   lastName   String?
   username   String?
   photoUrl   String?
+  // Set when a message to the user failed with 403 (bot blocked); cleared by /start.
+  botBlockedAt DateTime?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   orders     Order[]
@@ -87,4 +89,30 @@ model OrderEvent {
   createdAt DateTime @default(now())
 
   @@index([orderId])
+}
+
+// A message an admin sent to the bot, copied to every user as is (formatting, custom emoji, media).
+model Broadcast {
+  id                Int       @id @default(autoincrement())
+  authorId          BigInt
+  status            String
+  // The admin's own message; the copy keeps its entities, so nothing is re-rendered.
+  sourceChatId      BigInt?
+  sourceMessageId   Int?
+  buttons           Json      @default("[]")
+  // The admin's message with the counters, edited while sending.
+  progressMessageId Int?
+  // Last user id handled; sending resumes after it on restart.
+  cursorUserId      BigInt?
+  total             Int       @default(0)
+  sent              Int       @default(0)
+  blocked           Int       @default(0)
+  failed            Int       @default(0)
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([authorId, status])
+  @@index([status])
 }

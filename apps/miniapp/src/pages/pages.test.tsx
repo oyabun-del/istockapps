@@ -1,8 +1,10 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import { MAX_ORDER_ITEMS } from '@istock/shared';
 import { ApiError, api } from '../lib/api';
-import { ME, SBER, makeOrder, renderWithProviders } from '../test/render';
+import { cartStore } from '../lib/cart';
+import { ME, SBER, makeApp, renderWithProviders } from '../test/render';
 import { AppPage } from './app/AppPage';
 import { CatalogPage } from './catalog/CatalogPage';
 import { GuidePage } from './guide/GuidePage';
@@ -51,46 +53,84 @@ describe('CatalogPage', () => {
   });
 });
 
+describe('CatalogPage cart', () => {
+  const TBANK = makeApp('tbank', 'Т-Банк');
+  const CANVA = makeApp('canva', 'Canva');
+
+  it('adds apps to the cart and shows the discount the moment the third one is added', async () => {
+    vi.spyOn(api, 'categories').mockResolvedValue(CATEGORIES);
+    vi.spyOn(api, 'apps').mockResolvedValue([SBER, TBANK, CANVA]);
+    const app = vi.spyOn(api, 'app');
+    renderWithProviders(<CatalogPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Добавить СберБанк Онлайн в корзину' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Добавьте ещё 2 приложения для скидки 300 ₽');
+    expect(screen.getByRole('link', { name: /Корзина: 1 приложение/ })).toHaveTextContent('349 ₽');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить Т-Банк в корзину' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить Canva в корзину' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('Добавьте ещё 2 приложения для скидки 750 ₽'),
+    );
+    const bar = screen.getByRole('link', { name: 'Корзина: 3 приложения, скидка 300 ₽' });
+    expect(within(bar).getByText('747 ₽')).toBeInTheDocument();
+    expect(within(bar).getByText('447 ₽')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Убрать Canva из корзины' })).toHaveAttribute('aria-pressed', 'true');
+    // Prices come from the catalog list already on screen.
+    expect(app).not.toHaveBeenCalled();
+  });
+
+  it('removes an app from the cart with the same button', async () => {
+    vi.spyOn(api, 'categories').mockResolvedValue(CATEGORIES);
+    vi.spyOn(api, 'apps').mockResolvedValue([SBER]);
+    renderWithProviders(<CatalogPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Добавить СберБанк Онлайн в корзину' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Убрать СберБанк Онлайн из корзины' }));
+
+    expect(cartStore.getSnapshot()).toEqual([]);
+    await waitFor(() => expect(screen.queryByRole('link', { name: /Корзина/ })).not.toBeInTheDocument());
+  });
+});
+
 describe('AppPage', () => {
-  it('pays by SBP and opens the payment page', async () => {
+  it('only offers to add the app to the cart, then to open the cart', async () => {
     vi.spyOn(api, 'app').mockResolvedValue(SBER);
-    vi.spyOn(api, 'paymentMethods').mockResolvedValue([{ method: 'SBP' }]);
-    const createOrder = vi
-      .spyOn(api, 'createOrder')
-      .mockResolvedValue(makeOrder({ status: 'awaiting_payment', paymentUrl: 'https://pay.example.com/1' }));
-    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const createOrder = vi.spyOn(api, 'createOrder');
 
     renderWithProviders(<AppPage />, { route: '/apps/sberbank', path: '/apps/:appId' });
 
-    expect(await screen.findByText('СБП')).toBeInTheDocument();
-    expect(screen.queryByText(/Карта РФ|USDT/)).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /Оплатить 349 ₽/ }));
+    expect(await screen.findByText('Добавьте 3 приложения для скидки 300 ₽')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Оплатить/ })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'В корзину за 349 ₽' }));
 
-    await waitFor(() => expect(createOrder).toHaveBeenCalledWith({ appId: 'sberbank', paymentMethod: 'SBP' }));
-    expect(open).toHaveBeenCalledWith('https://pay.example.com/1', '_blank', 'noopener,noreferrer');
+    expect(cartStore.getSnapshot()).toEqual(['sberbank']);
+    expect(await screen.findByRole('status')).toHaveTextContent('Добавьте ещё 2 приложения для скидки 300 ₽');
+    await userEvent.click(screen.getByRole('button', { name: 'Перейти в корзину' }));
     expect(await screen.findByTestId('navigated')).toBeInTheDocument();
+    expect(createOrder).not.toHaveBeenCalled();
   });
 
-  it('blocks checkout while SBP is unavailable', async () => {
+  it('takes the app back out of the cart', async () => {
     vi.spyOn(api, 'app').mockResolvedValue(SBER);
-    vi.spyOn(api, 'paymentMethods').mockResolvedValue([]);
+    cartStore.add('sberbank');
 
     renderWithProviders(<AppPage />, { route: '/apps/sberbank', path: '/apps/:appId' });
 
-    expect(await screen.findByText(/Оплата временно недоступна/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Оплатить/ })).toBeDisabled();
+    await userEvent.click(await screen.findByRole('button', { name: 'Убрать из корзины' }));
+    expect(cartStore.getSnapshot()).toEqual([]);
+    expect(screen.getByRole('button', { name: 'В корзину за 349 ₽' })).toBeInTheDocument();
   });
 
-  it('shows checkout errors', async () => {
-    vi.spyOn(api, 'app').mockResolvedValue(SBER);
-    vi.spyOn(api, 'paymentMethods').mockResolvedValue([{ method: 'SBP' }]);
-    vi.spyOn(api, 'createOrder').mockRejectedValue(new ApiError('PAYMENT_PROVIDER_ERROR', 'Не удалось создать платёж', 502));
+  it('blocks adding when the cart is full', async () => {
+    vi.spyOn(api, 'app').mockImplementation(async (id) => (id === SBER.id ? SBER : makeApp(id, id)));
+    cartStore.addMany(Array.from({ length: MAX_ORDER_ITEMS }, (_, index) => `app-${index}`));
 
     renderWithProviders(<AppPage />, { route: '/apps/sberbank', path: '/apps/:appId' });
 
-    await screen.findByText('СБП');
-    await userEvent.click(screen.getByRole('button', { name: /Оплатить/ }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось создать платёж');
+    expect(await screen.findByRole('button', { name: /В корзину/ })).toBeDisabled();
+    expect(screen.getByText(`В одном заказе не больше ${MAX_ORDER_ITEMS} приложений`)).toBeInTheDocument();
   });
 });
 

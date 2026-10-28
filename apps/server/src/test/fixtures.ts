@@ -107,8 +107,8 @@ export function createTestContext(): TestContext {
 }
 
 /** Creates an order and marks it paid through the payment webhook path. */
-export async function createPaidOrder(ctx: TestContext, appId = 'sberbank') {
-  const order = await ctx.orders.createOrder(BUYER, { appId, paymentMethod: 'SBP' });
+export async function createPaidOrder(ctx: TestContext, appIds: readonly string[] = ['sberbank']) {
+  const order = await ctx.orders.createOrder(BUYER, { appIds: [...appIds], paymentMethod: 'SBP' });
   const payment = ctx.payments.setStatus(order.paymentId as string, 'PAID');
   if (!payment) throw new Error('payment missing');
   await ctx.orders.handlePaymentWebhook(order.paymentOrderId, { ...payment, isSandbox: false });

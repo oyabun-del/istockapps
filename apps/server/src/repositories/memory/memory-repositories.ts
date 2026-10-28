@@ -34,6 +34,7 @@ class MemoryOrderRepository implements OrderRepository {
   async create(input: NewOrder): Promise<Order> {
     const order: Order = {
       ...input,
+      items: input.items.map((item) => ({ ...item })),
       id: this.nextId++,
       paymentId: null,
       paymentUrl: null,
@@ -59,12 +60,14 @@ class MemoryOrderRepository implements OrderRepository {
     return order ? { ...order } : null;
   }
 
-  async findPendingForApp(userId: number, appId: string, createdAfter: Date): Promise<Order | null> {
+  async findPendingForApps(userId: number, appIds: readonly string[], createdAfter: Date): Promise<Order | null> {
+    const wanted = new Set(appIds);
     const order = [...this.orders.values()]
       .filter(
         (item) =>
           item.userId === userId &&
-          item.appId === appId &&
+          item.items.length === wanted.size &&
+          item.items.every((orderItem) => wanted.has(orderItem.appId)) &&
           item.status === 'awaiting_payment' &&
           item.paymentUrl !== null &&
           item.createdAt > createdAfter,

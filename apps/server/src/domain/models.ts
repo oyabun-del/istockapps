@@ -8,13 +8,25 @@ export interface User {
   photoUrl: string | null;
 }
 
+/** One app of an order, priced when the order was created. */
+export interface OrderItem {
+  appId: string;
+  appName: string;
+  appIconUrl: string;
+  priceKopecks: number;
+  discountKopecks: number;
+}
+
 export interface Order {
   id: number;
   paymentOrderId: string;
   userId: number;
-  appId: string;
-  appName: string;
-  appIconUrl: string;
+  /** At least one app, in the order the buyer added them. */
+  items: OrderItem[];
+  /** Sum of app prices before the bulk discount. */
+  subtotalKopecks: number;
+  discountKopecks: number;
+  /** What the buyer pays (subtotal minus discount); checked against the payment. */
   amountKopecks: number;
   paymentMethod: PaymentMethod;
   status: OrderStatus;
@@ -34,7 +46,14 @@ export interface Order {
 
 export type NewOrder = Pick<
   Order,
-  'paymentOrderId' | 'userId' | 'appId' | 'appName' | 'appIconUrl' | 'amountKopecks' | 'paymentMethod' | 'status'
+  | 'paymentOrderId'
+  | 'userId'
+  | 'items'
+  | 'subtotalKopecks'
+  | 'discountKopecks'
+  | 'amountKopecks'
+  | 'paymentMethod'
+  | 'status'
 >;
 
 export type OrderPatch = Partial<

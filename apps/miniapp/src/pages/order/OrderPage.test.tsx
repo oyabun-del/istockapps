@@ -1,9 +1,10 @@
 import type { CodeWaitDto, CredentialsDto, DeliveryAppDto, DeliveryDto, DeliveryGroupDto } from '@istock/shared';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '../../lib/api';
-import { makeOrder, renderWithProviders } from '../../test/render';
+import { cartStore } from '../../lib/cart';
+import { MULTI_ORDER, makeOrder, renderWithProviders } from '../../test/render';
 import { OrderPage } from './OrderPage';
 
 function renderOrder() {
@@ -67,7 +68,20 @@ describe('OrderPage after the invoice closed', () => {
     expect(await screen.findByRole('heading', { name: 'Счёт истёк' })).toBeInTheDocument();
     expect(screen.getByText('Номер заказа')).toBeInTheDocument();
     expect(screen.getByText(/Если банк всё же списал деньги/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Оформить заново/ })).toHaveAttribute('href', '/apps/sberbank');
+    await userEvent.click(screen.getByRole('button', { name: /Оформить заново/ }));
+    expect(cartStore.getSnapshot()).toEqual(['sberbank']);
+    expect(await screen.findByTestId('navigated')).toBeInTheDocument();
+  });
+
+  it('lists every app of a multi-app order with its discount', async () => {
+    vi.spyOn(api, 'order').mockResolvedValue(MULTI_ORDER);
+
+    renderOrder();
+
+    const items = await screen.findByRole('list', { name: 'Приложения заказа' });
+    expect(within(items).getAllByRole('listitem')).toHaveLength(3);
+    expect(screen.getByText('−300 ₽')).toBeInTheDocument();
+    expect(screen.getAllByText('447 ₽').length).toBeGreaterThan(0);
   });
 
   it('does not offer to reorder a refunded order', async () => {
@@ -76,7 +90,7 @@ describe('OrderPage after the invoice closed', () => {
     renderOrder();
 
     expect(await screen.findByRole('heading', { name: 'Деньги возвращены' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Оформить заново/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Оформить заново/ })).not.toBeInTheDocument();
   });
 });
 

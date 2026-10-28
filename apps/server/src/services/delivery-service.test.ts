@@ -118,7 +118,7 @@ describe('DeliveryService code step', () => {
 
 describe('DeliveryService guards', () => {
   it('refuses everything for unpaid orders', async () => {
-    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
     const service = ctx.deliveryService;
 
     await expect(service.getDelivery(BUYER.id, order.id)).rejects.toMatchObject({ code: 'INVALID_STATE' });
@@ -161,6 +161,14 @@ describe('DeliveryService with Install-IOS semantics', () => {
     expect(provider.count('getDelivery')).toBe(1);
     const stored = await ctx.repos.orders.findById(paid.id);
     expect(stored).toMatchObject({ deliveryRef: 'ord_1', deliveryExpiresAt: provider.current.expiresAt });
+  });
+
+  it('creates one delivery with every app of the order', async () => {
+    const paid = await createPaidOrder(ctx, ['sberbank', 'tbank', 'minecraft']);
+
+    await service.getDelivery(BUYER.id, paid.id);
+
+    expect(provider.calls[0]?.args[1]).toEqual(['sberbank', 'tbank', 'minecraft']);
   });
 
   it('shares one refresh between concurrent requests', async () => {

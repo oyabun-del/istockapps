@@ -162,7 +162,7 @@ describe('order lifecycle through HTTP', () => {
       method: 'POST',
       url: '/api/orders',
       headers: authHeader(),
-      payload: { appId: 'sberbank', paymentMethod: 'SBP' },
+      payload: { appIds: ['sberbank'], paymentMethod: 'SBP' },
     });
     const order = created.json().data;
     const lifetimeMs = Date.parse(order.expiresAt) - Date.parse(order.createdAt);
@@ -178,7 +178,7 @@ describe('order lifecycle through HTTP', () => {
       method: 'POST',
       url: '/api/orders',
       headers: authHeader(),
-      payload: { appId: 'sberbank', paymentMethod: 'SBP' },
+      payload: { appIds: ['sberbank'], paymentMethod: 'SBP' },
     });
 
     const foreign = await app.inject({
@@ -189,6 +189,50 @@ describe('order lifecycle through HTTP', () => {
 
     expect(foreign.statusCode).toBe(404);
   });
+
+  it('buys a cart of apps with the bulk discount in one order', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/orders',
+      headers: authHeader(),
+      payload: { appIds: ['sberbank', 'tbank', 'canva'], paymentMethod: 'SBP', expectedTotalKopecks: 44700 },
+    });
+
+    expect(created.statusCode).toBe(200);
+    expect(created.json().data).toMatchObject({
+      items: [
+        { id: 'sberbank', priceKopecks: 34900, discountKopecks: 10000 },
+        { id: 'tbank', priceKopecks: 19900, discountKopecks: 10000 },
+        { id: 'canva', priceKopecks: 19900, discountKopecks: 10000 },
+      ],
+      subtotalKopecks: 74700,
+      discountKopecks: 30000,
+      amountKopecks: 44700,
+    });
+  });
+
+  it('answers 409 PRICE_CHANGED when the cart total is outdated', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/orders',
+      headers: authHeader(),
+      payload: { appIds: ['sberbank', 'tbank', 'canva'], paymentMethod: 'SBP', expectedTotalKopecks: 74700 },
+    });
+
+    expect(created.statusCode).toBe(409);
+    expect(created.json().error.code).toBe('PRICE_CHANGED');
+  });
+
+  it('rejects duplicate apps in one order', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/orders',
+      headers: authHeader(),
+      payload: { appIds: ['sberbank', 'sberbank'], paymentMethod: 'SBP' },
+    });
+
+    expect(created.statusCode).toBe(400);
+  });
 });
 
 describe('purchase flow through HTTP', () => {
@@ -197,7 +241,7 @@ describe('purchase flow through HTTP', () => {
       method: 'POST',
       url: '/api/orders',
       headers: authHeader(),
-      payload: { appId: 'sberbank', paymentMethod: 'SBP' },
+      payload: { appIds: ['sberbank'], paymentMethod: 'SBP' },
     });
     expect(created.statusCode).toBe(200);
     const order = created.json().data;
@@ -272,13 +316,13 @@ describe('purchase flow through HTTP', () => {
         method: 'POST',
         url: '/api/orders',
         headers: authHeader(),
-        payload: { appId: 'sberbank', paymentMethod },
+        payload: { appIds: ['sberbank'], paymentMethod },
       });
       expect(invalid.statusCode).toBe(400);
       expect(invalid.json().error.code).toBe('VALIDATION_ERROR');
     }
 
-    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
     const foreign = await app.inject({
       method: 'POST',
       url: `/api/orders/${order.id}/credentials`,
@@ -323,7 +367,7 @@ describe('purchase flow through HTTP', () => {
 
 describe('CISPAY webhook', () => {
   async function appWithCisPay(): Promise<{ order: Awaited<ReturnType<typeof ctx.orders.createOrder>> }> {
-    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
     const cispay = new CisPayProvider({
       apiUrl: 'https://api.cispay.app',
       shopId: '0192a4b8-0000-7000-8000-000000000001',

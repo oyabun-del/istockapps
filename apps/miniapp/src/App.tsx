@@ -5,6 +5,7 @@ import { errorMessage } from './lib/api';
 import { useMe } from './lib/queries';
 import { getStartParam } from './lib/telegram';
 import { AppPage } from './pages/app/AppPage';
+import { CartPage } from './pages/cart/CartPage';
 import { CatalogPage } from './pages/catalog/CatalogPage';
 import { DownloadsPage } from './pages/downloads/DownloadsPage';
 import { SubscriptionGate } from './pages/gate/SubscriptionGate';
@@ -37,6 +38,7 @@ export function AppRoutes() {
       <Routes>
         <Route path="/" element={<CatalogPage />} />
         <Route path="/apps/:appId" element={<AppPage />} />
+        <Route path="/cart" element={<CartPage />} />
         <Route path="/orders" element={<DownloadsPage />} />
         <Route path="/orders/:orderId" element={<OrderPage />} />
         <Route path="/guide" element={<GuidePage />} />

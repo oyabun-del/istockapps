@@ -10,7 +10,8 @@ export interface OrderRepository {
   create(order: NewOrder): Promise<Order>;
   findById(id: number): Promise<Order | null>;
   findByPaymentOrderId(paymentOrderId: string): Promise<Order | null>;
-  findPendingForApp(userId: number, appId: string, createdAfter: Date): Promise<Order | null>;
+  /** Newest unpaid order with a payment link for exactly this set of apps (order of ids does not matter). */
+  findPendingForApps(userId: number, appIds: readonly string[], createdAfter: Date): Promise<Order | null>;
   listByUser(userId: number, limit: number): Promise<Order[]>;
   /** Unconditional field update (never changes status). */
   update(id: number, patch: Omit<OrderPatch, 'status'>): Promise<Order>;

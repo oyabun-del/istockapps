@@ -1,39 +1,58 @@
-import { ACTIVE_PAYMENT_METHOD, formatRub } from '@istock/shared';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { BULK_DISCOUNT_TIERS, formatRub, MAX_ORDER_ITEMS, type AppDto } from '@istock/shared';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { CartBar } from '../../components/cart/CartBar';
 import { Page } from '../../components/layout/Page';
 import { AppIcon } from '../../components/ui/AppIcon';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { ErrorState, Skeleton } from '../../components/ui/StateViews';
 import { QUICK_STEPS } from '../../content/guide';
+import { useAddToCart } from '../../hooks/useCart';
 import { api, errorMessage } from '../../lib/api';
+import { cartStore, discountHint, discountNotice, useCartIds } from '../../lib/cart';
 import { queryKeys } from '../../lib/queries';
-import { hapticNotify, openExternalLink } from '../../lib/telegram';
-import { SbpPaymentRow } from './SbpPaymentRow';
+
+const FIRST_TIER_ITEMS = BULK_DISCOUNT_TIERS.at(-1)?.minItems ?? 0;
+
+function CartActions({ app }: { app: AppDto }) {
+  const navigate = useNavigate();
+  const cartIds = useCartIds();
+  const addToCart = useAddToCart();
+  const isInCart = cartIds.includes(app.id);
+  const isCartFull = !isInCart && cartIds.length >= MAX_ORDER_ITEMS;
+  const hint = discountHint(cartIds.length) ?? discountNotice(cartIds.length).text;
+
+  return (
+    <div className="mt-6 flex flex-col gap-2.5">
+      {isInCart ? (
+        <>
+          <Button size="lg" isFullWidth icon="shopping_cart" onClick={() => navigate('/cart')}>
+            Перейти в корзину
+          </Button>
+          <Button variant="ghost" isFullWidth icon="close" onClick={() => cartStore.remove(app.id)}>
+            Убрать из корзины
+          </Button>
+        </>
+      ) : (
+        <Button size="lg" isFullWidth icon="add_shopping_cart" disabled={isCartFull} onClick={() => addToCart(app)}>
+          В корзину за {formatRub(app.priceKopecks)}
+        </Button>
+      )}
+      <p className="flex items-center justify-center gap-1.5 text-center text-label-md text-on-surface-variant">
+        <Icon name="sell" className="text-[16px] text-secondary" />
+        {isCartFull ? `В одном заказе не больше ${MAX_ORDER_ITEMS} приложений` : hint}
+      </p>
+    </div>
+  );
+}
 
 export function AppPage() {
   const { appId = '' } = useParams();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-
   const app = useQuery({ queryKey: queryKeys.app(appId), queryFn: () => api.app(appId) });
-  const methods = useQuery({ queryKey: queryKeys.paymentMethods, queryFn: api.paymentMethods, staleTime: 5 * 60_000 });
-  const isSbpAvailable = methods.data?.some((item) => item.method === ACTIVE_PAYMENT_METHOD) ?? false;
-
-  const checkout = useMutation({
-    mutationFn: () => api.createOrder({ appId, paymentMethod: ACTIVE_PAYMENT_METHOD }),
-    onSuccess: (order) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.orders });
-      queryClient.setQueryData(queryKeys.order(order.id), order);
-      if (order.paymentUrl) openExternalLink(order.paymentUrl);
-      navigate(`/orders/${order.id}`, { replace: true });
-    },
-    onError: () => hapticNotify('error'),
-  });
 
   return (
-    <Page subtitle="Оплата" hasBackButton hasBottomNav={false}>
+    <Page subtitle="Приложение" hasBackButton hasBottomNav={false}>
       <div className="mb-4 mt-1 flex items-center justify-between">
         <Link
           to="/"
@@ -41,7 +60,9 @@ export function AppPage() {
         >
           <Icon name="arrow_back" className="text-[18px] text-primary" />В каталог
         </Link>
-        <span className="text-label-sm uppercase tracking-wider text-on-surface-variant">Быстрая оплата</span>
+        <span className="text-label-sm uppercase tracking-wider text-on-surface-variant">
+          Скидки от {FIRST_TIER_ITEMS} приложений
+        </span>
       </div>
 
       {app.isPending && <Skeleton className="h-[88px]" />}
@@ -86,35 +107,10 @@ export function AppPage() {
             </ol>
           </details>
 
-          <SbpPaymentRow
-            isAvailable={isSbpAvailable}
-            isLoading={methods.isPending}
-            error={methods.isError ? errorMessage(methods.error) : null}
-          />
-
-          <div className="mt-6">
-            <Button
-              size="lg"
-              isFullWidth
-              icon="lock"
-              disabled={!isSbpAvailable}
-              isLoading={checkout.isPending}
-              onClick={() => checkout.mutate()}
-            >
-              Оплатить {formatRub(app.data.priceKopecks)}
-            </Button>
-            {checkout.isError && (
-              <p role="alert" className="mt-2.5 text-center text-body-sm text-error">
-                {errorMessage(checkout.error)}
-              </p>
-            )}
-            <p className="mt-2.5 flex items-center justify-center gap-1 text-label-sm text-on-surface-variant">
-              <Icon name="verified_user" className="text-[13px] text-secondary" />
-              Безопасный платёж через CISPAY
-            </p>
-          </div>
+          <CartActions app={app.data} />
         </>
       )}
+      <CartBar />
     </Page>
   );
 }

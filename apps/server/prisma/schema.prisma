@@ -26,9 +26,9 @@ model Order {
   paymentOrderId  String       @unique
   userId          BigInt
   user            User         @relation(fields: [userId], references: [id])
-  appId           String
-  appName         String
-  appIconUrl      String
+  // Sum of app prices before the bulk discount; amountKopecks is what the buyer pays.
+  subtotalKopecks Int
+  discountKopecks Int          @default(0)
   amountKopecks   Int
   paymentMethod   String
   status          String
@@ -44,10 +44,25 @@ model Order {
   completedAt     DateTime?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
+  items           OrderItem[]
   events          OrderEvent[]
   codeWaits       CodeWaitAttempt[]
 
   @@index([userId, createdAt])
+}
+
+// One app of an order, priced when the order was created.
+model OrderItem {
+  id              Int    @id @default(autoincrement())
+  orderId         Int
+  order           Order  @relation(fields: [orderId], references: [id])
+  appId           String
+  appName         String
+  appIconUrl      String
+  priceKopecks    Int
+  discountKopecks Int    @default(0)
+
+  @@unique([orderId, appId])
 }
 
 // One explicit attempt to receive a login code: ids only, the code itself is never stored.

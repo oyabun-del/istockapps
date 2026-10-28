@@ -27,6 +27,7 @@ export const ERROR_CODES = [
   'PAYMENT_PROVIDER_ERROR',
   'DELIVERY_PROVIDER_ERROR',
   'CATALOG_PROVIDER_ERROR',
+  'PRICE_CHANGED',
   'TOO_MANY_REQUESTS',
   'INTERNAL_ERROR',
 ] as const;
@@ -69,10 +70,23 @@ export interface AppDto {
 
 // ---------- Orders ----------
 
+export interface OrderItemDto {
+  id: string;
+  name: string;
+  iconUrl: string;
+  priceKopecks: number;
+  discountKopecks: number;
+}
+
 export interface OrderDto {
   id: number;
   status: OrderStatus;
-  app: { id: string; name: string; iconUrl: string };
+  /** At least one app, in the order the buyer added them. */
+  items: OrderItemDto[];
+  /** Sum of app prices before the bulk discount. */
+  subtotalKopecks: number;
+  discountKopecks: number;
+  /** What the buyer pays: subtotal minus discount. */
   amountKopecks: number;
   paymentMethod: PaymentMethod;
   paymentUrl: string | null;
@@ -170,6 +184,9 @@ export interface CatalogQuery {
 }
 
 export interface CreateOrderInput {
-  appId: string;
+  /** Distinct app ids, 1..MAX_ORDER_ITEMS. */
+  appIds: string[];
   paymentMethod: ActivePaymentMethod;
+  /** Total the buyer saw; the order is refused with PRICE_CHANGED if the server's total differs. */
+  expectedTotalKopecks?: number;
 }

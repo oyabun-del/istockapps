@@ -11,7 +11,7 @@ beforeEach(() => {
 
 describe('NotificationService', () => {
   it('notifies every admin with the escaped buyer profile', async () => {
-    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
 
     await ctx.notifications.purchaseCompleted(order, { ...BUYER, firstName: 'Иван <b>' }, false);
 
@@ -20,9 +20,21 @@ describe('NotificationService', () => {
     expect(ctx.sender.sent[0]?.html).toContain('@ivan');
   });
 
+  it('lists every app and the bulk discount of the purchase', async () => {
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank', 'tbank', 'canva'], paymentMethod: 'SBP' });
+
+    await ctx.notifications.purchaseCompleted(order, BUYER, false);
+    await ctx.notifications.notifyBuyerPaid(order);
+
+    const [admin, , buyer] = ctx.sender.sent.map((message) => message.html);
+    expect(admin).toContain('СберБанк Онлайн, Т-Банк, Canva');
+    expect(admin).toContain('Скидка: <b>300 ₽</b>');
+    expect(buyer).toContain('СберБанк Онлайн, Т-Банк, Canva');
+  });
+
   it('keeps notifying other admins when one admin is unreachable', async () => {
     ctx.sender.failFor.add(ADMIN_IDS[0] as number);
-    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
 
     await ctx.notifications.purchaseCompleted(order, BUYER, false);
 
@@ -31,12 +43,12 @@ describe('NotificationService', () => {
 
   it('swallows buyer notification failures', async () => {
     ctx.sender.failFor.add(BUYER.id);
-    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
     await expect(ctx.notifications.notifyBuyerPaid(order)).resolves.toBeUndefined();
   });
 
   it('marks sandbox purchases and labels methods of older orders', async () => {
-    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
     await ctx.notifications.purchaseCompleted({ ...order, paymentMethod: 'CRYPTO' }, null, true);
     const html = ctx.sender.sent[0]?.html ?? '';
     expect(html).toContain('тестовый платёж');

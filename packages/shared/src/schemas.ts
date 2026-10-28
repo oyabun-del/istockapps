@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ACTIVE_PAYMENT_METHOD, type CatalogQuery, type CreateOrderInput, type StartCodeInput } from './api.js';
+import { MAX_ORDER_ITEMS } from './pricing.js';
 
 /** Server-side request validation. Kept out of the main entry so zod is not bundled into the Mini App. */
 
@@ -12,8 +13,13 @@ const appIdSchema = z.string().min(1).max(APP_ID_MAX).regex(APP_ID_PATTERN).refi
 export const appIdParamSchema = z.object({ appId: appIdSchema });
 
 export const createOrderSchema: z.ZodType<CreateOrderInput> = z.object({
-  appId: appIdSchema,
+  appIds: z
+    .array(appIdSchema)
+    .min(1)
+    .max(MAX_ORDER_ITEMS)
+    .refine((ids) => new Set(ids).size === ids.length, 'Duplicate app ids'),
   paymentMethod: z.literal(ACTIVE_PAYMENT_METHOD),
+  expectedTotalKopecks: z.number().int().nonnegative().optional(),
 });
 
 export const catalogQuerySchema: z.ZodType<CatalogQuery> = z.object({

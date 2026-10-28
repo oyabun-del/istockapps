@@ -5,6 +5,7 @@
  */
 export const ICON_NAMES = [
   'account_balance',
+  'add_shopping_cart',
   'apps',
   'arrow_back',
   'auto_fix_high',
@@ -14,6 +15,7 @@ export const ICON_NAMES = [
   'check',
   'check_circle',
   'chevron_right',
+  'close',
   'content_copy',
   'credit_card',
   'currency_bitcoin',
@@ -37,8 +39,10 @@ export const ICON_NAMES = [
   'schedule',
   'search',
   'search_off',
+  'sell',
   'send',
   'settings',
+  'shopping_cart',
   'sms',
   'sports_esports',
   'subdirectory_arrow_right',

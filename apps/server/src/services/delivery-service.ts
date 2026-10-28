@@ -211,7 +211,12 @@ export class DeliveryService {
     const { delivery } = this.deps;
     const ref = order.deliveryRef;
     const snapshot = await this.callProvider(order, 'delivery', () =>
-      ref ? delivery.getDelivery(ref) : delivery.createDelivery(externalOrderId(order), [order.appId]),
+      ref
+        ? delivery.getDelivery(ref)
+        : delivery.createDelivery(
+            externalOrderId(order),
+            order.items.map((item) => item.appId),
+          ),
     );
     const isNew = ref !== snapshot.ref;
     if (isNew || order.deliveryExpiresAt?.getTime() !== snapshot.expiresAt.getTime()) {

@@ -1,9 +1,24 @@
 import type { OrderStatus } from '@istock/shared';
-import type { CodeWaitAttempt, NewCodeWaitAttempt, NewOrder, Order, OrderPatch, User } from '../domain/models.js';
+import type {
+  Broadcast,
+  BroadcastPatch,
+  BroadcastStatus,
+  CodeWaitAttempt,
+  NewCodeWaitAttempt,
+  NewOrder,
+  Order,
+  OrderPatch,
+  User,
+} from '../domain/models.js';
 
 export interface UserRepository {
   upsert(user: User): Promise<User>;
   findById(id: number): Promise<User | null>;
+  /** Ids of users the bot can still write to, ascending, after `afterId` (null = from the start). */
+  listRecipients(afterId: number | null, limit: number): Promise<number[]>;
+  countRecipients(): Promise<number>;
+  /** `at` = when a message failed with 403; null when the user started the bot again. */
+  setBotBlockedAt(id: number, at: Date | null): Promise<void>;
 }
 
 export interface OrderRepository {
@@ -35,9 +50,27 @@ export interface OrderEventRepository {
   has(orderId: number, type: string): Promise<boolean>;
 }
 
+export interface BroadcastRepository {
+  create(authorId: number): Promise<Broadcast>;
+  findById(id: number): Promise<Broadcast | null>;
+  /** The author's broadcast that is still being prepared, or null. */
+  findOpenDraft(authorId: number): Promise<Broadcast | null>;
+  /** Oldest first. */
+  listByStatus(status: BroadcastStatus): Promise<Broadcast[]>;
+  /** Unconditional field update (never changes status). */
+  update(id: number, patch: Omit<BroadcastPatch, 'status'>): Promise<Broadcast>;
+  /** Atomic compare-and-set, like OrderRepository.transition. */
+  transition(
+    id: number,
+    from: readonly BroadcastStatus[],
+    patch: BroadcastPatch & { status: BroadcastStatus },
+  ): Promise<Broadcast | null>;
+}
+
 export interface Repositories {
   users: UserRepository;
   orders: OrderRepository;
   orderEvents: OrderEventRepository;
   codeWaits: CodeWaitAttemptRepository;
+  broadcasts: BroadcastRepository;
 }

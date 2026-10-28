@@ -21,5 +21,17 @@ export function createOfflineTelegram({ channel, logger }: OfflineTelegramDeps):
         logger.info({ chatId, text: htmlToText(html), button: button?.text }, 'Telegram offline: message not sent');
       },
     },
+    broadcast: {
+      async copy(chatId, source) {
+        logger.info({ chatId, source }, 'Telegram offline: broadcast copy not sent');
+        return { kind: 'sent' };
+      },
+      async sendText(chatId, html) {
+        logger.info({ chatId, text: htmlToText(html) }, 'Telegram offline: message not sent');
+      },
+      async editText(chatId, messageId, html) {
+        logger.info({ chatId, messageId, text: htmlToText(html) }, 'Telegram offline: message not edited');
+      },
+    },
   };
 }

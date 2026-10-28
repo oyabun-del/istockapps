@@ -1,6 +1,18 @@
 import type { OrderStatus } from '@istock/shared';
-import type { CodeWaitAttempt, NewCodeWaitAttempt, NewOrder, Order, OrderPatch, User } from '../../domain/models.js';
+import { DRAFT_STATUSES } from '../../domain/broadcast-status.js';
 import type {
+  Broadcast,
+  BroadcastPatch,
+  BroadcastStatus,
+  CodeWaitAttempt,
+  NewCodeWaitAttempt,
+  NewOrder,
+  Order,
+  OrderPatch,
+  User,
+} from '../../domain/models.js';
+import type {
+  BroadcastRepository,
   CodeWaitAttemptRepository,
   OrderEventRepository,
   OrderRepository,
@@ -11,6 +23,7 @@ import type {
 /** In-memory repositories for tests and quick local experiments. */
 class MemoryUserRepository implements UserRepository {
   private readonly users = new Map<number, User>();
+  private readonly blockedAt = new Map<number, Date>();
 
   async upsert(user: User): Promise<User> {
     this.users.set(user.id, { ...user });
@@ -20,6 +33,25 @@ class MemoryUserRepository implements UserRepository {
   async findById(id: number): Promise<User | null> {
     const user = this.users.get(id);
     return user ? { ...user } : null;
+  }
+
+  async listRecipients(afterId: number | null, limit: number): Promise<number[]> {
+    return this.recipientIds()
+      .filter((id) => afterId === null || id > afterId)
+      .slice(0, limit);
+  }
+
+  async countRecipients(): Promise<number> {
+    return this.recipientIds().length;
+  }
+
+  async setBotBlockedAt(id: number, at: Date | null): Promise<void> {
+    if (at) this.blockedAt.set(id, at);
+    else this.blockedAt.delete(id);
+  }
+
+  private recipientIds(): number[] {
+    return [...this.users.keys()].filter((id) => !this.blockedAt.has(id)).sort((a, b) => a - b);
   }
 }
 
@@ -146,6 +178,70 @@ class MemoryOrderEventRepository implements OrderEventRepository {
   }
 }
 
+class MemoryBroadcastRepository implements BroadcastRepository {
+  private readonly broadcasts = new Map<number, Broadcast>();
+  private nextId = 1;
+
+  constructor(private readonly now: Now) {}
+
+  async create(authorId: number): Promise<Broadcast> {
+    const broadcast: Broadcast = {
+      id: this.nextId++,
+      authorId,
+      status: 'awaiting_content',
+      source: null,
+      buttons: [],
+      progressMessageId: null,
+      cursorUserId: null,
+      total: 0,
+      sent: 0,
+      blocked: 0,
+      failed: 0,
+      startedAt: null,
+      finishedAt: null,
+      createdAt: this.now(),
+    };
+    this.broadcasts.set(broadcast.id, broadcast);
+    return { ...broadcast };
+  }
+
+  async findById(id: number): Promise<Broadcast | null> {
+    const broadcast = this.broadcasts.get(id);
+    return broadcast ? { ...broadcast } : null;
+  }
+
+  async findOpenDraft(authorId: number): Promise<Broadcast | null> {
+    const found = [...this.broadcasts.values()]
+      .filter((item) => item.authorId === authorId && DRAFT_STATUSES.includes(item.status))
+      .at(-1);
+    return found ? { ...found } : null;
+  }
+
+  async listByStatus(status: BroadcastStatus): Promise<Broadcast[]> {
+    return [...this.broadcasts.values()].filter((item) => item.status === status).map((item) => ({ ...item }));
+  }
+
+  async update(id: number, patch: Omit<BroadcastPatch, 'status'>): Promise<Broadcast> {
+    const current = this.broadcasts.get(id);
+    if (!current) throw new Error(`Broadcast ${id} not found`);
+    const updated = { ...current, ...patch };
+    this.broadcasts.set(id, updated);
+    return { ...updated };
+  }
+
+  async transition(
+    id: number,
+    from: readonly BroadcastStatus[],
+    patch: BroadcastPatch & { status: BroadcastStatus },
+  ): Promise<Broadcast | null> {
+    const current = this.broadcasts.get(id);
+    if (!current || !from.includes(current.status)) return null;
+    const updated = { ...current, ...patch };
+    this.broadcasts.set(id, updated);
+    return { ...updated };
+  }
+}
+
 export interface MemoryRepositories extends Repositories {
   orderEvents: MemoryOrderEventRepository;
 }
@@ -156,5 +252,6 @@ export function createMemoryRepositories(now: Now = () => new Date()): MemoryRep
     orders: new MemoryOrderRepository(now),
     orderEvents: new MemoryOrderEventRepository(),
     codeWaits: new MemoryCodeWaitAttemptRepository(now),
+    broadcasts: new MemoryBroadcastRepository(now),
   };
 }

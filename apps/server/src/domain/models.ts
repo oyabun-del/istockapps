@@ -84,3 +84,74 @@ export interface CodeWaitAttempt {
 }
 
 export type NewCodeWaitAttempt = Pick<CodeWaitAttempt, 'orderId' | 'groupId' | 'idempotencyKey'>;
+
+/** An inline keyboard button. Broadcasts carry only url and web_app ones; callback buttons are the admin's controls. */
+export type InlineButton =
+  | { kind: 'url'; text: string; url: string }
+  | { kind: 'web_app'; text: string; url: string }
+  | { kind: 'callback'; text: string; data: string };
+
+export type BroadcastButton = Exclude<InlineButton, { kind: 'callback' }>;
+
+/** Rows of buttons; an empty list means no keyboard. */
+export type Keyboard<T extends InlineButton = InlineButton> = readonly (readonly T[])[];
+
+/**
+ * awaiting_content → draft ⇄ awaiting_buttons → sending → done.
+ * cancelled and failed are final too; failed means the source message is gone.
+ */
+export type BroadcastStatus =
+  | 'awaiting_content'
+  | 'awaiting_buttons'
+  | 'draft'
+  | 'sending'
+  | 'done'
+  | 'cancelled'
+  | 'failed';
+
+/** The admin's message that every user receives a copy of. */
+export interface MessageRef {
+  chatId: number;
+  messageId: number;
+}
+
+export interface BroadcastCounters {
+  sent: number;
+  /** The user blocked the bot or deleted the account. */
+  blocked: number;
+  failed: number;
+}
+
+export interface Broadcast extends BroadcastCounters {
+  id: number;
+  authorId: number;
+  status: BroadcastStatus;
+  /** null until the admin sends the message. */
+  source: MessageRef | null;
+  buttons: Keyboard<BroadcastButton>;
+  progressMessageId: number | null;
+  /** Last user id handled; sending resumes after it. */
+  cursorUserId: number | null;
+  /** Recipients counted when sending started. */
+  total: number;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+  createdAt: Date;
+}
+
+export type BroadcastPatch = Partial<
+  Pick<
+    Broadcast,
+    | 'status'
+    | 'source'
+    | 'buttons'
+    | 'progressMessageId'
+    | 'cursorUserId'
+    | 'total'
+    | 'sent'
+    | 'blocked'
+    | 'failed'
+    | 'startedAt'
+    | 'finishedAt'
+  >
+>;

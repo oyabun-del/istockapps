@@ -45,10 +45,13 @@ services:
     <<: *dev
     command: ["pnpm", "install", "--frozen-lockfile", "--store-dir", "/pnpm/store"]
 
-  # One-shot: applies existing migrations. New ones: docker compose run --rm server pnpm db:migrate
+  # One-shot: regenerates the Prisma client and applies existing migrations.
+  # `install` skips postinstall when the lockfile is unchanged, so a schema change from
+  # `git pull` would otherwise leave the old client in the node_modules volume.
+  # New migrations: docker compose run --rm server pnpm db:migrate
   migrate:
     <<: *dev
-    command: ["pnpm", "db:deploy"]
+    command: ["sh", "-c", "pnpm --filter @istock/server db:generate && pnpm db:deploy"]
     depends_on:
       install:
         condition: service_completed_successfully

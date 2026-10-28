@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/coverage
+**/*.log
+**/*.db
+**/*.db-journal
+.git
+.claude
+.env
+.env.*
+backups
+design
+docs
+screenshots

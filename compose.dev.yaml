@@ -1,0 +1,82 @@
+# Development with hot reload: Postgres + server (tsx watch, :3000) + Mini App (Vite, :5173).
+# Source is bind-mounted; node_modules live in volumes (host ones are built for another OS).
+# Usage: put COMPOSE_FILE=compose.dev.yaml in .env, then `docker compose up`.
+
+name: istock-dev
+
+x-dev: &dev
+  image: istock-dev:latest
+  build:
+    context: .
+    target: dev
+  env_file: .env
+  environment: &dev-env
+    DATABASE_URL: postgresql://istock:istock@db:5432/istock
+    # Bind mounts from Windows/macOS do not deliver file events: watch by polling.
+    CHOKIDAR_USEPOLLING: "true"
+  volumes:
+    - .:/app
+    - node_modules:/app/node_modules
+    - server_modules:/app/apps/server/node_modules
+    - miniapp_modules:/app/apps/miniapp/node_modules
+    - shared_modules:/app/packages/shared/node_modules
+    - pnpm_store:/pnpm/store
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: istock
+      POSTGRES_USER: istock
+      POSTGRES_PASSWORD: istock
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U istock -d istock"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # One-shot: syncs node_modules volumes with the lockfile.
+  install:
+    <<: *dev
+    command: ["pnpm", "install", "--frozen-lockfile", "--store-dir", "/pnpm/store"]
+
+  # One-shot: applies existing migrations. New ones: docker compose run --rm server pnpm db:migrate
+  migrate:
+    <<: *dev
+    command: ["pnpm", "db:deploy"]
+    depends_on:
+      install:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+
+  server:
+    <<: *dev
+    command: ["pnpm", "--filter", "@istock/server", "dev"]
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  miniapp:
+    <<: *dev
+    command: ["pnpm", "--filter", "@istock/miniapp", "dev"]
+    environment:
+      <<: *dev-env
+      VITE_DEV_API_TARGET: http://server:3000
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on:
+      install:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
+  node_modules:
+  server_modules:
+  miniapp_modules:
+  shared_modules:
+  pnpm_store:

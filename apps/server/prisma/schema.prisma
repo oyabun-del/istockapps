@@ -1,12 +1,11 @@
-// SQLite for development. For production switch `provider` to "postgresql",
-// point DATABASE_URL at Postgres and re-create migrations (`pnpm db:migrate`).
+// Postgres everywhere (dev and prod run it in Docker, see compose.yaml / compose.dev.yaml).
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

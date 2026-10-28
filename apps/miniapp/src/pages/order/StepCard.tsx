@@ -1,32 +1,41 @@
 import { AnimatePresence, motion } from 'motion/react';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { Icon } from '../../components/ui/Icon';
-import { POP_SPRING } from '../../lib/motion';
+import { POP_SPRING, REVEAL } from '../../lib/motion';
 
-export type StepState = 'done' | 'active' | 'locked';
+/** Locked steps are not rendered at all, so a card is either the current step or a finished one. */
+export type StepState = 'done' | 'active';
 
 type Props = {
   index: number;
   title: string;
   state: StepState;
   isLast?: boolean;
+  /** Opened while the buyer is on the page: animate it in and scroll it into view. */
+  isNew?: boolean;
   children?: ReactNode;
 };
 
 const INDICATOR_CLASSES: Record<StepState, string> = {
   done: 'bg-success/20 text-success',
   active: 'bg-primary-container text-white shadow-[0_0_16px_-2px_rgba(37,99,235,0.55)]',
-  locked: 'bg-surface-container-highest text-outline',
 };
 
 /** Numbered timeline card (design/_1 "Пошаговый процесс активации"). */
-export function StepCard({ index, title, state, isLast = false, children }: Props) {
+export function StepCard({ index, title, state, isLast = false, isNew = false, children }: Props) {
+  const ref = useRef<HTMLLIElement>(null);
+
+  useEffect(() => {
+    // Older WebViews and jsdom have no scrollIntoView.
+    if (isNew) ref.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+  }, [isNew]);
+
   return (
-    <li
+    <motion.li
+      ref={ref}
+      {...(isNew ? REVEAL : {})}
       aria-current={state === 'active' ? 'step' : undefined}
-      className={`flex gap-space-md rounded-xl bg-surface-container p-space-lg transition-opacity ${
-        state === 'locked' ? 'opacity-60' : ''
-      }`}
+      className="flex gap-space-md rounded-xl bg-surface-container p-space-lg"
     >
       <div className="flex flex-col items-center">
         <span
@@ -54,8 +63,8 @@ export function StepCard({ index, title, state, isLast = false, children }: Prop
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-space-sm pb-space-xs">
         <h3 className="text-balance text-headline-sm text-on-surface">{title}</h3>
-        {state !== 'locked' && children}
+        {children}
       </div>
-    </li>
+    </motion.li>
   );
 }

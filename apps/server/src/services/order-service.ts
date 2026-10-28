@@ -1,6 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import type { AppDto, CreateOrderInput, PaymentMethod } from '@istock/shared';
-import type { Order, User } from '../domain/models.js';
+import {
+  ACTIVE_PAYMENT_METHOD,
+  calculateCartPricing,
+  type ActivePaymentMethod,
+  type AppDto,
+  type CartPricing,
+  type CreateOrderInput,
+} from '@istock/shared';
+import type { NewOrder, Order, User } from '../domain/models.js';
+import { describeApps } from '../domain/order-items.js';
 import { allowedSourcesFor, INVOICE_TTL_MS } from '../domain/order-transitions.js';
 import { AppError, getErrorMessage } from '../lib/app-error.js';
 import type { Logger } from '../lib/logger.js';
@@ -15,8 +23,6 @@ const PENDING_REUSE_WINDOW_MS = INVOICE_TTL_MS;
 /** Fallback polling of CISPAY when the webhook is late. */
 export const PAYMENT_SYNC_INTERVAL_MS = 15_000;
 const ORDER_LIST_LIMIT = 50;
-/** CISPAY: minimum for CARD is 50 ₽. */
-const MIN_AMOUNT_KOPECKS: Partial<Record<PaymentMethod, number>> = { CARD: 5000 };
 
 export interface PaymentUpdate {
   paymentId: string;
@@ -41,6 +47,41 @@ export interface OrderServiceDeps {
   now?: () => Date;
 }
 
+/** CISPAY rejects longer descriptions (PaymentCreateRequest.description maxLength). */
+const PAYMENT_DESCRIPTION_MAX = 512;
+
+/** "СберБанк Онлайн, Т-Банк, заказ #12"; long app lists are cut so the order number always fits. */
+function paymentDescription(order: Order): string {
+  const suffix = `, заказ #${order.id}`;
+  const apps = describeApps(order);
+  const room = PAYMENT_DESCRIPTION_MAX - suffix.length;
+  return `${apps.length > room ? `${apps.slice(0, room - 1)}…` : apps}${suffix}`;
+}
+
+function buildNewOrder(
+  user: User,
+  apps: readonly AppDto[],
+  pricing: CartPricing,
+  method: ActivePaymentMethod,
+): NewOrder {
+  return {
+    paymentOrderId: randomUUID(),
+    userId: user.id,
+    items: apps.map((app, index) => ({
+      appId: app.id,
+      appName: app.name,
+      appIconUrl: app.iconUrl,
+      priceKopecks: app.priceKopecks,
+      discountKopecks: pricing.items[index]?.discountKopecks ?? 0,
+    })),
+    subtotalKopecks: pricing.subtotalKopecks,
+    discountKopecks: pricing.discountKopecks,
+    amountKopecks: pricing.totalKopecks,
+    paymentMethod: method,
+    status: 'awaiting_payment',
+  };
+}
+
 export class OrderService {
   private readonly now: () => Date;
 
@@ -48,44 +89,45 @@ export class OrderService {
     this.now = deps.now ?? (() => new Date());
   }
 
-  async listPaymentMethods(): Promise<PaymentMethod[]> {
+  /** SBP when CISPAY has it enabled for the shop, otherwise nothing: other methods are not offered. */
+  async listPaymentMethods(): Promise<ActivePaymentMethod[]> {
     try {
-      return await this.deps.payments.listMethods();
+      const methods = await this.deps.payments.listMethods();
+      return methods.filter((method): method is ActivePaymentMethod => method === ACTIVE_PAYMENT_METHOD);
     } catch (error: unknown) {
       this.deps.logger.error({ err: getErrorMessage(error) }, 'Failed to load payment methods');
       throw new AppError('PAYMENT_PROVIDER_ERROR', 'Платёжный сервис временно недоступен', { cause: error });
     }
   }
 
+  /** One order and one payment for all apps of the cart; the bulk discount is applied here. */
   async createOrder(user: User, input: CreateOrderInput): Promise<Order> {
     const { repos } = this.deps;
-    const app = await this.loadApp(input.appId);
+    const apps = await this.loadApps(input.appIds);
+    const pricing = calculateCartPricing(apps.map((app) => app.priceKopecks));
+    if (input.expectedTotalKopecks !== undefined && input.expectedTotalKopecks !== pricing.totalKopecks) {
+      throw new AppError('PRICE_CHANGED', 'Цены обновились. Проверьте корзину и оплатите ещё раз.');
+    }
 
     const methods = await this.listPaymentMethods();
-    const minAmount = MIN_AMOUNT_KOPECKS[input.paymentMethod] ?? 0;
-    if (!methods.includes(input.paymentMethod) || app.priceKopecks < minAmount) {
+    if (!methods.includes(input.paymentMethod)) {
       throw new AppError('PAYMENT_METHOD_UNAVAILABLE', 'Этот способ оплаты сейчас недоступен');
     }
 
     await repos.users.upsert(user);
 
     const reuseAfter = new Date(this.now().getTime() - PENDING_REUSE_WINDOW_MS);
-    const pending = await repos.orders.findPendingForApp(user.id, app.id, reuseAfter);
-    const reusable = await this.reusablePendingOrder(pending, input.paymentMethod, app.priceKopecks);
+    const pending = await repos.orders.findPendingForApps(user.id, input.appIds, reuseAfter);
+    const reusable = await this.reusablePendingOrder(pending, input.paymentMethod, pricing.totalKopecks);
     if (reusable) return reusable;
 
-    const order = await repos.orders.create({
-      paymentOrderId: randomUUID(),
-      userId: user.id,
-      appId: app.id,
-      appName: app.name,
-      appIconUrl: app.iconUrl,
-      amountKopecks: app.priceKopecks,
-      paymentMethod: input.paymentMethod,
-      status: 'awaiting_payment',
-    });
-    await repos.orderEvents.add(order.id, 'created', { method: input.paymentMethod });
+    const order = await repos.orders.create(buildNewOrder(user, apps, pricing, input.paymentMethod));
+    await repos.orderEvents.add(order.id, 'created', { method: input.paymentMethod, apps: order.items.length });
+    return this.openPayment(order, user);
+  }
 
+  private async openPayment(order: Order, user: User): Promise<Order> {
+    const { repos } = this.deps;
     try {
       const returnUrl = this.deps.returnUrl(order);
       const payment = await this.deps.payments.createPayment({
@@ -93,7 +135,7 @@ export class OrderService {
         amountKopecks: order.amountKopecks,
         method: order.paymentMethod,
         customerId: String(user.id),
-        description: `${app.name}, заказ #${order.id}`,
+        description: paymentDescription(order),
         successUrl: returnUrl,
         failUrl: returnUrl,
       });
@@ -108,25 +150,29 @@ export class OrderService {
     }
   }
 
-  private async loadApp(appId: string): Promise<AppDto> {
-    let app: AppDto | null;
+  /** Same order as the ids; any missing app fails the whole order. */
+  private async loadApps(appIds: readonly string[]): Promise<AppDto[]> {
+    let apps: Array<AppDto | null>;
     try {
-      app = await this.deps.catalog.getApp(appId);
+      apps = await Promise.all(appIds.map((appId) => this.deps.catalog.getApp(appId)));
     } catch (error: unknown) {
-      this.deps.logger.error({ appId, err: getErrorMessage(error) }, 'Catalog lookup failed');
+      this.deps.logger.error({ appIds, err: getErrorMessage(error) }, 'Catalog lookup failed');
       throw new AppError('CATALOG_PROVIDER_ERROR', 'Каталог временно недоступен', { cause: error });
     }
-    if (!app) throw new AppError('NOT_FOUND', 'Приложение не найдено');
-    return app;
+    const found = apps.filter((app): app is AppDto => app !== null);
+    if (found.length !== appIds.length) {
+      throw new AppError('NOT_FOUND', 'Одно из приложений больше не продаётся. Обновите корзину.');
+    }
+    return found;
   }
 
   /** Reuses a fresh unpaid invoice only if CISPAY still considers it payable. */
   private async reusablePendingOrder(
     pending: Order | null,
-    method: PaymentMethod,
-    priceKopecks: number,
+    method: ActivePaymentMethod,
+    totalKopecks: number,
   ): Promise<Order | null> {
-    if (!pending || pending.paymentMethod !== method || pending.amountKopecks !== priceKopecks) return null;
+    if (!pending || pending.paymentMethod !== method || pending.amountKopecks !== totalKopecks) return null;
     try {
       const synced = await this.syncPayment(pending);
       return synced.status === 'awaiting_payment' ? synced : null;

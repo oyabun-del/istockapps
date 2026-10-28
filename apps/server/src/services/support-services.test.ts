@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { silentLogger } from '../lib/logger.js';
-import { ADMIN_IDS, BUYER, OTHER_USER, createTestContext, type TestContext } from '../test/fixtures.js';
+import { ADMIN_IDS, BUYER, createTestContext, type TestContext } from '../test/fixtures.js';
 import { SUBSCRIPTION_CACHE_TTL_MS, SubscriptionService, isSubscribedMember } from './subscription-service.js';
-import { MAX_TICKETS_PER_WINDOW } from './ticket-service.js';
 
 let ctx: TestContext;
 
@@ -10,53 +9,47 @@ beforeEach(() => {
   ctx = createTestContext();
 });
 
-describe('TicketService', () => {
-  it('stores the ticket and notifies all admins with escaped text', async () => {
-    const ticket = await ctx.tickets.create(BUYER, { message: 'Не приходит <код>' });
+describe('NotificationService', () => {
+  it('notifies every admin with the escaped buyer profile', async () => {
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
 
-    expect(ticket).toMatchObject({ userId: BUYER.id, orderId: null, message: 'Не приходит <код>' });
+    await ctx.notifications.purchaseCompleted(order, { ...BUYER, firstName: 'Иван <b>' }, false);
+
     expect(ctx.sender.sent.map((message) => message.chatId)).toEqual(ADMIN_IDS);
-    expect(ctx.sender.sent[0]?.html).toContain('Не приходит &lt;код&gt;');
+    expect(ctx.sender.sent[0]?.html).toContain('Иван &lt;b&gt;');
     expect(ctx.sender.sent[0]?.html).toContain('@ivan');
   });
 
-  it('links the ticket to an own order only', async () => {
-    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
+  it('lists every app and the bulk discount of the purchase', async () => {
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank', 'tbank', 'canva'], paymentMethod: 'SBP' });
 
-    await expect(ctx.tickets.create(OTHER_USER, { orderId: order.id, message: 'чужой заказ' })).rejects.toMatchObject({
-      code: 'NOT_FOUND',
-    });
-    const ticket = await ctx.tickets.create(BUYER, { orderId: order.id, message: 'мой заказ' });
-    expect(ticket.orderId).toBe(order.id);
-    expect(ctx.sender.sent[0]?.html).toContain(`Заказ: <b>#${order.id}</b>`);
+    await ctx.notifications.purchaseCompleted(order, BUYER, false);
+    await ctx.notifications.notifyBuyerPaid(order);
+
+    const [admin, , buyer] = ctx.sender.sent.map((message) => message.html);
+    expect(admin).toContain('СберБанк Онлайн, Т-Банк, Canva');
+    expect(admin).toContain('Скидка: <b>300 ₽</b>');
+    expect(buyer).toContain('СберБанк Онлайн, Т-Банк, Canva');
   });
 
-  it('limits ticket spam', async () => {
-    for (let index = 0; index < MAX_TICKETS_PER_WINDOW; index += 1) {
-      await ctx.tickets.create(BUYER, { message: `сообщение ${index}` });
-    }
-    await expect(ctx.tickets.create(BUYER, { message: 'ещё одно' })).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
-  });
-});
-
-describe('NotificationService', () => {
   it('keeps notifying other admins when one admin is unreachable', async () => {
     ctx.sender.failFor.add(ADMIN_IDS[0] as number);
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
 
-    await ctx.tickets.create(BUYER, { message: 'Помогите пожалуйста' });
+    await ctx.notifications.purchaseCompleted(order, BUYER, false);
 
     expect(ctx.sender.sent.map((message) => message.chatId)).toEqual([ADMIN_IDS[1]]);
   });
 
   it('swallows buyer notification failures', async () => {
     ctx.sender.failFor.add(BUYER.id);
-    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
     await expect(ctx.notifications.notifyBuyerPaid(order)).resolves.toBeUndefined();
   });
 
-  it('marks sandbox purchases and falls back to user id when profile is unknown', async () => {
-    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'CRYPTO' });
-    await ctx.notifications.purchaseCompleted(order, null, true);
+  it('marks sandbox purchases and labels methods of older orders', async () => {
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
+    await ctx.notifications.purchaseCompleted({ ...order, paymentMethod: 'CRYPTO' }, null, true);
     const html = ctx.sender.sent[0]?.html ?? '';
     expect(html).toContain('тестовый платёж');
     expect(html).toContain('Крипта');

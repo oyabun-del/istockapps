@@ -46,6 +46,13 @@ export function formatCountdown(totalSeconds: number): string {
   return `${minutes}:${String(seconds % SECONDS_PER_MINUTE).padStart(2, '0')}`;
 }
 
+/** "СберБанк Онлайн" for one app, "СберБанк Онлайн и ещё 2" for several. */
+export function formatOrderTitle(items: readonly { name: string }[]): string {
+  const [first, ...rest] = items;
+  if (!first) return 'Заказ';
+  return rest.length > 0 ? `${first.name} и ещё ${rest.length}` : first.name;
+}
+
 export function formatSubscribers(count: number): string {
   if (count >= COMPACT_FROM) return `${COMPACT.format(count)} подписчиков`;
   return `${count} ${pluralRu(count, ['подписчик', 'подписчика', 'подписчиков'])}`;

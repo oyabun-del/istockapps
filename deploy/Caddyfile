@@ -1,0 +1,16 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# No X-Frame-Options / CSP frame-ancestors: Telegram Web shows the Mini App in an iframe.
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# Caddy sets X-Forwarded-For itself; the app trusts exactly one hop (TRUST_PROXY_HOPS=1).
+	reverse_proxy app:3000
+}

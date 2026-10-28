@@ -6,6 +6,7 @@ import { SupportButton } from '../../components/SupportButton';
 import { AppIcon } from '../../components/ui/AppIcon';
 import { Badge } from '../../components/ui/Badge';
 import { Icon } from '../../components/ui/Icon';
+import { useReorder } from '../../hooks/useReorder';
 import { formatOrderDate } from '../../lib/format';
 import type { IconName } from '../../lib/icons';
 import { POP_SPRING } from '../../lib/motion';
@@ -74,9 +75,26 @@ type Props = {
   status: ClosedStatus;
 };
 
+function OrderItems({ order }: { order: OrderDto }) {
+  return (
+    <ul aria-label="Приложения заказа" className="flex flex-col gap-space-xs">
+      {order.items.map((item) => (
+        <li key={item.id} className="flex items-center gap-space-md rounded-lg bg-surface-container-high p-space-md">
+          <AppIcon src={item.iconUrl} size={order.items.length > 1 ? 'sm' : 'md'} />
+          <span className="min-w-0 flex-1 truncate text-headline-sm text-on-surface">{item.name}</span>
+          <span className="tabular text-headline-sm text-on-surface">
+            {formatRub(item.priceKopecks - item.discountKopecks)}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function PaymentClosed({ order, status }: Props) {
   const copy = COPY[status];
   const meta = ORDER_STATUS_META[status];
+  const reorder = useReorder(order);
 
   return (
     <div className="flex flex-col gap-space-lg">
@@ -94,12 +112,14 @@ export function PaymentClosed({ order, status }: Props) {
       </section>
 
       <section aria-label="Детали заказа" className="rounded-xl bg-surface-container p-space-lg">
-        <div className="flex items-center gap-space-md rounded-lg bg-surface-container-high p-space-md">
-          <AppIcon src={order.app.iconUrl} size="md" />
-          <span className="min-w-0 flex-1 truncate text-headline-sm text-on-surface">{order.app.name}</span>
-          <span className="tabular text-headline-sm text-on-surface">{formatRub(order.amountKopecks)}</span>
-        </div>
+        <OrderItems order={order} />
         <dl className="mt-space-sm divide-y divide-white/5">
+          {order.discountKopecks > 0 && (
+            <DetailRow label="Скидка">
+              <span className="text-success">−{formatRub(order.discountKopecks)}</span>
+            </DetailRow>
+          )}
+          <DetailRow label="Итого">{formatRub(order.amountKopecks)}</DetailRow>
           <DetailRow label="Статус">
             <Badge label={meta.label} tone={copy.severity === 'error' ? 'danger' : 'neutral'} icon={meta.icon} />
           </DetailRow>
@@ -122,13 +142,14 @@ export function PaymentClosed({ order, status }: Props) {
 
       <div className="flex flex-col gap-space-sm">
         {copy.canReorder && (
-          <Link
-            to={`/apps/${encodeURIComponent(order.app.id)}`}
+          <button
+            type="button"
+            onClick={reorder}
             className="flex h-12 items-center justify-center gap-2 rounded-full bg-primary-container text-label-lg text-on-primary shadow-lg shadow-primary-container/25 transition-transform active:scale-[0.97]"
           >
             <Icon name="refresh" className="text-[20px]" />
             Оформить заново
-          </Link>
+          </button>
         )}
         <SupportButton isSecondary={copy.canReorder} />
         <Link to="/" className="py-2 text-center text-label-lg text-on-surface-variant transition-colors hover:text-on-surface">

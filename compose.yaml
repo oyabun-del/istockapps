@@ -1,0 +1,98 @@
+# Production: Caddy (HTTPS) → app (API + bot + Mini App) → Postgres.
+# Only Caddy publishes ports. Settings come from .env (template: .env.production.example).
+# Deploy guide: docs/DEPLOY.md
+
+name: istock
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+x-app-image: &app-image
+  image: istock-app:latest
+  build:
+    context: .
+    target: runtime
+
+x-database-url: &database-url postgresql://istock:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/istock
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: istock
+      POSTGRES_USER: istock
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U istock -d istock"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    logging: *logging
+
+  # One-shot: applies pending Prisma migrations, then exits. app starts only if it succeeds.
+  migrate:
+    <<: *app-image
+    command: ["node_modules/.bin/prisma", "migrate", "deploy"]
+    # The image healthcheck probes the HTTP server, which this container never runs.
+    healthcheck:
+      disable: true
+    environment:
+      DATABASE_URL: *database-url
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    logging: *logging
+
+  app:
+    <<: *app-image
+    restart: unless-stopped
+    env_file: .env
+    # Fixed by this setup; they override .env.
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3000"
+      TRUST_PROXY_HOPS: "1"
+      SERVE_MINIAPP: "true"
+      WEBAPP_URL: https://${DOMAIN:?Set DOMAIN in .env}
+      PUBLIC_URL: https://${DOMAIN:?Set DOMAIN in .env}
+      DATABASE_URL: *database-url
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    # Long polling: exactly one bot instance per token. Do not scale this service.
+    logging: *logging
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates live here: losing this volume means re-issuing them (Let's Encrypt rate limits).
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    logging: *logging
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

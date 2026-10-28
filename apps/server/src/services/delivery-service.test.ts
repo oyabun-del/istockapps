@@ -61,24 +61,64 @@ describe('DeliveryService happy path (mock provider)', () => {
     expect(status.codeExpiresAt).toBe(
       new Date(ctx.clock.current.getTime() + MOCK_CODE_VALID_SECONDS * 1000).toISOString(),
     );
+    expect((await ctx.repos.orders.findById(paid.id))?.codeReceivedAt).toEqual(ctx.clock.current);
 
     const completed = await ctx.deliveryService.complete(BUYER.id, paid.id);
     expect(completed.status).toBe('completed');
   });
 
-  it('keeps confirm, credentials and complete idempotent', async () => {
+  it('keeps confirm, credentials, code skip and complete idempotent', async () => {
     const paid = await orderWithCredentials();
 
     expect((await ctx.deliveryService.confirmDownload(BUYER.id, paid.id)).status).toBe('credentials_issued');
     expect((await ctx.deliveryService.getCredentials(BUYER.id, paid.id)).groups).toHaveLength(1);
+    const skipped = await ctx.deliveryService.skipCode(BUYER.id, paid.id);
+    ctx.clock.advance(HOUR_MS);
+    expect((await ctx.deliveryService.skipCode(BUYER.id, paid.id)).codeReceivedAt).toEqual(skipped.codeReceivedAt);
     await ctx.deliveryService.complete(BUYER.id, paid.id);
     expect((await ctx.deliveryService.complete(BUYER.id, paid.id)).status).toBe('completed');
   });
 });
 
+describe('DeliveryService code step', () => {
+  it('keeps the last step locked until a code was received or skipped', async () => {
+    const paid = await orderWithCredentials();
+
+    await expect(ctx.deliveryService.complete(BUYER.id, paid.id)).rejects.toMatchObject({ code: 'INVALID_STATE' });
+
+    const skipped = await ctx.deliveryService.skipCode(BUYER.id, paid.id);
+    expect(skipped.codeReceivedAt).toEqual(ctx.clock.current);
+    expect((await ctx.deliveryService.complete(BUYER.id, paid.id)).status).toBe('completed');
+  });
+
+  it('records a received code once', async () => {
+    const paid = await orderWithCredentials();
+    const groupId = (await ctx.deliveryService.getDelivery(BUYER.id, paid.id)).groups[0]?.id ?? '';
+    const wait = await ctx.deliveryService.startCode(BUYER.id, paid.id, groupId);
+
+    for (let poll = 0; poll < MOCK_CODE_AFTER_POLLS + 2; poll += 1) {
+      ctx.clock.advance(CODE_POLL_MIN_INTERVAL_MS);
+      await ctx.deliveryService.getCodeWait(BUYER.id, paid.id, wait.id);
+    }
+
+    const events = ctx.repos.orderEvents.events.filter((event) => event.type === 'code_received');
+    expect(events).toHaveLength(1);
+    expect((await ctx.repos.orders.findById(paid.id))?.codeReceivedAt).not.toBeNull();
+  });
+
+  it('refuses to skip the code before credentials or for another buyer', async () => {
+    const paid = await createPaidOrder(ctx);
+    await expect(ctx.deliveryService.skipCode(BUYER.id, paid.id)).rejects.toMatchObject({ code: 'INVALID_STATE' });
+
+    await ctx.deliveryService.confirmDownload(BUYER.id, paid.id);
+    await ctx.deliveryService.getCredentials(BUYER.id, paid.id);
+    await expect(ctx.deliveryService.skipCode(OTHER_USER.id, paid.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
 describe('DeliveryService guards', () => {
   it('refuses everything for unpaid orders', async () => {
-    const order = await ctx.orders.createOrder(BUYER, { appId: 'sberbank', paymentMethod: 'SBP' });
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
     const service = ctx.deliveryService;
 
     await expect(service.getDelivery(BUYER.id, order.id)).rejects.toMatchObject({ code: 'INVALID_STATE' });
@@ -121,6 +161,14 @@ describe('DeliveryService with Install-IOS semantics', () => {
     expect(provider.count('getDelivery')).toBe(1);
     const stored = await ctx.repos.orders.findById(paid.id);
     expect(stored).toMatchObject({ deliveryRef: 'ord_1', deliveryExpiresAt: provider.current.expiresAt });
+  });
+
+  it('creates one delivery with every app of the order', async () => {
+    const paid = await createPaidOrder(ctx, ['sberbank', 'tbank', 'minecraft']);
+
+    await service.getDelivery(BUYER.id, paid.id);
+
+    expect(provider.calls[0]?.args[1]).toEqual(['sberbank', 'tbank', 'minecraft']);
   });
 
   it('shares one refresh between concurrent requests', async () => {

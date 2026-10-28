@@ -1,12 +1,11 @@
-// SQLite for development. For production switch `provider` to "postgresql",
-// point DATABASE_URL at Postgres and re-create migrations (`pnpm db:migrate`).
+// Postgres everywhere (dev and prod run it in Docker, see compose.yaml / compose.dev.yaml).
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -19,7 +18,6 @@ model User {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   orders     Order[]
-  tickets    Ticket[]
 }
 
 model Order {
@@ -28,9 +26,9 @@ model Order {
   paymentOrderId  String       @unique
   userId          BigInt
   user            User         @relation(fields: [userId], references: [id])
-  appId           String
-  appName         String
-  appIconUrl      String
+  // Sum of app prices before the bulk discount; amountKopecks is what the buyer pays.
+  subtotalKopecks Int
+  discountKopecks Int          @default(0)
   amountKopecks   Int
   paymentMethod   String
   status          String
@@ -40,15 +38,31 @@ model Order {
   // Install-IOS order id and deadline. Links, credentials and codes are never stored.
   deliveryRef       String?   @unique
   deliveryExpiresAt DateTime?
+  // Login code received (or not asked by Apple): unlocks the last activation step.
+  codeReceivedAt  DateTime?
   paidAt          DateTime?
   completedAt     DateTime?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
+  items           OrderItem[]
   events          OrderEvent[]
-  tickets         Ticket[]
   codeWaits       CodeWaitAttempt[]
 
   @@index([userId, createdAt])
+}
+
+// One app of an order, priced when the order was created.
+model OrderItem {
+  id              Int    @id @default(autoincrement())
+  orderId         Int
+  order           Order  @relation(fields: [orderId], references: [id])
+  appId           String
+  appName         String
+  appIconUrl      String
+  priceKopecks    Int
+  discountKopecks Int    @default(0)
+
+  @@unique([orderId, appId])
 }
 
 // One explicit attempt to receive a login code: ids only, the code itself is never stored.
@@ -73,16 +87,4 @@ model OrderEvent {
   createdAt DateTime @default(now())
 
   @@index([orderId])
-}
-
-model Ticket {
-  id        Int      @id @default(autoincrement())
-  userId    BigInt
-  user      User     @relation(fields: [userId], references: [id])
-  orderId   Int?
-  order     Order?   @relation(fields: [orderId], references: [id])
-  message   String
-  createdAt DateTime @default(now())
-
-  @@index([userId, createdAt])
 }

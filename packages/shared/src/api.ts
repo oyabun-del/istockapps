@@ -27,6 +27,7 @@ export const ERROR_CODES = [
   'PAYMENT_PROVIDER_ERROR',
   'DELIVERY_PROVIDER_ERROR',
   'CATALOG_PROVIDER_ERROR',
+  'PRICE_CHANGED',
   'TOO_MANY_REQUESTS',
   'INTERNAL_ERROR',
 ] as const;
@@ -35,14 +36,16 @@ export type ErrorCode = (typeof ERROR_CODES)[number];
 
 // ---------- Payment ----------
 
-/** Methods supported by CISPAY (see docs/cispay-openapi.json). */
+/** Methods supported by CISPAY (see docs/cispay-openapi.json); older orders may carry any of them. */
 export const PAYMENT_METHODS = ['SBP', 'CARD', 'CRYPTO'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
+/** The shop accepts new payments by SBP only. */
+export const ACTIVE_PAYMENT_METHOD = 'SBP' satisfies PaymentMethod;
+export type ActivePaymentMethod = typeof ACTIVE_PAYMENT_METHOD;
+
 export interface PaymentMethodDto {
-  method: PaymentMethod;
-  /** Minimum amount in kopecks, null when unlimited. */
-  minAmountKopecks: number | null;
+  method: ActivePaymentMethod;
 }
 
 // ---------- Catalog ----------
@@ -67,16 +70,31 @@ export interface AppDto {
 
 // ---------- Orders ----------
 
+export interface OrderItemDto {
+  id: string;
+  name: string;
+  iconUrl: string;
+  priceKopecks: number;
+  discountKopecks: number;
+}
+
 export interface OrderDto {
   id: number;
   status: OrderStatus;
-  app: { id: string; name: string; iconUrl: string };
+  /** At least one app, in the order the buyer added them. */
+  items: OrderItemDto[];
+  /** Sum of app prices before the bulk discount. */
+  subtotalKopecks: number;
+  discountKopecks: number;
+  /** What the buyer pays: subtotal minus discount. */
   amountKopecks: number;
   paymentMethod: PaymentMethod;
   paymentUrl: string | null;
   /** When the unpaid invoice expires (ISO); null once the order is no longer awaiting payment. */
   expiresAt: string | null;
   createdAt: string;
+  /** The login code step is done (code received or not asked by Apple); unlocks the last step. */
+  isCodeReceived: boolean;
   paidAt: string | null;
   completedAt: string | null;
 }
@@ -158,15 +176,7 @@ export interface SubscriptionDto {
   isSubscribed: boolean;
 }
 
-export interface TicketDto {
-  id: number;
-  createdAt: string;
-}
-
-// ---------- Limits (shared by client validation and server schemas) ----------
-
-export const TICKET_MESSAGE_MAX = 2000;
-export const TICKET_MESSAGE_MIN = 5;
+// ---------- Requests ----------
 
 export interface CatalogQuery {
   q?: string;
@@ -174,11 +184,9 @@ export interface CatalogQuery {
 }
 
 export interface CreateOrderInput {
-  appId: string;
-  paymentMethod: PaymentMethod;
-}
-
-export interface CreateTicketInput {
-  orderId?: number | null;
-  message: string;
+  /** Distinct app ids, 1..MAX_ORDER_ITEMS. */
+  appIds: string[];
+  paymentMethod: ActivePaymentMethod;
+  /** Total the buyer saw; the order is refused with PRICE_CHANGED if the server's total differs. */
+  expectedTotalKopecks?: number;
 }

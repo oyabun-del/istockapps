@@ -43,18 +43,40 @@ export const SBER: AppDto = {
   minIos: '14.0',
 };
 
+export function makeApp(id: string, name: string, priceKopecks = 19900): AppDto {
+  return { ...SBER, id, name, priceKopecks, iconUrl: `https://example.com/${id}.png` };
+}
+
 export function makeOrder(overrides: Partial<OrderDto> = {}): OrderDto {
   return {
     id: 7,
     status: 'paid',
-    app: { id: SBER.id, name: SBER.name, iconUrl: SBER.iconUrl },
+    items: [{ id: SBER.id, name: SBER.name, iconUrl: SBER.iconUrl, priceKopecks: 34900, discountKopecks: 0 }],
+    subtotalKopecks: 34900,
+    discountKopecks: 0,
     amountKopecks: 34900,
     paymentMethod: 'SBP',
     paymentUrl: null,
     expiresAt: null,
     createdAt: '2026-10-14T12:00:00.000Z',
+    isCodeReceived: false,
     paidAt: '2026-10-14T12:01:00.000Z',
     completedAt: null,
     ...overrides,
   };
 }
+
+/** Three apps bought together with the 100 ₽ per app discount; the invoice expired. */
+export const MULTI_ORDER: OrderDto = makeOrder({
+  id: 8,
+  status: 'expired',
+  paidAt: null,
+  items: [
+    { id: SBER.id, name: SBER.name, iconUrl: SBER.iconUrl, priceKopecks: 34900, discountKopecks: 10000 },
+    { id: 'tbank', name: 'Т-Банк', iconUrl: 'https://example.com/tbank.png', priceKopecks: 19900, discountKopecks: 10000 },
+    { id: 'canva', name: 'Canva', iconUrl: 'https://example.com/canva.png', priceKopecks: 19900, discountKopecks: 10000 },
+  ],
+  subtotalKopecks: 74700,
+  discountKopecks: 30000,
+  amountKopecks: 44700,
+});

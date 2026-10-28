@@ -1,9 +1,10 @@
 import type { CodeWaitDto, CredentialsDto, DeliveryAppDto, DeliveryDto, DeliveryGroupDto } from '@istock/shared';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '../../lib/api';
-import { makeOrder, renderWithProviders } from '../../test/render';
+import { cartStore } from '../../lib/cart';
+import { MULTI_ORDER, makeOrder, renderWithProviders } from '../../test/render';
 import { OrderPage } from './OrderPage';
 
 function renderOrder() {
@@ -67,7 +68,20 @@ describe('OrderPage after the invoice closed', () => {
     expect(await screen.findByRole('heading', { name: 'Счёт истёк' })).toBeInTheDocument();
     expect(screen.getByText('Номер заказа')).toBeInTheDocument();
     expect(screen.getByText(/Если банк всё же списал деньги/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Оформить заново/ })).toHaveAttribute('href', '/apps/sberbank');
+    await userEvent.click(screen.getByRole('button', { name: /Оформить заново/ }));
+    expect(cartStore.getSnapshot()).toEqual(['sberbank']);
+    expect(await screen.findByTestId('navigated')).toBeInTheDocument();
+  });
+
+  it('lists every app of a multi-app order with its discount', async () => {
+    vi.spyOn(api, 'order').mockResolvedValue(MULTI_ORDER);
+
+    renderOrder();
+
+    const items = await screen.findByRole('list', { name: 'Приложения заказа' });
+    expect(within(items).getAllByRole('listitem')).toHaveLength(3);
+    expect(screen.getByText('−300 ₽')).toBeInTheDocument();
+    expect(screen.getAllByText('447 ₽').length).toBeGreaterThan(0);
   });
 
   it('does not offer to reorder a refunded order', async () => {
@@ -76,7 +90,7 @@ describe('OrderPage after the invoice closed', () => {
     renderOrder();
 
     expect(await screen.findByRole('heading', { name: 'Деньги возвращены' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Оформить заново/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Оформить заново/ })).not.toBeInTheDocument();
   });
 });
 
@@ -129,6 +143,55 @@ function issuedOrder() {
   vi.spyOn(api, 'delivery').mockResolvedValue(delivery());
   vi.spyOn(api, 'credentials').mockResolvedValue(credentialsFor());
 }
+
+describe('OrderPage steps', () => {
+  const TITLES = ['Скачайте приложение', 'Войдите в App Store', 'Введите код подтверждения', 'Откройте приложение'];
+
+  function visibleTitles() {
+    return TITLES.filter((title) => screen.queryByRole('heading', { name: title }));
+  }
+
+  it.each([
+    { order: makeOrder({ status: 'paid' }), shown: 1, label: 'Шаг 1 из 4' },
+    { order: makeOrder({ status: 'download_confirmed' }), shown: 2, label: 'Шаг 2 из 4' },
+    { order: makeOrder({ status: 'credentials_issued' }), shown: 3, label: 'Шаг 3 из 4' },
+    { order: makeOrder({ status: 'credentials_issued', isCodeReceived: true }), shown: 4, label: 'Шаг 4 из 4' },
+  ])('shows only the steps opened so far ($label)', async ({ order, shown, label }) => {
+    vi.spyOn(api, 'order').mockResolvedValue(order);
+    vi.spyOn(api, 'delivery').mockResolvedValue(delivery());
+    vi.spyOn(api, 'credentials').mockResolvedValue(credentialsFor());
+
+    renderOrder();
+
+    expect(await screen.findByText(label)).toBeInTheDocument();
+    expect(visibleTitles()).toEqual(TITLES.slice(0, shown));
+  });
+
+  it('marks a completed order as done', async () => {
+    vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'completed', isCodeReceived: true }));
+    vi.spyOn(api, 'delivery').mockResolvedValue(delivery());
+    vi.spyOn(api, 'credentials').mockResolvedValue(credentialsFor());
+
+    renderOrder();
+
+    expect(await screen.findByText('Готово')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Приложение активировано' })).toBeInTheDocument();
+  });
+
+  it('opens the last step when Apple did not ask for a code', async () => {
+    issuedOrder();
+    const skip = vi
+      .spyOn(api, 'skipCode')
+      .mockResolvedValue(makeOrder({ status: 'credentials_issued', isCodeReceived: true }));
+
+    renderOrder();
+    await userEvent.click(await screen.findByRole('button', { name: /Apple не запросил код/ }));
+
+    await waitFor(() => expect(skip).toHaveBeenCalledWith(7));
+    expect(await screen.findByRole('button', { name: /Приложение работает/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Apple не запросил код/ })).not.toBeInTheDocument();
+  });
+});
 
 describe('OrderPage delivery', () => {
   it('opens the main and reserve links and confirms the download', async () => {
@@ -251,18 +314,23 @@ describe('OrderPage credentials', () => {
 });
 
 describe('OrderPage login code', () => {
-  it('turns on the wait, shows the fresh code and completes the order', async () => {
+  it('turns on the wait, shows the fresh code, then opens the last step and completes the order', async () => {
     issuedOrder();
+    // The server marks the code step done once it has seen the code.
+    let isCodeReceived = false;
+    vi.mocked(api.order).mockImplementation(async () => makeOrder({ status: 'credentials_issued', isCodeReceived }));
     const start = vi.spyOn(api, 'startCode').mockResolvedValue(codeWait());
     vi.spyOn(api, 'codeWait')
       .mockResolvedValueOnce(codeWait())
-      .mockImplementation(async () =>
-        codeWait({ status: 'succeeded', code: '482913', codeExpiresAt: new Date(Date.now() + 60_000).toISOString() }),
-      );
-    const complete = vi.spyOn(api, 'complete').mockResolvedValue(makeOrder({ status: 'completed' }));
+      .mockImplementation(async () => {
+        isCodeReceived = true;
+        return codeWait({ status: 'succeeded', code: '482913', codeExpiresAt: new Date(Date.now() + 60_000).toISOString() });
+      });
+    const complete = vi.spyOn(api, 'complete').mockResolvedValue(makeOrder({ status: 'completed', isCodeReceived: true }));
 
     renderOrder();
     expect(await screen.findByText('id@example.com')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Приложение работает/ })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Включить ожидание кода/ }));
 
     expect(start).toHaveBeenCalledWith(7, 'grp_1');
@@ -271,7 +339,7 @@ describe('OrderPage login code', () => {
     expect(screen.getByText(/Действует ещё/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Включить ожидание кода/ })).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /Приложение работает/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /Приложение работает/ }));
     await waitFor(() => expect(complete).toHaveBeenCalledWith(7));
     expect(await screen.findByText('Приложение активировано')).toBeInTheDocument();
   });

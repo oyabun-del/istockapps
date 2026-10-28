@@ -1,5 +1,6 @@
 import { formatRub, type PaymentMethod } from '@istock/shared';
-import type { Order, Ticket, User } from '../domain/models.js';
+import type { Order, User } from '../domain/models.js';
+import { describeApps } from '../domain/order-items.js';
 import { getErrorMessage } from '../lib/app-error.js';
 import { escapeHtml } from '../lib/html.js';
 import type { Logger } from '../lib/logger.js';
@@ -42,16 +43,17 @@ export class NotificationService {
   async purchaseCompleted(order: Order, user: User | null, isSandbox: boolean): Promise<void> {
     const lines = [
       `🛒 <b>Новая покупка</b>${isSandbox ? ' <i>(тестовый платёж)</i>' : ''}`,
-      `Заказ <b>#${order.id}</b>: ${escapeHtml(order.appName)}`,
+      `Заказ <b>#${order.id}</b>: ${escapeHtml(describeApps(order))}`,
       `Сумма: <b>${formatRub(order.amountKopecks)}</b> (${METHOD_LABELS[order.paymentMethod]})`,
+      order.discountKopecks > 0 ? `Скидка: <b>${formatRub(order.discountKopecks)}</b>` : null,
       `Покупатель: ${describeUser(user, order.userId)}`,
     ];
-    await this.notifyAdmins(lines.join('\n'));
+    await this.notifyAdmins(lines.filter((line) => line !== null).join('\n'));
   }
 
   async orderRefunded(order: Order): Promise<void> {
     await this.notifyAdmins(
-      `↩️ <b>Возврат</b>\nЗаказ <b>#${order.id}</b>: ${escapeHtml(order.appName)}, ${formatRub(order.amountKopecks)}`,
+      `↩️ <b>Возврат</b>\nЗаказ <b>#${order.id}</b>: ${escapeHtml(describeApps(order))}, ${formatRub(order.amountKopecks)}`,
     );
   }
 
@@ -62,22 +64,14 @@ export class NotificationService {
     );
   }
 
-  async ticketCreated(ticket: Ticket, user: User | null): Promise<void> {
-    const lines = [
-      `🆘 <b>Новое обращение #${ticket.id}</b>`,
-      `От: ${describeUser(user, ticket.userId)}`,
-      ticket.orderId ? `Заказ: <b>#${ticket.orderId}</b>` : null,
-      '',
-      escapeHtml(ticket.message),
-    ].filter((line): line is string => line !== null);
-    await this.notifyAdmins(lines.join('\n'));
-  }
-
   async notifyBuyerPaid(order: Order): Promise<void> {
     try {
       await this.deps.sender.send(
         order.userId,
-        `✅ Оплата получена: <b>${escapeHtml(order.appName)}</b>\nОткройте заказ, чтобы скачать приложение и активировать его.`,
+        `✅ Оплата получена: <b>${escapeHtml(describeApps(order))}</b>\n` +
+          (order.items.length > 1
+            ? 'Откройте заказ, чтобы скачать приложения и активировать их.'
+            : 'Откройте заказ, чтобы скачать приложение и активировать его.'),
         { text: `Открыть заказ #${order.id}`, webAppUrl: `${this.deps.webAppUrl}#/orders/${order.id}` },
       );
     } catch (error: unknown) {

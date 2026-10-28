@@ -1,21 +1,11 @@
-import type { PrismaClient, Order as OrderRow, User as UserRow } from '@prisma/client';
+import type { Prisma, PrismaClient, User as UserRow } from '@prisma/client';
 import type { OrderStatus, PaymentMethod } from '@istock/shared';
-import type {
-  CodeWaitAttempt,
-  NewCodeWaitAttempt,
-  NewOrder,
-  NewTicket,
-  Order,
-  OrderPatch,
-  Ticket,
-  User,
-} from '../../domain/models.js';
+import type { CodeWaitAttempt, NewCodeWaitAttempt, NewOrder, Order, OrderPatch, User } from '../../domain/models.js';
 import type {
   CodeWaitAttemptRepository,
   OrderEventRepository,
   OrderRepository,
   Repositories,
-  TicketRepository,
   UserRepository,
 } from '../repositories.js';
 
@@ -29,14 +19,27 @@ function toUser(row: UserRow): User {
   };
 }
 
+/** Every order read carries its items, in the order they were added. */
+const WITH_ITEMS = { items: { orderBy: { id: 'asc' } } } satisfies Prisma.OrderInclude;
+type OrderRow = Prisma.OrderGetPayload<{ include: typeof WITH_ITEMS }>;
+
+/** Unpaid orders a user can have at once is small; this only bounds the lookup. */
+const PENDING_LOOKUP_LIMIT = 20;
+
 function toOrder(row: OrderRow): Order {
   return {
     id: row.id,
     paymentOrderId: row.paymentOrderId,
     userId: Number(row.userId),
-    appId: row.appId,
-    appName: row.appName,
-    appIconUrl: row.appIconUrl,
+    items: row.items.map((item) => ({
+      appId: item.appId,
+      appName: item.appName,
+      appIconUrl: item.appIconUrl,
+      priceKopecks: item.priceKopecks,
+      discountKopecks: item.discountKopecks,
+    })),
+    subtotalKopecks: row.subtotalKopecks,
+    discountKopecks: row.discountKopecks,
     amountKopecks: row.amountKopecks,
     // Values are written only through the typed domain layer.
     paymentMethod: row.paymentMethod as PaymentMethod,
@@ -46,6 +49,7 @@ function toOrder(row: OrderRow): Order {
     paymentSyncedAt: row.paymentSyncedAt,
     deliveryRef: row.deliveryRef,
     deliveryExpiresAt: row.deliveryExpiresAt,
+    codeReceivedAt: row.codeReceivedAt,
     paidAt: row.paidAt,
     completedAt: row.completedAt,
     createdAt: row.createdAt,
@@ -80,31 +84,39 @@ class PrismaOrderRepository implements OrderRepository {
   constructor(private readonly db: PrismaClient) {}
 
   async create(order: NewOrder): Promise<Order> {
-    const row = await this.db.order.create({ data: { ...order, userId: BigInt(order.userId) } });
+    const { items, ...fields } = order;
+    const row = await this.db.order.create({
+      data: { ...fields, userId: BigInt(order.userId), items: { create: items } },
+      include: WITH_ITEMS,
+    });
     return toOrder(row);
   }
 
   async findById(id: number): Promise<Order | null> {
-    const row = await this.db.order.findUnique({ where: { id } });
+    const row = await this.db.order.findUnique({ where: { id }, include: WITH_ITEMS });
     return row ? toOrder(row) : null;
   }
 
   async findByPaymentOrderId(paymentOrderId: string): Promise<Order | null> {
-    const row = await this.db.order.findUnique({ where: { paymentOrderId } });
+    const row = await this.db.order.findUnique({ where: { paymentOrderId }, include: WITH_ITEMS });
     return row ? toOrder(row) : null;
   }
 
-  async findPendingForApp(userId: number, appId: string, createdAfter: Date): Promise<Order | null> {
-    const row = await this.db.order.findFirst({
+  async findPendingForApps(userId: number, appIds: readonly string[], createdAfter: Date): Promise<Order | null> {
+    // Every item is one of the wanted apps; (orderId, appId) is unique, so equal counts mean the same set.
+    const rows = await this.db.order.findMany({
       where: {
         userId: BigInt(userId),
-        appId,
         status: 'awaiting_payment',
         paymentUrl: { not: null },
         createdAt: { gt: createdAfter },
+        items: { every: { appId: { in: [...appIds] } } },
       },
       orderBy: { createdAt: 'desc' },
+      take: PENDING_LOOKUP_LIMIT,
+      include: WITH_ITEMS,
     });
+    const row = rows.find((candidate) => candidate.items.length === appIds.length);
     return row ? toOrder(row) : null;
   }
 
@@ -113,12 +125,13 @@ class PrismaOrderRepository implements OrderRepository {
       where: { userId: BigInt(userId) },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit,
+      include: WITH_ITEMS,
     });
     return rows.map(toOrder);
   }
 
   async update(id: number, patch: Omit<OrderPatch, 'status'>): Promise<Order> {
-    return toOrder(await this.db.order.update({ where: { id }, data: patch }));
+    return toOrder(await this.db.order.update({ where: { id }, data: patch, include: WITH_ITEMS }));
   }
 
   async transition(
@@ -169,27 +182,11 @@ class PrismaOrderEventRepository implements OrderEventRepository {
   }
 }
 
-class PrismaTicketRepository implements TicketRepository {
-  constructor(private readonly db: PrismaClient) {}
-
-  async create(ticket: NewTicket): Promise<Ticket> {
-    const row = await this.db.ticket.create({
-      data: { ...ticket, userId: BigInt(ticket.userId) },
-    });
-    return { ...row, userId: Number(row.userId) };
-  }
-
-  async countByUserSince(userId: number, since: Date): Promise<number> {
-    return this.db.ticket.count({ where: { userId: BigInt(userId), createdAt: { gte: since } } });
-  }
-}
-
 export function createPrismaRepositories(db: PrismaClient): Repositories {
   return {
     users: new PrismaUserRepository(db),
     orders: new PrismaOrderRepository(db),
     orderEvents: new PrismaOrderEventRepository(db),
     codeWaits: new PrismaCodeWaitAttemptRepository(db),
-    tickets: new PrismaTicketRepository(db),
   };
 }

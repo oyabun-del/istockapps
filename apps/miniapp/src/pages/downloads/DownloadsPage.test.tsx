@@ -2,7 +2,8 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { api } from '../../lib/api';
-import { makeOrder, renderWithProviders } from '../../test/render';
+import { cartStore } from '../../lib/cart';
+import { MULTI_ORDER, makeOrder, renderWithProviders } from '../../test/render';
 import { DownloadsPage } from './DownloadsPage';
 
 const ORDERS = [
@@ -51,10 +52,22 @@ describe('DownloadsPage', () => {
     expect(within(card(1)).getByRole('link', { name: /Продолжить/ })).toHaveAttribute('href', '/orders/1');
     expect(within(card(1)).getByRole('link', { name: /Инструкция/ })).toHaveAttribute('href', '/guide');
     expect(within(card(2)).getByText(/осталось 1[12]:\d\d/)).toBeInTheDocument();
-    expect(within(card(3)).getByRole('link', { name: /Оформить заново/ })).toHaveAttribute('href', '/apps/sberbank');
 
     await userEvent.click(within(card(2)).getByRole('button', { name: 'Оплатить 349 ₽' }));
     expect(open).toHaveBeenCalledWith('https://pay.example.com/2', '_blank', 'noopener,noreferrer');
+
+    await userEvent.click(within(card(3)).getByRole('button', { name: /Оформить заново/ }));
+    expect(cartStore.getSnapshot()).toEqual(['sberbank']);
+    expect(await screen.findByTestId('navigated')).toBeInTheDocument();
+  });
+
+  it('names a multi-app order by its first app and shows the discount', async () => {
+    vi.spyOn(api, 'orders').mockResolvedValue([MULTI_ORDER]);
+    renderWithProviders(<DownloadsPage />);
+
+    const multi = await screen.findByRole('article', { name: `Заказ #${MULTI_ORDER.id}` });
+    expect(within(multi).getByText('СберБанк Онлайн и ещё 2')).toBeInTheDocument();
+    expect(within(multi).getByText(/скидка 300 ₽/)).toBeInTheDocument();
   });
 
   it('teaches what to do when there are no orders yet', async () => {

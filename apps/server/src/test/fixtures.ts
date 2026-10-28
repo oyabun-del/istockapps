@@ -1,4 +1,3 @@
-import type { PaymentMethod } from '@istock/shared';
 import type { User } from '../domain/models.js';
 import { silentLogger } from '../lib/logger.js';
 import { MockCatalogProvider } from '../providers/catalog/mock-catalog-provider.js';
@@ -10,7 +9,6 @@ import { DeliveryService } from '../services/delivery-service.js';
 import { NotificationService, type MessageButton, type MessageSender } from '../services/notification-service.js';
 import { OrderService } from '../services/order-service.js';
 import { SubscriptionService, type ChatMemberInfo } from '../services/subscription-service.js';
-import { TicketService } from '../services/ticket-service.js';
 
 export const BOT_TOKEN = '123456:TEST-token-abcdefghijklmnopqrstuvwxyz';
 export const ADMIN_IDS = [111, 222];
@@ -56,7 +54,6 @@ export interface TestContext {
   notifications: NotificationService;
   orders: OrderService;
   deliveryService: DeliveryService;
-  tickets: TicketService;
 }
 
 export function createTestContext(): TestContext {
@@ -92,7 +89,6 @@ export function createTestContext(): TestContext {
     now: clock.now,
   });
   const deliveryService = new DeliveryService({ repos, delivery, logger: silentLogger, now: clock.now });
-  const tickets = new TicketService({ repos, notifications, now: clock.now });
 
   return {
     repos,
@@ -107,13 +103,12 @@ export function createTestContext(): TestContext {
     notifications,
     orders,
     deliveryService,
-    tickets,
   };
 }
 
 /** Creates an order and marks it paid through the payment webhook path. */
-export async function createPaidOrder(ctx: TestContext, method: PaymentMethod = 'SBP', appId = 'sberbank') {
-  const order = await ctx.orders.createOrder(BUYER, { appId, paymentMethod: method });
+export async function createPaidOrder(ctx: TestContext, appIds: readonly string[] = ['sberbank']) {
+  const order = await ctx.orders.createOrder(BUYER, { appIds: [...appIds], paymentMethod: 'SBP' });
   const payment = ctx.payments.setStatus(order.paymentId as string, 'PAID');
   if (!payment) throw new Error('payment missing');
   await ctx.orders.handlePaymentWebhook(order.paymentOrderId, { ...payment, isSandbox: false });

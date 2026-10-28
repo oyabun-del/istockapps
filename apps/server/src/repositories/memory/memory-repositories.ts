@@ -1,20 +1,10 @@
 import type { OrderStatus } from '@istock/shared';
-import type {
-  CodeWaitAttempt,
-  NewCodeWaitAttempt,
-  NewOrder,
-  NewTicket,
-  Order,
-  OrderPatch,
-  Ticket,
-  User,
-} from '../../domain/models.js';
+import type { CodeWaitAttempt, NewCodeWaitAttempt, NewOrder, Order, OrderPatch, User } from '../../domain/models.js';
 import type {
   CodeWaitAttemptRepository,
   OrderEventRepository,
   OrderRepository,
   Repositories,
-  TicketRepository,
   UserRepository,
 } from '../repositories.js';
 
@@ -44,12 +34,14 @@ class MemoryOrderRepository implements OrderRepository {
   async create(input: NewOrder): Promise<Order> {
     const order: Order = {
       ...input,
+      items: input.items.map((item) => ({ ...item })),
       id: this.nextId++,
       paymentId: null,
       paymentUrl: null,
       paymentSyncedAt: null,
       deliveryRef: null,
       deliveryExpiresAt: null,
+      codeReceivedAt: null,
       paidAt: null,
       completedAt: null,
       createdAt: this.now(),
@@ -68,12 +60,14 @@ class MemoryOrderRepository implements OrderRepository {
     return order ? { ...order } : null;
   }
 
-  async findPendingForApp(userId: number, appId: string, createdAfter: Date): Promise<Order | null> {
+  async findPendingForApps(userId: number, appIds: readonly string[], createdAfter: Date): Promise<Order | null> {
+    const wanted = new Set(appIds);
     const order = [...this.orders.values()]
       .filter(
         (item) =>
           item.userId === userId &&
-          item.appId === appId &&
+          item.items.length === wanted.size &&
+          item.items.every((orderItem) => wanted.has(orderItem.appId)) &&
           item.status === 'awaiting_payment' &&
           item.paymentUrl !== null &&
           item.createdAt > createdAfter,
@@ -152,22 +146,6 @@ class MemoryOrderEventRepository implements OrderEventRepository {
   }
 }
 
-class MemoryTicketRepository implements TicketRepository {
-  private readonly tickets: Ticket[] = [];
-
-  constructor(private readonly now: Now) {}
-
-  async create(input: NewTicket): Promise<Ticket> {
-    const ticket: Ticket = { ...input, id: this.tickets.length + 1, createdAt: this.now() };
-    this.tickets.push(ticket);
-    return { ...ticket };
-  }
-
-  async countByUserSince(userId: number, since: Date): Promise<number> {
-    return this.tickets.filter((item) => item.userId === userId && item.createdAt >= since).length;
-  }
-}
-
 export interface MemoryRepositories extends Repositories {
   orderEvents: MemoryOrderEventRepository;
 }
@@ -178,6 +156,5 @@ export function createMemoryRepositories(now: Now = () => new Date()): MemoryRep
     orders: new MemoryOrderRepository(now),
     orderEvents: new MemoryOrderEventRepository(),
     codeWaits: new MemoryCodeWaitAttemptRepository(now),
-    tickets: new MemoryTicketRepository(now),
   };
 }

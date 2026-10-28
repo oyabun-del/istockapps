@@ -12,7 +12,13 @@ docs/           спецификация CISPAY (OpenAPI)
 design/         исходные макеты
 ```
 
-**Готово:** бот (`/start`, `/support`, проверка подписки, кнопка магазина), уведомления всем админам о покупках, возвратах и обращениях, оплата CISPAY (создание счёта, webhook с проверкой подписи, опрос статуса как запасной вариант), заказ со статусами, все экраны Mini App.
+**Готово:** бот (`/start`, `/support`, проверка подписки, кнопка магазина), уведомления всем админам о покупках и возвратах, оплата CISPAY по СБП (создание счёта, webhook с проверкой подписи, опрос статуса как запасной вариант), заказ со статусами, все экраны Mini App.
+
+**Корзина и скидка за количество.** Купить можно только через корзину: она хранит id приложений в `localStorage` (`istock.cart.v1`, не больше `MAX_ORDER_ITEMS` = 10). Вся корзина оформляется одним заказом (`Order` + `OrderItem`), одним платежом СБП и одной выдачей Install-IOS. Скидка: от 3 приложений −100 ₽ за каждое, от 5 приложений −150 ₽ за каждое (`BULK_DISCOUNT_TIERS` в `packages/shared/src/pricing.ts`), при этом цена приложения не опускается ниже 1 ₽. Одна и та же функция `calculateCartPricing` показывает скидку в Mini App сразу при добавлении и считает сумму на сервере. `POST /api/orders` принимает `{ appIds, paymentMethod, expectedTotalKopecks }`: если серверная сумма разошлась с той, что видел покупатель, сервер отвечает `409 PRICE_CHANGED`.
+
+**Поддержка** — только в Telegram: кнопки в боте и Mini App ведут на `SUPPORT_USERNAME`. Обращений в Mini App нет.
+
+**Шаги активации** открываются по очереди: следующий шаг не показывается, пока не выполнен текущий (скачать → логин и пароль → код → «Приложение работает»). Шаг с кодом завершается, когда сервер увидел полученный код или покупатель нажал «Apple не запросил код» (`POST /api/orders/:id/skip-code`); отметка хранится в `Order.codeReceivedAt`, без неё `complete` отвечает 409.
 
 **Каталог и выдача** (`apps/server/src/providers/`): `CATALOG_PROVIDER` и `DELIVERY_PROVIDER` (оба одинаковые):
 - `mock` — заглушки для разработки (`catalog/mock-catalog-provider.ts`, `delivery/mock-delivery-provider.ts`);
@@ -35,30 +41,34 @@ INSTALLIOS_PRICES={"app_…": 299}  # необязательно: цены от�
 - **Код.** Покупатель сначала включает ожидание, потом запрашивает код на iPhone; Mini App опрашивает статус раз в 1,5 с, код живёт до 60 с и затем стирается. Лимит — 3 успешных кода на аккаунт (берётся из API). Старт ожидания сокращает срок заявки (в sandbox: 12 ч → 6 ч), он показывается под ссылками.
 - **Админ-команды бота** (только `ADMIN_IDS`): `/balance` — долг и аванс перед Install-IOS, `/sync` — обновить каталог сейчас.
 - Не реализовано: повторная выдача (`set_extend`/`extend`), webhook Install-IOS, сообщение о блокировке (`report-blocked`), возвраты Install-IOS.
-- **Откат:** `CATALOG_PROVIDER=mock`, `DELIVERY_PROVIDER=mock` (только вне production). Код — `git revert` коммита интеграции; миграция `20261027120000_installios_delivery` добавляет таблицу `CodeWaitAttempt` и поля `deliveryRef`/`deliveryExpiresAt` и удаляет устаревшие `codeRequests`/`lastCodeAt`.
+- **Откат:** `CATALOG_PROVIDER=mock`, `DELIVERY_PROVIDER=mock` (только вне production). Код — `git revert` коммита интеграции; таблица `CodeWaitAttempt` и поля `deliveryRef`/`deliveryExpiresAt` останутся в схеме, на mock-выдачу они не влияют.
 
 ## Запуск локально
 
-Нужны Node.js 20.19+ и pnpm 11 (проще всего через `corepack enable`: нужная версия указана в `package.json`).
+Всё запускается в Docker (нужен Docker Desktop): Postgres, сервер с горячей перезагрузкой (tsx watch, :3000) и Mini App (Vite, :5173). Node.js и pnpm на машине не нужны.
 
 ```bash
-pnpm install
 cp .env.example .env          # заполните BOT_TOKEN, REQUIRED_CHANNEL, ADMIN_IDS, SUPPORT_USERNAME
-pnpm db:migrate               # создаст SQLite-базу (только для разработки)
-pnpm build                    # соберёт Mini App и сервер
-pnpm start
+docker compose up             # первый раз соберёт образ; Ctrl+C — остановить
 ```
 
-Telegram открывает Mini App только по HTTPS, поэтому для проверки в Telegram нужен туннель (cloudflared или ngrok):
+`COMPOSE_FILE=compose.dev.yaml` из `.env` направляет `docker compose` на dev-окружение ([compose.dev.yaml](compose.dev.yaml)). Исходники подключены в контейнеры, изменения подхватываются сразу; `node_modules` живут в томах Docker. При старте контейнер `install` синхронизирует зависимости с lockfile, `migrate` применяет миграции.
 
-- **`pnpm start`** (собранная версия, сервер на :3000): `cloudflared tunnel --url http://localhost:3000`, адрес туннеля укажите в `WEBAPP_URL` и `PUBLIC_URL`.
-- **`pnpm dev`** (горячая перезагрузка: сервер на :3000, Vite на :5173): туннель на `http://localhost:5173`, его адрес в `WEBAPP_URL` и `PUBLIC_URL`. Vite проксирует `/api` и `/dev` на сервер. Webhook CISPAY через Vite не проходит: для `PAYMENT_PROVIDER=cispay` нужен второй туннель на :3000 в `PUBLIC_URL`.
+| Задача | Команда |
+|---|---|
+| Запустить в фоне / логи | `docker compose up -d`, `docker compose logs -f server` |
+| Новая миграция после правки `schema.prisma` | `docker compose run --rm server pnpm db:migrate` |
+| Добавить зависимость | `docker compose run --rm --no-deps server pnpm --filter @istock/server add <пакет>`, затем `docker compose up -d` |
+| Консоль базы | `docker compose exec db psql -U istock istock` |
+| Стереть базу и `node_modules` | `docker compose down -v` |
 
-После смены `WEBAPP_URL` перезапустите сервер: кнопка меню бота настраивается при старте.
+Telegram открывает Mini App только по HTTPS, поэтому для проверки в Telegram нужен туннель (cloudflared или ngrok) на `http://localhost:5173`; его адрес укажите в `WEBAPP_URL` и `PUBLIC_URL`. Vite проксирует `/api` и `/dev` на сервер. Webhook CISPAY через Vite не проходит: для `PAYMENT_PROVIDER=cispay` нужен второй туннель на :3000 в `PUBLIC_URL`.
+
+После смены `.env` выполните `docker compose up -d`: кнопка меню бота настраивается при старте сервера.
 
 ### Проверка в обычном браузере (без бота)
 1. В `.env`: `NODE_ENV=development`, `PAYMENT_PROVIDER=mock`, `DEV_USER_ID=111111111`, `TELEGRAM_OFFLINE=true`, `WEBAPP_URL` и `PUBLIC_URL` = `http://localhost:5173`. `BOT_TOKEN` не нужен.
-2. `pnpm db:migrate`, затем `pnpm dev` и откройте http://localhost:5173 (мобильный экран в DevTools: `Ctrl+Shift+M`).
+2. `docker compose up` и откройте http://localhost:5173 (мобильный экран в DevTools: `Ctrl+Shift+M`).
 
 В офлайн-режиме бот не запускается, подписка на канал считается оформленной, а сообщения админам и покупателю пишутся в лог сервера. Работает весь путь: каталог, заказ, тестовая оплата, логин и пароль, код, отмена. Режим запрещён в production и с реальной оплатой.
 
@@ -76,20 +86,21 @@ Telegram открывает Mini App только по HTTPS, поэтому д�
 ### Оплата
 - `PAYMENT_PROVIDER=mock` — после «Оплатить» откроется тестовая страница с кнопками «Оплатить / Отклонить».
 - `PAYMENT_PROVIDER=cispay` — реальные платежи. В кабинете CISPAY укажите webhook `${PUBLIC_URL}/webhooks/cispay` (например, `https://shop.example.com/webhooks/cispay`). Тестовые платежи из «Песочницы» CISPAY тоже присылают webhook (пометка `is_sandbox`).
-- USDT: CISPAY присылает сумму в центах USD, поэтому оплата сверяется с рублёвой суммой через `GET /payments/status` (поле `source_amount`).
-- Способы оплаты берутся из `GET /store/capabilities` CISPAY: СБП, карта, USDT. **T-Pay из макета CISPAY не поддерживает**, поэтому его плитки нет.
+- **Только СБП.** Магазин принимает новые заказы только с `paymentMethod: "SBP"`, карта и USDT отклоняются проверкой запроса. СБП предлагается, если он включён в `GET /store/capabilities` CISPAY; иначе Mini App пишет «Оплата временно недоступна». Старые заказы картой или USDT показываются как раньше.
+- Если webhook пришёл без суммы в рублях, оплата сверяется с рублёвой суммой через `GET /payments/status` (поле `source_amount`).
 
 ## Проверки
 
 ```bash
-pnpm typecheck
-pnpm test
-pnpm test:coverage
+docker compose run --rm --no-deps server pnpm typecheck
+docker compose run --rm --no-deps server pnpm test
+docker compose run --rm --no-deps server pnpm test:coverage
 ```
 
 ## Production
-- Миграции применяйте командой `pnpm db:deploy`, **не** `pnpm db:migrate`: `migrate dev` при расхождении схемы предлагает сбросить базу.
+Деплой, обновление, откат и бэкапы — [docs/DEPLOY.md](docs/DEPLOY.md). Коротко: [compose.yaml](compose.yaml) поднимает Caddy (HTTPS через Let's Encrypt), сервер и Postgres; домен задаётся одной переменной `DOMAIN`.
+
+- Миграции применяет сервис `migrate` (`prisma migrate deploy`) перед каждым запуском сервера. `migrate dev` в production не используйте: при расхождении схемы он предлагает сбросить базу.
 - Если `NODE_ENV` не задан, сервер считает окружение production. В production запрещены mock-оплата, mock-каталог и mock-выдача (иначе покупатели получили бы тестовый пароль), `DEV_USER_ID` и HTTP-адреса. `DEV_USER_ID` также запрещён при `PAYMENT_PROVIDER=cispay`.
 - Платежи из «Песочницы» CISPAY и платежи заблокированных покупателей (`is_sandbox`) не засчитываются ни через webhook, ни при опросе статуса, пока не задан `ALLOW_SANDBOX_PAYMENTS=true`.
-- За reverse-proxy укажите `TRUST_PROXY_HOPS=1`, чтобы rate limit видел настоящий IP.
-- Для Postgres смените `provider` в `apps/server/prisma/schema.prisma` на `postgresql`, укажите `DATABASE_URL` и пересоздайте миграции.
+- За Caddy сервер доверяет одному прокси (`TRUST_PROXY_HOPS=1` в compose.yaml), поэтому rate limit видит настоящий IP.

@@ -66,10 +66,10 @@ describe('api client', () => {
 
   it('posts JSON bodies', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ success: true, data: { id: 1 }, error: null }));
-    await api.createTicket({ message: 'Помогите', orderId: null });
+    await api.createOrder({ appIds: ['sberbank'], paymentMethod: 'SBP' });
     const init = fetchMock.mock.calls[0]?.[1];
     expect(init?.method).toBe('POST');
-    expect(JSON.parse(String(init?.body))).toEqual({ message: 'Помогите', orderId: null });
+    expect(JSON.parse(String(init?.body))).toEqual({ appIds: ['sberbank'], paymentMethod: 'SBP' });
   });
 
   it('throws ApiError with the server code', async () => {

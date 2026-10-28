@@ -7,13 +7,22 @@ export function toOrderDto(order: Order): OrderDto {
   return {
     id: order.id,
     status: order.status,
-    app: { id: order.appId, name: order.appName, iconUrl: order.appIconUrl },
+    items: order.items.map((item) => ({
+      id: item.appId,
+      name: item.appName,
+      iconUrl: item.appIconUrl,
+      priceKopecks: item.priceKopecks,
+      discountKopecks: item.discountKopecks,
+    })),
+    subtotalKopecks: order.subtotalKopecks,
+    discountKopecks: order.discountKopecks,
     amountKopecks: order.amountKopecks,
     paymentMethod: order.paymentMethod,
     // The payment link is only useful while the order is unpaid.
     paymentUrl: isAwaitingPayment ? order.paymentUrl : null,
     expiresAt: isAwaitingPayment ? new Date(order.createdAt.getTime() + INVOICE_TTL_MS).toISOString() : null,
     createdAt: order.createdAt.toISOString(),
+    isCodeReceived: order.codeReceivedAt !== null || order.status === 'completed',
     paidAt: order.paidAt?.toISOString() ?? null,
     completedAt: order.completedAt?.toISOString() ?? null,
   };

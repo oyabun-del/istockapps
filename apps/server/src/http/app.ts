@@ -11,7 +11,6 @@ import type { ChannelInfoService } from '../services/channel-info-service.js';
 import type { DeliveryService } from '../services/delivery-service.js';
 import type { OrderService } from '../services/order-service.js';
 import type { SubscriptionService } from '../services/subscription-service.js';
-import type { TicketService } from '../services/ticket-service.js';
 import { registerAuth } from './auth.js';
 import { ok } from './envelope.js';
 import { registerErrorHandling } from './error-handler.js';
@@ -37,7 +36,6 @@ export interface AppDeps {
   mockPayments?: MockPaymentProvider;
   orders: OrderService;
   delivery: DeliveryService;
-  tickets: TicketService;
   subscription: SubscriptionService;
   /** Built Mini App to serve from "/", if present. */
   miniappDir?: string | null;

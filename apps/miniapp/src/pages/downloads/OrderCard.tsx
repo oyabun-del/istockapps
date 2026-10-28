@@ -1,11 +1,12 @@
 import { formatRub, type OrderDto } from '@istock/shared';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { AppIcon } from '../../components/ui/AppIcon';
+import { AppIconStack } from '../../components/ui/AppIconStack';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
+import { useReorder } from '../../hooks/useReorder';
 import { useSecondsUntil } from '../../hooks/useSecondsUntil';
-import { formatCountdown, formatOrderDate } from '../../lib/format';
+import { formatCountdown, formatOrderDate, formatOrderTitle } from '../../lib/format';
 import type { IconName } from '../../lib/icons';
 import { ORDER_STATUS_META, type Tone } from '../../lib/order-status';
 import { openExternalLink } from '../../lib/telegram';
@@ -45,6 +46,16 @@ function TimeLeft({ expiresAt }: { expiresAt: string }) {
   return <span className="tabular">, осталось {formatCountdown(seconds)}</span>;
 }
 
+function ReorderButton({ order }: { order: OrderDto }) {
+  const reorder = useReorder(order);
+  return (
+    <button type="button" onClick={reorder} className={SECONDARY_LINK}>
+      <Icon name="refresh" className="text-[20px]" />
+      Оформить заново
+    </button>
+  );
+}
+
 function Actions({ order }: { order: OrderDto }) {
   switch (order.status) {
     case 'awaiting_payment':
@@ -73,11 +84,7 @@ function Actions({ order }: { order: OrderDto }) {
     case 'expired':
     case 'failed':
     case 'cancelled':
-      return (
-        <ActionLink to={`/apps/${encodeURIComponent(order.app.id)}`} icon="refresh">
-          Оформить заново
-        </ActionLink>
-      );
+      return <ReorderButton order={order} />;
     case 'completed':
     case 'refunded':
       return null;
@@ -89,10 +96,10 @@ export function OrderCard({ order }: { order: OrderDto }) {
   return (
     <article aria-label={`Заказ #${order.id}`} className="flex flex-col gap-space-md rounded-xl bg-surface-container p-space-lg">
       <Link to={`/orders/${order.id}`} className="-m-1 flex items-start gap-space-md rounded-lg p-1">
-        <AppIcon src={order.app.iconUrl} size="md" />
+        <AppIconStack items={order.items} />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex items-baseline justify-between gap-space-sm">
-            <span className="truncate text-headline-sm text-on-surface">{order.app.name}</span>
+            <span className="truncate text-headline-sm text-on-surface">{formatOrderTitle(order.items)}</span>
             <span className="shrink-0 text-label-md text-on-surface-variant">{formatOrderDate(order.createdAt)}</span>
           </div>
           <span className={`flex items-center gap-1.5 text-label-lg ${TEXT_CLASSES[meta.tone]}`}>
@@ -104,6 +111,7 @@ export function OrderCard({ order }: { order: OrderDto }) {
           </span>
           <span className="tabular text-body-sm text-on-surface-variant">
             Заказ #{order.id}, {formatRub(order.amountKopecks)}
+            {order.discountKopecks > 0 && <span className="text-success">, скидка {formatRub(order.discountKopecks)}</span>}
           </span>
         </div>
       </Link>

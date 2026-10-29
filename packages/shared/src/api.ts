@@ -164,13 +164,22 @@ export interface StartCodeInput {
 
 // ---------- User ----------
 
+/** Individual entrepreneur running the shop. */
+export interface SellerDto {
+  name: string;
+  inn: string;
+  ogrnip: string;
+  /** Address for personal data requests. */
+  email: string;
+}
+
 export interface MeDto {
   user: { id: number; firstName: string; username: string | null; photoUrl: string | null };
   isSubscribed: boolean;
   channelUrl: string;
   supportUrl: string;
-  /** Terms of service page, if the shop has published one. */
-  termsUrl: string | null;
+  /** Seller named in the terms and privacy policy; null only in development. */
+  seller: SellerDto | null;
   /** Unknown values are null (e.g. the bot cannot read the channel). */
   channel: { title: string | null; subscriberCount: number | null };
 }

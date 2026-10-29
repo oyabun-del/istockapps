@@ -5,10 +5,11 @@ import { Link } from 'react-router-dom';
 import { Page } from '../../components/layout/Page';
 import { Badge } from '../../components/ui/Badge';
 import { Icon } from '../../components/ui/Icon';
+import { LEGAL_PATHS, LEGAL_TITLES } from '../../content/legal';
 import { api } from '../../lib/api';
 import type { IconName } from '../../lib/icons';
 import { queryKeys, useMe } from '../../lib/queries';
-import { getTelegramProfile, openExternalLink, openTelegramLink } from '../../lib/telegram';
+import { getTelegramProfile, openTelegramLink } from '../../lib/telegram';
 
 type ActionProps = {
   icon: IconName;
@@ -131,14 +132,8 @@ export function ProfilePage() {
               onClick={() => openTelegramLink(me.channelUrl)}
             />
           )}
-          {me?.termsUrl && (
-            <ActionRow
-              icon="description"
-              title="Пользовательское соглашение"
-              hint="Условия покупки и возврата"
-              onClick={() => openExternalLink(me.termsUrl as string)}
-            />
-          )}
+          <ActionRow icon="description" title={LEGAL_TITLES.terms} hint="Условия покупки и возврата" to={LEGAL_PATHS.terms} />
+          <ActionRow icon="shield_person" title={LEGAL_TITLES.privacy} hint="Какие данные мы храним" to={LEGAL_PATHS.privacy} />
         </Menu>
 
         <p className="tabular text-center text-label-sm text-outline">{`iStockApps v${__APP_VERSION__}`}</p>

@@ -158,6 +158,18 @@ describe('CartPage', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
   });
 
+  it('tells that paying accepts the terms and the privacy policy', async () => {
+    mockCatalog();
+    vi.spyOn(api, 'paymentMethods').mockResolvedValue([{ method: 'SBP' }]);
+    fillCart(1);
+
+    renderCart();
+
+    expect(await screen.findByText(/Нажимая «Оплатить», вы принимаете/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'условия соглашения' })).toHaveAttribute('href', '/legal/terms');
+    expect(screen.getByRole('link', { name: 'политику конфиденциальности' })).toHaveAttribute('href', '/legal/privacy');
+  });
+
   it('blocks payment while SBP is unavailable', async () => {
     mockCatalog();
     vi.spyOn(api, 'paymentMethods').mockResolvedValue([]);

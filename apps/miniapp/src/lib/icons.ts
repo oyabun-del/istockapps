@@ -42,6 +42,7 @@ export const ICON_NAMES = [
   'sell',
   'send',
   'settings',
+  'shield_person',
   'shopping_cart',
   'sms',
   'sports_esports',

@@ -7,6 +7,7 @@ import { Page } from '../../components/layout/Page';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { EmptyState, ErrorState, Skeleton } from '../../components/ui/StateViews';
+import { LEGAL_PATHS } from '../../content/legal';
 import { useCart } from '../../hooks/useCart';
 import { ApiError, api, errorMessage } from '../../lib/api';
 import { cartStore } from '../../lib/cart';
@@ -183,6 +184,16 @@ export function CartPage() {
             <p className="mt-2.5 flex items-center justify-center gap-1 text-label-sm text-on-surface-variant">
               <Icon name="verified_user" className="text-[13px] text-secondary" />
               Безопасный платёж через CISPAY
+            </p>
+            <p className="mt-1.5 text-balance text-center text-label-sm text-outline">
+              Нажимая «Оплатить», вы принимаете{' '}
+              <Link to={LEGAL_PATHS.terms} className="underline underline-offset-2 hover:text-primary">
+                условия соглашения
+              </Link>{' '}
+              и{' '}
+              <Link to={LEGAL_PATHS.privacy} className="underline underline-offset-2 hover:text-primary">
+                политику конфиденциальности
+              </Link>
             </p>
           </div>
         </div>

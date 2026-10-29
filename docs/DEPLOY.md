@@ -97,13 +97,14 @@ nano .env
 | `ACME_EMAIL` | ваша почта: Let's Encrypt пишет о проблемах с сертификатом |
 | `POSTGRES_PASSWORD` | результат `openssl rand -hex 24` (только буквы и цифры: пароль входит в URL подключения) |
 | `BOT_TOKEN`, `BOT_USERNAME` | из @BotFather. **Отдельный бот для прода**: один токен не может работать в двух местах |
-| `REQUIRED_CHANNEL`, `ADMIN_IDS`, `SUPPORT_USERNAME`, `TERMS_URL` | как в разработке |
+| `REQUIRED_CHANNEL`, `ADMIN_IDS`, `SUPPORT_USERNAME` | как в разработке |
+| `SELLER_NAME`, `SELLER_INN`, `SELLER_OGRNIP`, `SELLER_EMAIL` | реквизиты ИП для соглашения и политики конфиденциальности, без них сервер не стартует |
 | `CISPAY_SHOP_ID`, `CISPAY_API_KEY` | кабинет CISPAY → «Настройки магазина» |
 | `INSTALLIOS_API_KEY`, `INSTALLIOS_DEFAULT_PRICE_RUB`, `INSTALLIOS_PRICES` | ключ партнёра и цены |
 
 `NODE_ENV`, `PORT`, `TRUST_PROXY_HOPS`, `WEBAPP_URL`, `PUBLIC_URL` и `DATABASE_URL` задаёт `compose.yaml` — в `.env` их не нужно (и они бы не применились). Адреса Mini App и webhook получаются из `DOMAIN`.
 
-При старте сервер проверяет все настройки: в production запрещены mock-оплата, mock-каталог, `DEV_USER_ID` и HTTP-адреса. Ошибка в `.env` видна в `docker compose logs app` строкой `Invalid environment configuration`.
+При старте сервер проверяет все настройки: в production запрещены mock-оплата, mock-каталог, `DEV_USER_ID` и HTTP-адреса, а реквизиты ИП обязательны. Ошибка в `.env` видна в `docker compose logs app` строкой `Invalid environment configuration`.
 
 ## 5. Первый запуск
 

@@ -8,11 +8,11 @@ import { ApiError, api } from './lib/api';
 import { ROUTER_FUTURE } from './lib/router';
 import { ME, SBER } from './test/render';
 
-function renderApp() {
+function renderApp(route = '/') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter future={ROUTER_FUTURE}>
+      <MemoryRouter initialEntries={[route]} future={ROUTER_FUTURE}>
         <App />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -38,6 +38,23 @@ describe('App', () => {
     await userEvent.click(screen.getByRole('button', { name: /Проверить подписку/ }));
     expect(await screen.findByText('СберБанк Онлайн')).toBeInTheDocument();
     expect(check).toHaveBeenCalledTimes(2);
+  });
+
+  it('opens the legal documents before subscribing', async () => {
+    vi.spyOn(api, 'me').mockResolvedValue({ ...ME, isSubscribed: false });
+
+    renderApp();
+    await userEvent.click(await screen.findByRole('link', { name: 'Политика конфиденциальности' }));
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Политика конфиденциальности' })).toBeInTheDocument();
+  });
+
+  it('keeps other screens behind the gate', async () => {
+    vi.spyOn(api, 'me').mockResolvedValue({ ...ME, isSubscribed: false });
+
+    renderApp('/cart');
+
+    expect(await screen.findByText('Подпишитесь на канал')).toBeInTheDocument();
   });
 
   it('shows a retryable error when the profile cannot load', async () => {

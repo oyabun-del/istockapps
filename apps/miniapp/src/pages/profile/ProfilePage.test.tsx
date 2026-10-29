@@ -51,18 +51,13 @@ describe('ProfilePage', () => {
     expect(screen.queryByText(/Создать обращение/)).not.toBeInTheDocument();
   });
 
-  it('shows the terms of service only when the shop published them', async () => {
+  it('links to the terms and the privacy policy inside the app', async () => {
     vi.spyOn(api, 'orders').mockResolvedValue([]);
-    const open = vi.spyOn(window, 'open').mockReturnValue(null);
 
-    const { unmount } = renderProfile();
-    expect(await screen.findByRole('button', { name: /Служба поддержки/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Пользовательское соглашение/ })).not.toBeInTheDocument();
-    unmount();
+    renderProfile();
 
-    renderProfile({ ...ME, termsUrl: 'https://telegra.ph/terms' });
-    await userEvent.click(await screen.findByRole('button', { name: /Пользовательское соглашение/ }));
-    expect(open).toHaveBeenCalledWith('https://telegra.ph/terms', '_blank', 'noopener,noreferrer');
+    expect(await screen.findByRole('link', { name: /Пользовательское соглашение/ })).toHaveAttribute('href', '/legal/terms');
+    expect(screen.getByRole('link', { name: /Политика конфиденциальности/ })).toHaveAttribute('href', '/legal/privacy');
   });
 
   it('never shows certificate, device profile or warranty claims', async () => {

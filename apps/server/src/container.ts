@@ -103,7 +103,9 @@ export function createContainer(env: Env, telegram: TelegramAdapters, logger: Lo
     fetchMember: telegram.fetchMember,
     logger,
   });
-  const checkout = new CheckoutGate({ repos });
+  // Fake payments must not hand out real Install-IOS apps to anyone without a promo code.
+  const isPaymentFake = env.PAYMENT_PROVIDER === 'mock' && env.DELIVERY_PROVIDER === 'installios';
+  const checkout = new CheckoutGate({ repos, isOpenModeAllowed: !isPaymentFake });
   const orders = new OrderService({
     repos,
     catalog,

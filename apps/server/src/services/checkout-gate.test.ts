@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { Order } from '../domain/models.js';
 import { INVOICE_TTL_MS } from '../domain/order-transitions.js';
 import { BUYER, OTHER_USER, createTestContext, type TestContext } from '../test/fixtures.js';
-import { PAYMENTS_MODE_KEY } from './checkout-gate.js';
+import { CheckoutGate, PAYMENTS_MODE_KEY } from './checkout-gate.js';
 
 const ADMIN_ID = 111;
 const TWO_APPS = ['sberbank', 'tbank'];
@@ -192,5 +192,31 @@ describe('sandbox payments', () => {
   it('marks an order paid with a CISPAY test payment', async () => {
     expect((await pay(await order(['sberbank']), true)).isSandbox).toBe(true);
     expect((await pay(await order(['tbank']), false)).isSandbox).toBe(false);
+  });
+});
+
+describe('fake payments with real delivery', () => {
+  function fakeGate() {
+    return new CheckoutGate({ repos: ctx.repos, isOpenModeAllowed: false, now: ctx.clock.now });
+  }
+
+  it('works by promo code only, even when nothing was switched or "open" was saved earlier', async () => {
+    expect(await fakeGate().getMode()).toBe('promo');
+
+    await ctx.repos.settings.set(PAYMENTS_MODE_KEY, 'open');
+    expect(await fakeGate().getMode()).toBe('promo');
+  });
+
+  it('refuses to open payments to everyone and keeps closed working', async () => {
+    const gate = fakeGate();
+
+    await expect(gate.setMode('open')).rejects.toMatchObject({ code: 'INVALID_STATE' });
+    await gate.setMode('closed');
+    expect(await gate.getMode()).toBe('closed');
+    await expect(gate.authorize('ANY-CODE')).rejects.toMatchObject({ code: 'PAYMENTS_CLOSED' });
+  });
+
+  it('asks every buyer for a promo code', async () => {
+    await expect(fakeGate().authorize(undefined)).rejects.toMatchObject({ code: 'PAYMENTS_CLOSED' });
   });
 });

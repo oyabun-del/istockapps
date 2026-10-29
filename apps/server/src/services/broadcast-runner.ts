@@ -3,10 +3,12 @@ import { getErrorMessage } from '../lib/app-error.js';
 import type { Logger } from '../lib/logger.js';
 import type { BroadcastRepository, UserRepository } from '../repositories/repositories.js';
 import type { BroadcastTelegram, CopyOutcome } from './broadcast-port.js';
-import { BROADCAST_KEYBOARD, BROADCAST_TEXT } from './broadcast-ui.js';
+import { BROADCAST_KEYBOARD, BROADCAST_TEXT, type FailureReason } from './broadcast-ui.js';
 
-/** Recipients read and progress saved per batch: a crash repeats at most one batch. */
-const BATCH_SIZE = 50;
+/** Recipients read and progress saved per batch: a crash or a failed save repeats at most one batch. */
+const BATCH_SIZE = 10;
+/** This many failures in a row mean the copy itself is broken (token, markup), not the users. */
+const MAX_CONSECUTIVE_FAILURES = 25;
 const PROGRESS_INTERVAL_MS = 5000;
 /** Attempts per recipient while Telegram is unreachable or rate-limits us. */
 const MAX_RETRIES = 3;
@@ -27,7 +29,7 @@ export interface BroadcastRunnerDeps {
 }
 
 /** Why a batch ended early. */
-type Halt = 'source_missing' | 'unavailable' | null;
+type Halt = 'source_missing' | 'unavailable' | 'failing' | null;
 
 interface BatchResult {
   broadcast: Broadcast;
@@ -52,6 +54,9 @@ export class BroadcastRunner {
   private interruptPause: (() => void) | null = null;
   /** Cancelled by the admin: stop after the current copy instead of the current batch. */
   private readonly cancelledIds = new Set<number>();
+  /** The broadcast being sent right now, if any. */
+  private activeId: number | null = null;
+  private consecutiveFailures = 0;
   private readonly intervalMs: number;
   private readonly now: () => number;
   private readonly sleep: (ms: number) => Promise<void>;
@@ -85,10 +90,18 @@ export class BroadcastRunner {
     });
   }
 
-  /** Call after a broadcast moved from `sending` to `cancelled`, so sending stops right away. */
-  cancel(broadcastId: number): void {
-    this.cancelledIds.add(broadcastId);
-    this.interruptPause?.();
+  /**
+   * Call after a broadcast moved from `sending` to `cancelled`, so sending stops right away.
+   * When the worker is not sending it (e.g. waiting out an outage), the report is sent here.
+   */
+  async cancel(broadcastId: number): Promise<void> {
+    if (this.activeId === broadcastId) {
+      this.cancelledIds.add(broadcastId);
+      this.interruptPause?.();
+      return;
+    }
+    const cancelled = await this.deps.broadcasts.findById(broadcastId);
+    if (cancelled) await this.report(cancelled);
   }
 
   /** Resolves when the worker has nothing left to do (tests, graceful shutdown). */
@@ -123,9 +136,12 @@ export class BroadcastRunner {
   }
 
   private async run(initial: Broadcast): Promise<void> {
+    this.activeId = initial.id;
+    this.consecutiveFailures = 0;
     try {
       await this.runUntilHalted(initial);
     } finally {
+      this.activeId = null;
       this.cancelledIds.delete(initial.id);
     }
   }
@@ -155,8 +171,8 @@ export class BroadcastRunner {
         blocked: batch.broadcast.blocked,
         failed: batch.broadcast.failed,
       });
-      if (batch.halt === 'source_missing') {
-        await this.finish(broadcast, 'failed');
+      if (batch.halt === 'source_missing' || batch.halt === 'failing') {
+        await this.finish(broadcast, 'failed', batch.halt);
         return;
       }
       if (batch.halt === 'unavailable') throw new TelegramUnavailableError(`Telegram unavailable (broadcast ${broadcast.id})`);
@@ -177,6 +193,11 @@ export class BroadcastRunner {
       if (outcome.kind === 'source_missing') return { broadcast, halt: 'source_missing' };
       broadcast = { ...this.count(broadcast, outcome), cursorUserId: userId };
       await this.afterCopy(userId, outcome);
+      this.consecutiveFailures = outcome.kind === 'failed' ? this.consecutiveFailures + 1 : 0;
+      if (this.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        this.deps.logger.error({ broadcastId: initial.id, failures: this.consecutiveFailures }, 'Every copy fails, broadcast halted');
+        return { broadcast, halt: 'failing' };
+      }
     }
     return { broadcast, halt: null };
   }
@@ -234,13 +255,17 @@ export class BroadcastRunner {
     this.interruptPause = null;
   }
 
-  private async finish(broadcast: Broadcast, status: Extract<BroadcastStatus, 'done' | 'failed'>): Promise<void> {
+  private async finish(
+    broadcast: Broadcast,
+    status: Extract<BroadcastStatus, 'done' | 'failed'>,
+    reason?: FailureReason,
+  ): Promise<void> {
     const finished = await this.deps.broadcasts.transition(broadcast.id, ['sending'], {
       status,
       finishedAt: new Date(this.now()),
     });
     // null: cancelled at the same moment; the report still shows what was sent.
-    await this.report(finished ?? { ...broadcast, status: 'cancelled' });
+    await this.report(finished ?? { ...broadcast, status: 'cancelled' }, reason);
   }
 
   private async showProgress(broadcast: Broadcast): Promise<void> {
@@ -255,8 +280,8 @@ export class BroadcastRunner {
     );
   }
 
-  private async report(broadcast: Broadcast): Promise<void> {
-    const html = BROADCAST_TEXT.report(broadcast);
+  private async report(broadcast: Broadcast, reason?: FailureReason): Promise<void> {
+    const html = BROADCAST_TEXT.report(broadcast, reason);
     const { authorId, progressMessageId } = broadcast;
     await this.tellAuthor(() =>
       progressMessageId === null

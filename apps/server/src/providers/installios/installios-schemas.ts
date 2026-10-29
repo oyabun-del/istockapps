@@ -44,13 +44,17 @@ const orderGroupSchema = z.object({
   applications: z.array(orderApplicationSchema),
 });
 
+/**
+ * Statuses the API may extend later: an unknown value becomes 'unknown' instead of failing the whole
+ * response, so buyers keep their links and credentials.
+ */
 const automaticReplacementSchema = z.object({
-  status: z.enum(['pending', 'partial', 'replaced']),
+  status: z.enum(['pending', 'partial', 'replaced', 'unknown']).catch('unknown'),
   applications: z
     .array(
       z.object({
         application_id: z.string(),
-        status: z.enum(['pending', 'replaced']),
+        status: z.enum(['pending', 'replaced', 'unknown']).catch('unknown'),
         expires_at: z.number().int().optional(),
       }),
     )
@@ -60,7 +64,7 @@ const automaticReplacementSchema = z.object({
 export const orderSchema = z.object({
   id: z.string().min(1),
   external_order_id: z.string(),
-  status: z.enum(['active', 'completed', 'expired']),
+  status: z.enum(['active', 'completed', 'expired', 'unknown']).catch('unknown'),
   sandbox: z.boolean(),
   expires_at: z.number().int(),
   fallback_url: z.string(),
@@ -84,7 +88,8 @@ export const credentialsResponseSchema = z.object({
 
 export const codeWaitSchema = z.object({
   id: z.string().min(1),
-  status: z.enum(CODE_WAIT_STATUSES),
+  /** An unknown state ends the wait: the buyer can start a new one instead of polling forever. */
+  status: z.enum(CODE_WAIT_STATUSES).catch('timed_out'),
   code: z.string().nullish(),
   valid_for_seconds: z.number().int().nonnegative().nullish(),
   deadline_at: z.number().int().nullish(),

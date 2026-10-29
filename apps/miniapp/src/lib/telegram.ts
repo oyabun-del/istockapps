@@ -92,8 +92,19 @@ export function getStartParam(): string | null {
   return getWebApp()?.initDataUnsafe.start_param ?? null;
 }
 
+/** Only web pages leave the Mini App; plain http is kept for local development. */
+function isWebUrl(url: string): boolean {
+  try {
+    const { protocol } = new URL(url);
+    return protocol === 'https:' || (import.meta.env.DEV && protocol === 'http:');
+  } catch {
+    return false;
+  }
+}
+
 /** External links (payment page, downloads) open in the system browser. */
 export function openExternalLink(url: string): void {
+  if (!isWebUrl(url)) return;
   const webApp = getWebApp();
   if (webApp) webApp.openLink(url);
   else window.open(url, '_blank', 'noopener,noreferrer');

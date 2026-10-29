@@ -127,7 +127,9 @@ function DownloadStep({ order, delivery, card }: { order: OrderDto; delivery: De
 function CredentialsStep({ order, delivery, card }: { order: OrderDto; delivery: DeliveryDto | undefined; card: CardProps }) {
   const queryClient = useQueryClient();
   const [isRequested, setIsRequested] = useState(false);
-  const isIssued = order.status === 'credentials_issued' || order.status === 'completed';
+  const isIssued = order.status === 'credentials_issued';
+  // After activation the buyer signs out of the account: it is no longer read or shown.
+  const isCompleted = order.status === 'completed';
   const groups = availableGroups(delivery);
   const groupIds = groups.map((group) => group.id).join(',');
 
@@ -138,7 +140,7 @@ function CredentialsStep({ order, delivery, card }: { order: OrderDto; delivery:
       if (!isIssued) void queryClient.invalidateQueries({ queryKey: queryKeys.order(order.id) });
       return result;
     },
-    enabled: (isIssued || isRequested) && groups.length > 0,
+    enabled: !isCompleted && (isIssued || isRequested) && groups.length > 0,
     // Re-read on every visit and return to the app (a password may change); forget on leave.
     staleTime: 0,
     gcTime: 0,
@@ -164,7 +166,9 @@ function CredentialsStep({ order, delivery, card }: { order: OrderDto; delivery:
         Входите только в App Store. Не входите с этими данными в iCloud.
       </p>
 
-      {shown ? (
+      {isCompleted ? (
+        <p className="text-body-sm text-on-surface-variant">Активация завершена, логин и пароль больше не показываются.</p>
+      ) : shown ? (
         <motion.div {...REVEAL} className="flex flex-col gap-2">
           {shown.groups.map((item, index) => (
             <div key={item.groupId} className="flex flex-col gap-2">

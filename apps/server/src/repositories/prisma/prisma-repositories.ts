@@ -163,8 +163,24 @@ class PrismaOrderRepository implements OrderRepository {
     return rows.map(toOrder);
   }
 
+  async listForPaymentSync(statuses: readonly OrderStatus[], createdAfter: Date, limit: number): Promise<Order[]> {
+    const rows = await this.db.order.findMany({
+      where: { status: { in: [...statuses] }, paymentId: { not: null }, createdAt: { gt: createdAfter } },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+      include: WITH_ITEMS,
+    });
+    return rows.map(toOrder);
+  }
+
   async update(id: number, patch: Omit<OrderPatch, 'status'>): Promise<Order> {
     return toOrder(await this.db.order.update({ where: { id }, data: patch, include: WITH_ITEMS }));
+  }
+
+  async markCodeReceived(id: number, at: Date): Promise<Order | null> {
+    const result = await this.db.order.updateMany({ where: { id, codeReceivedAt: null }, data: { codeReceivedAt: at } });
+    if (result.count === 0) return null;
+    return this.findById(id);
   }
 
   async transition(

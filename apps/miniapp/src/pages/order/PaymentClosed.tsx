@@ -152,7 +152,10 @@ export function PaymentClosed({ order, status }: Props) {
           </button>
         )}
         <SupportButton isSecondary={copy.canReorder} />
-        <Link to="/" className="py-2 text-center text-label-lg text-on-surface-variant transition-colors hover:text-on-surface">
+        <Link
+          to="/"
+          className="flex min-h-11 items-center justify-center text-label-lg text-on-surface-variant transition-colors hover:text-on-surface"
+        >
           Вернуться в каталог
         </Link>
       </div>

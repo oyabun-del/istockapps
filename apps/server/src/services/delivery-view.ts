@@ -1,8 +1,6 @@
 import type { CodeWaitDto, DeliveryAppDto, DeliveryDto, DeliveryGroupDto, DeliveryState } from '@istock/shared';
 import type { CodeWait, DeliveryApp, DeliveryGroup, DeliverySnapshot } from '../providers/delivery/delivery-provider.js';
 
-const MS_PER_SECOND = 1000;
-
 /**
  * Pure mapping of one fresh snapshot to what the buyer sees. Nothing from earlier snapshots is
  * merged in: a revoked flag, a replacement banner or a link disappears as soon as the API drops it.
@@ -68,16 +66,15 @@ export function isGroupUsable(group: DeliveryGroup, snapshot: DeliverySnapshot, 
   return toGroupDto(group, snapshot, now).state === 'available';
 }
 
-export function toCodeWaitDto(wait: CodeWait, groupId: string, now: Date): CodeWaitDto {
+export function toCodeWaitDto(wait: CodeWait, groupId: string): CodeWaitDto {
   const hasCode = wait.status === 'succeeded' && wait.code !== null && (wait.validForSeconds ?? 0) > 0;
   return {
     id: wait.id,
     groupId,
     status: wait.status,
     code: hasCode ? wait.code : null,
-    // Relative TTL against our own clock, so clock skew between servers does not matter.
-    codeExpiresAt:
-      hasCode && wait.validForSeconds ? new Date(now.getTime() + wait.validForSeconds * MS_PER_SECOND).toISOString() : null,
+    // A relative TTL: the Mini App counts it from when the response arrived, so no clock is compared.
+    codeTtlSeconds: hasCode ? wait.validForSeconds : null,
     deadlineAt: wait.deadlineAt?.toISOString() ?? null,
   };
 }

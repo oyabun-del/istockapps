@@ -149,8 +149,11 @@ export interface CodeWaitDto {
   status: CodeWaitStatus;
   /** Present only while status is "succeeded" and the code is still fresh. */
   code: string | null;
-  /** When the code stops working (ISO). */
-  codeExpiresAt: string | null;
+  /**
+   * Seconds the code keeps working, counted from when this response was received.
+   * Relative on purpose: the device clock may be minutes off the server's.
+   */
+  codeTtlSeconds: number | null;
   /** When the wait for a code ends (ISO). */
   deadlineAt: string | null;
 }

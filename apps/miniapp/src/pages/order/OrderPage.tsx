@@ -1,6 +1,6 @@
 import { formatRub, isPaidStatus, type OrderDto } from '@istock/shared';
 import { useCallback, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Navigate, useParams } from 'react-router-dom';
 import { Page } from '../../components/layout/Page';
 import { AppIconStack } from '../../components/ui/AppIconStack';
 import { Badge } from '../../components/ui/Badge';
@@ -50,7 +50,7 @@ function SupportRow() {
         <button
           type="button"
           onClick={() => openTelegramLink(me.supportUrl)}
-          className="flex h-9 shrink-0 items-center gap-1 rounded-full bg-tertiary-container/30 px-3.5 text-label-lg text-tertiary transition-transform active:scale-[0.97]"
+          className="flex h-11 shrink-0 items-center gap-1 rounded-full bg-tertiary-container/30 px-3.5 text-label-lg text-tertiary transition-transform active:scale-[0.97]"
         >
           Написать
           <Icon name="chevron_right" className="text-[18px]" />
@@ -60,9 +60,18 @@ function SupportRow() {
   );
 }
 
+function parseOrderId(value: string | undefined): number | null {
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
 export function OrderPage() {
-  const { orderId } = useParams();
-  const id = Number(orderId);
+  const id = parseOrderId(useParams().orderId);
+  if (id === null) return <Navigate to="/orders" replace />;
+  return <OrderScreen id={id} />;
+}
+
+function OrderScreen({ id }: { id: number }) {
   const order = useOrder(id);
   const [isChecking, setIsChecking] = useState(false);
   const { refetch } = order;
@@ -90,7 +99,12 @@ export function OrderPage() {
             <Skeleton className="h-[260px]" />
           </>
         )}
-        {order.isError && <ErrorState message={errorMessage(order.error)} onRetry={handleRefresh} />}
+        {order.isError && !data && <ErrorState message={errorMessage(order.error)} onRetry={handleRefresh} />}
+        {order.isError && data && (
+          <p role="alert" className="text-center text-body-sm text-error">
+            Не удалось обновить заказ: {errorMessage(order.error)}
+          </p>
+        )}
 
         {data && closedStatus && <PaymentClosed order={data} status={closedStatus} />}
         {data && !closedStatus && (

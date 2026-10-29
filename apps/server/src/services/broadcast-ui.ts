@@ -40,7 +40,15 @@ function counters(broadcast: Broadcast): string {
 const FINAL_TITLES: Partial<Record<Broadcast['status'], (id: number) => string>> = {
   done: (id) => `✅ <b>Рассылка #${id} завершена</b>`,
   cancelled: (id) => `⏹ <b>Рассылка #${id} остановлена</b>`,
-  failed: (id) => `⚠️ <b>Рассылка #${id} прервана</b>: исходное сообщение удалено`,
+  failed: (id) => `⚠️ <b>Рассылка #${id} прервана</b>`,
+};
+
+/** Why the worker gave up on a broadcast. */
+export type FailureReason = 'source_missing' | 'failing';
+
+const FAILURE_REASONS: Record<FailureReason, string> = {
+  source_missing: 'исходное сообщение удалено',
+  failing: 'Telegram отклоняет все копии, проверьте сообщение и кнопки',
 };
 
 export const BROADCAST_TEXT = {
@@ -62,8 +70,9 @@ export const BROADCAST_TEXT = {
     `Отправить рассылку <b>${count(recipients)}</b> пользователям? Остановить её можно в любой момент.`,
   progress: (broadcast: Broadcast): string =>
     `📤 <b>Рассылка #${broadcast.id}</b>: ${count(processed(broadcast))} из ${count(broadcast.total)}\n\n${counters(broadcast)}`,
-  report: (broadcast: Broadcast): string => {
-    const title = FINAL_TITLES[broadcast.status]?.(broadcast.id) ?? `Рассылка #${broadcast.id}`;
+  report: (broadcast: Broadcast, reason: FailureReason = 'source_missing'): string => {
+    const base = FINAL_TITLES[broadcast.status]?.(broadcast.id) ?? `Рассылка #${broadcast.id}`;
+    const title = broadcast.status === 'failed' ? `${base}: ${FAILURE_REASONS[reason]}` : base;
     return `${title}\nОбработано ${count(processed(broadcast))} из ${count(broadcast.total)}\n\n${counters(broadcast)}`;
   },
   cancelled: 'Рассылка отменена.',

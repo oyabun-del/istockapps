@@ -86,8 +86,7 @@ export class BroadcastService {
       case 'stop':
         // The worker stops after the current copy and turns the progress message into the report.
         await this.moveTo(broadcast, ['sending'], 'cancelled', { finishedAt: this.now() });
-        this.deps.runner.cancel(id);
-        return;
+        return this.deps.runner.cancel(id);
     }
   }
 

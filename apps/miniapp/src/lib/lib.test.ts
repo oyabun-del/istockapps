@@ -1,8 +1,12 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderHook, waitFor } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
+import { makeOrder } from '../test/render';
 import { ApiError, api, errorMessage } from './api';
 import { copyText } from './clipboard';
 import { FALLBACK_ICON, iconFontNames, injectIconNames, toIconName } from './icons';
-import { createQueryClient, queryKeys } from './queries';
+import { createQueryClient, queryKeys, useOrder } from './queries';
 import {
   getStartParam,
   getTelegramProfile,
@@ -122,6 +126,17 @@ describe('telegram wrapper', () => {
     expect(getStartParam()).toBe('15');
   });
 
+  it('ignores external links that are not web pages', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const unsafe = ['javascript:alert(1)', 'data:text/html,<b>x</b>', 'not a url'];
+    unsafe.forEach((url) => openExternalLink(url));
+    expect(open).not.toHaveBeenCalled();
+
+    const webApp = installWebApp();
+    unsafe.forEach((url) => openExternalLink(url));
+    expect(webApp.openLink).not.toHaveBeenCalled();
+  });
+
   it('skips unsupported features on old clients', () => {
     const webApp = installWebApp({ isVersionAtLeast: vi.fn(() => false) });
     initTelegram();
@@ -156,6 +171,23 @@ describe('query client', () => {
       .catch(() => undefined);
 
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.me });
+  });
+
+  it('refreshes the orders list only when the order status changes', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(queryKeys.order(7), makeOrder({ status: 'awaiting_payment' }));
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const order = vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'awaiting_payment' }));
+    const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client }, children);
+
+    const { result } = renderHook(() => useOrder(7), { wrapper });
+    await waitFor(() => expect(order).toHaveBeenCalled());
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: queryKeys.orders });
+
+    order.mockResolvedValue(makeOrder({ status: 'paid' }));
+    await result.current.refetch();
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.orders }));
   });
 
   it('retries only server and network errors', () => {

@@ -34,7 +34,7 @@ describe('ProfilePage', () => {
 
     renderProfile();
 
-    expect(await screen.findByText(`AppDrop v${__APP_VERSION__}`)).toBeInTheDocument();
+    expect(await screen.findByText(`iStockApps v${__APP_VERSION__}`)).toBeInTheDocument();
   });
 
   it('opens support and the channel inside Telegram', async () => {

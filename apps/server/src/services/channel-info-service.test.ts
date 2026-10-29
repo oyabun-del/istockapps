@@ -9,10 +9,10 @@ function createService(fetchChannel: ChannelFetcher, now = () => 0) {
 describe('ChannelInfoService', () => {
   it('returns the channel title and subscriber count and caches them', async () => {
     let now = 0;
-    const fetchChannel = vi.fn<ChannelFetcher>().mockResolvedValue({ title: 'AppDrop', memberCount: 42_800 });
+    const fetchChannel = vi.fn<ChannelFetcher>().mockResolvedValue({ title: 'iStockApps', memberCount: 42_800 });
     const service = createService(fetchChannel, () => now);
 
-    expect(await service.getInfo()).toEqual({ title: 'AppDrop', subscriberCount: 42_800 });
+    expect(await service.getInfo()).toEqual({ title: 'iStockApps', subscriberCount: 42_800 });
     await service.getInfo();
     expect(fetchChannel).toHaveBeenCalledTimes(1);
     expect(fetchChannel).toHaveBeenCalledWith('@test_channel');
@@ -32,13 +32,13 @@ describe('ChannelInfoService', () => {
     let now = 0;
     const fetchChannel = vi
       .fn<ChannelFetcher>()
-      .mockResolvedValueOnce({ title: 'AppDrop', memberCount: 10 })
+      .mockResolvedValueOnce({ title: 'iStockApps', memberCount: 10 })
       .mockRejectedValueOnce(new Error('timeout'));
     const service = createService(fetchChannel, () => now);
 
     await service.getInfo();
     now += CHANNEL_INFO_TTL_MS + 1;
 
-    expect(await service.getInfo()).toEqual({ title: 'AppDrop', subscriberCount: 10 });
+    expect(await service.getInfo()).toEqual({ title: 'iStockApps', subscriberCount: 10 });
   });
 });

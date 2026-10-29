@@ -141,7 +141,7 @@ export function ProfilePage() {
           )}
         </Menu>
 
-        <p className="tabular text-center text-label-sm text-outline">{`AppDrop v${__APP_VERSION__}`}</p>
+        <p className="tabular text-center text-label-sm text-outline">{`iStockApps v${__APP_VERSION__}`}</p>
       </div>
     </Page>
   );

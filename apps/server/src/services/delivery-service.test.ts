@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { silentLogger } from '../lib/logger.js';
 import {
   DeliveryAccessRevokedError,
@@ -58,9 +58,7 @@ describe('DeliveryService happy path (mock provider)', () => {
     }
     expect(status.status).toBe('succeeded');
     expect(status.code).toMatch(/^\d{6}$/);
-    expect(status.codeExpiresAt).toBe(
-      new Date(ctx.clock.current.getTime() + MOCK_CODE_VALID_SECONDS * 1000).toISOString(),
-    );
+    expect(status.codeTtlSeconds).toBe(MOCK_CODE_VALID_SECONDS);
     expect((await ctx.repos.orders.findById(paid.id))?.codeReceivedAt).toEqual(ctx.clock.current);
 
     const completed = await ctx.deliveryService.complete(BUYER.id, paid.id);
@@ -287,6 +285,42 @@ describe('DeliveryService with Install-IOS semantics', () => {
     expect(provider.count('startCodeWait')).toBe(1);
   });
 
+  it('starts one wait when the button is tapped twice at once', async () => {
+    const paid = await orderWithCredentials(service);
+
+    const [first, second] = await Promise.all([
+      service.startCode(BUYER.id, paid.id, 'grp_a'),
+      service.startCode(BUYER.id, paid.id, 'grp_a'),
+    ]);
+
+    expect(provider.count('startCodeWait')).toBe(1);
+    expect(second.id).toBe(first.id);
+  });
+
+  it('records a received code once for concurrent status reads', async () => {
+    const paid = await orderWithCredentials(service);
+    await service.startCode(BUYER.id, paid.id, 'grp_a');
+    provider.waitStatus = codeWait({ status: 'succeeded', code: '123456', validForSeconds: 45 });
+
+    await Promise.all([
+      service.getCodeWait(BUYER.id, paid.id, 'wait_1'),
+      service.getCodeWait(BUYER.id, paid.id, 'wait_1'),
+    ]);
+
+    expect(ctx.repos.orderEvents.events.filter((event) => event.type === 'code_received')).toHaveLength(1);
+  });
+
+  it('serves credentials even when the audit event cannot be recorded', async () => {
+    const paid = await createPaidOrder(ctx);
+    await service.confirmDownload(BUYER.id, paid.id);
+    vi.spyOn(ctx.repos.orderEvents, 'add').mockRejectedValue(new Error('db down'));
+
+    const credentials = await service.getCredentials(BUYER.id, paid.id);
+
+    expect(credentials.groups.length).toBeGreaterThan(0);
+    expect((await ctx.repos.orders.findById(paid.id))?.status).toBe('credentials_issued');
+  });
+
   it('starts a new attempt when the previous wait can no longer be read', async () => {
     const paid = await orderWithCredentials(service);
     await service.startCode(BUYER.id, paid.id, 'grp_a');
@@ -362,12 +396,12 @@ describe('DeliveryService with Install-IOS semantics', () => {
 
     provider.waitStatus = codeWait({ status: 'succeeded', code: '123456', validForSeconds: 45 });
     const ready = await service.getCodeWait(BUYER.id, paid.id, 'wait_1');
-    expect(ready).toMatchObject({ code: '123456', codeExpiresAt: new Date(ctx.clock.current.getTime() + 45_000).toISOString() });
+    expect(ready).toMatchObject({ code: '123456', codeTtlSeconds: 45 });
 
     ctx.clock.advance(CODE_POLL_MIN_INTERVAL_MS);
     provider.waitStatus = codeWait({ status: 'cancelled', code: '123456', isRevoked: true });
     const cancelled = await service.getCodeWait(BUYER.id, paid.id, 'wait_1');
-    expect(cancelled).toMatchObject({ status: 'cancelled', code: null, codeExpiresAt: null });
+    expect(cancelled).toMatchObject({ status: 'cancelled', code: null, codeTtlSeconds: null });
   });
 
   it('rejects a wait id that belongs to another order', async () => {

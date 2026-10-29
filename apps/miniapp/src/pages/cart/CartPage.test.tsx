@@ -127,6 +127,37 @@ describe('CartPage', () => {
     expect(cartStore.getSnapshot()).toHaveLength(3);
   });
 
+  it('names the new total once the changed prices are loaded', async () => {
+    const app = mockCatalog();
+    vi.spyOn(api, 'paymentMethods').mockResolvedValue([{ method: 'SBP' }]);
+    vi.spyOn(api, 'createOrder').mockRejectedValue(new ApiError('PRICE_CHANGED', 'Цены обновились', 409));
+    fillCart(1);
+    renderCart();
+
+    await screen.findByRole('button', { name: 'Оплатить 349 ₽' });
+    app.mockResolvedValue({ ...SBER, priceKopecks: 39900 });
+    await userEvent.click(screen.getByRole('button', { name: /Оплатить/ }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Цена изменилась: теперь 399 ₽. Проверьте и оплатите ещё раз.');
+    expect(screen.getByRole('button', { name: 'Оплатить 399 ₽' })).toBeInTheDocument();
+  });
+
+  it('clears a checkout error once the cart changes', async () => {
+    mockCatalog();
+    vi.spyOn(api, 'paymentMethods').mockResolvedValue([{ method: 'SBP' }]);
+    vi.spyOn(api, 'createOrder').mockRejectedValue(new ApiError('PRICE_CHANGED', 'Цены обновились', 409));
+    fillCart(2);
+    renderCart();
+
+    await screen.findByText('СБП');
+    await userEvent.click(screen.getByRole('button', { name: /Оплатить/ }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole('button', { name: /Убрать/ })[0] as HTMLElement);
+
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  });
+
   it('blocks payment while SBP is unavailable', async () => {
     mockCatalog();
     vi.spyOn(api, 'paymentMethods').mockResolvedValue([]);
@@ -147,6 +178,7 @@ describe('CartPage', () => {
 
     await waitFor(() => expect(cartStore.getSnapshot()).toEqual(['sberbank']));
     expect(await screen.findByRole('button', { name: 'Оплатить 349 ₽' })).toBeInTheDocument();
+    expect(screen.getByText('Некоторые приложения больше недоступны и убраны из корзины')).toHaveAttribute('role', 'status');
   });
 
   it('shows catalog errors with a retry', async () => {

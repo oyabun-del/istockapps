@@ -11,7 +11,7 @@ describe('SubscriptionGate', () => {
     renderWithProviders(<SubscriptionGate me={GUEST} />);
 
     expect(screen.getByRole('heading', { name: 'Подпишитесь на канал' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /AppDrop/ })).toHaveTextContent(/42,8\sтыс\. подписчиков/);
+    expect(screen.getByRole('button', { name: /iStockApps/ })).toHaveTextContent(/42,8\sтыс\. подписчиков/);
   });
 
   it('falls back gracefully when the bot cannot read the channel', () => {

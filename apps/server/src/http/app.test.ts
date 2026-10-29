@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initDataSecret, signInitData } from '../lib/telegram-init-data.js';
@@ -151,7 +154,7 @@ describe('profile and gate data', () => {
 
     expect(me.json().data).toMatchObject({
       termsUrl: 'https://telegra.ph/terms',
-      channel: { title: 'AppDrop', subscriberCount: 42_800 },
+      channel: { title: 'iStockApps', subscriberCount: 42_800 },
     });
   });
 });
@@ -440,6 +443,22 @@ describe('misc', () => {
     expect(response.body).not.toContain('secret');
   });
 
+  it('rate limits order creation per buyer, not per IP', async () => {
+    const create = (user = BUYER) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/orders',
+        headers: authHeader(user),
+        payload: { appIds: ['sberbank'], paymentMethod: 'SBP' },
+      });
+    const statuses: number[] = [];
+    for (let attempt = 0; attempt < 11; attempt += 1) statuses.push((await create()).statusCode);
+
+    expect(statuses.slice(0, 10).every((status) => status === 200)).toBe(true);
+    expect(statuses.at(-1)).toBe(429);
+    expect((await create(OTHER_USER)).statusCode).toBe(200);
+  });
+
   it('rate limits code requests', async () => {
     const statuses: number[] = [];
     for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -447,5 +466,31 @@ describe('misc', () => {
       statuses.push(response.statusCode);
     }
     expect(statuses.at(-1)).toBe(429);
+  });
+});
+
+describe('Mini App pages', () => {
+  it('serves the Mini App with a content security policy that still lets Telegram frame it', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'miniapp-'));
+    writeFileSync(join(dir, 'index.html'), '<!doctype html><title>iStockApps</title>');
+    const withMiniapp = await buildApp(baseDeps({ miniappDir: dir }));
+    try {
+      const response = await withMiniapp.inject({ method: 'GET', url: '/' });
+
+      expect(response.statusCode).toBe(200);
+      const csp = String(response.headers['content-security-policy']);
+      expect(csp).toContain("script-src 'self' https://telegram.org");
+      expect(csp).toContain("object-src 'none'");
+      expect(csp).not.toContain('frame-ancestors');
+    } finally {
+      await withMiniapp.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not put the page policy on API responses', async () => {
+    const response = await app.inject({ method: 'GET', url: '/health' });
+
+    expect(response.headers['content-security-policy']).toBeUndefined();
   });
 });

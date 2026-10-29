@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { silentLogger } from '../../lib/logger.js';
+import { INTERACTIVE_RETRY_DELAYS_MS } from '../installios/installios-client.js';
 import type { InstalliosApplication, InstalliosCatalog } from '../installios/installios-schemas.js';
 import { CatalogUnavailableError, InstalliosCatalogProvider } from './installios-catalog-provider.js';
 
@@ -121,5 +122,33 @@ describe('InstalliosCatalogProvider', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+  it('keeps the last snapshot when Install-IOS answers with no catalogs', async () => {
+    const client = fakeClient(CATALOGS, PAGES);
+    const provider = createProvider(client);
+    await provider.sync();
+    client.listCatalogs.mockResolvedValueOnce([]);
+
+    expect(await provider.sync()).toBe(false);
+    expect(provider.size).toBe(3);
+  });
+
+  it('keeps the last snapshot when a non-empty catalog comes back empty', async () => {
+    const client = fakeClient(CATALOGS, PAGES);
+    const provider = createProvider(client);
+    await provider.sync();
+    client.listApplications.mockResolvedValueOnce([]);
+
+    expect(await provider.sync()).toBe(false);
+    expect(provider.size).toBe(3);
+  });
+
+  it('loads on demand with the short retries a waiting buyer can afford', async () => {
+    const client = fakeClient(CATALOGS, PAGES);
+    const provider = new InstalliosCatalogProvider({ client, priceOf: () => 19900, logger: silentLogger });
+
+    await provider.listApps({});
+
+    expect(client.listCatalogs).toHaveBeenCalledWith(INTERACTIVE_RETRY_DELAYS_MS);
   });
 });

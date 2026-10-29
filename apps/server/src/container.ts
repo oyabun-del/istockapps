@@ -24,6 +24,7 @@ import { DeliveryService } from './services/delivery-service.js';
 import { NotificationService } from './services/notification-service.js';
 import { OrderService } from './services/order-service.js';
 import { PartnerAdminService } from './services/partner-admin-service.js';
+import { PaymentReconciler } from './services/payment-reconciler.js';
 import { SubscriptionService } from './services/subscription-service.js';
 
 const MINIAPP_DIST = fileURLToPath(new URL('../../miniapp/dist', import.meta.url));
@@ -137,15 +138,19 @@ export function createContainer(env: Env, telegram: TelegramAdapters, logger: Lo
     logger,
   });
 
+  const paymentReconciler = new PaymentReconciler({ orders, logger });
+
   const background = {
     start: () => {
       installiosCatalog?.start();
       broadcastRunner.start();
+      paymentReconciler.start();
     },
     stop: async () => {
       installiosCatalog?.stop();
       broadcastRunner.stop();
-      await broadcastRunner.idle();
+      paymentReconciler.stop();
+      await Promise.all([broadcastRunner.idle(), paymentReconciler.idle()]);
     },
   };
 

@@ -99,7 +99,7 @@ function CancelOrder({ orderId }: { orderId: number }) {
               hapticImpact('light');
               setIsConfirming(true);
             }}
-            className="rounded-full px-4 py-2 text-label-lg text-error/90 transition-colors hover:bg-error-container/20"
+            className="min-h-11 rounded-full px-4 py-2 text-label-lg text-error/90 transition-colors hover:bg-error-container/20"
           >
             Отменить заказ
           </motion.button>

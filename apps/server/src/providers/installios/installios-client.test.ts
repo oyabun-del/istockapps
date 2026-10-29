@@ -193,4 +193,39 @@ describe('InstalliosClient', () => {
     // Status polls are never retried inside a request: the next poll is the retry.
     expect(fetchFn).toHaveBeenCalledTimes(1);
   });
+  it('treats a timeout while reading the body as a retriable network error', async () => {
+    const stalled = () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.error(new DOMException('The operation timed out.', 'TimeoutError'));
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    const fetchFn = vi.fn<typeof fetch>().mockImplementation(async () => stalled());
+    const { client } = createClient(fetchFn);
+
+    await expect(client.getOrder('ord_1')).rejects.toMatchObject({ status: 0, code: 'network_error' });
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps working when the API adds a status this shop does not know yet', async () => {
+    const order = {
+      ...ORDER,
+      status: 'archived',
+      automatic_replacement: { status: 'queued', applications: [{ application_id: 'app_1', status: 'queued' }] },
+    };
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(envelope(order))
+      .mockResolvedValueOnce(envelope({ id: 'wait_1', status: 'paused' }));
+    const { client } = createClient(fetchFn);
+
+    const parsed = await client.getOrder('ord_1');
+    expect(parsed.status).toBe('unknown');
+    expect(parsed.automatic_replacement).toMatchObject({ status: 'unknown', applications: [{ status: 'unknown' }] });
+    // An unknown wait state ends the wait: the buyer can start a new one instead of polling forever.
+    expect((await client.getCodeWait('wait_1')).status).toBe('timed_out');
+  });
 });

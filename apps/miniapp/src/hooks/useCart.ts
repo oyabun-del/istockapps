@@ -1,6 +1,6 @@
 import { calculateCartPricing, discountTierFor, type AppDto, type CartPricing, type ItemPricing } from '@istock/shared';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ApiError, api } from '../lib/api';
 import { cartStore, useCartIds } from '../lib/cart';
 import { queryKeys } from '../lib/queries';
@@ -25,6 +25,8 @@ export interface CartState {
   pricing: CartPricing | null;
   isLoading: boolean;
   error: unknown;
+  /** Some apps left the catalog and were removed from the cart while it was open. */
+  hasDroppedApps: boolean;
   refetch: () => void;
 }
 
@@ -43,9 +45,12 @@ export function useCart(): CartState {
     })),
   });
 
+  const [hasDroppedApps, setHasDroppedApps] = useState(false);
   const goneKey = ids.filter((_, index) => isGone(results[index]?.error)).join(',');
   useEffect(() => {
-    if (goneKey) goneKey.split(',').forEach((id) => cartStore.remove(id));
+    if (!goneKey) return;
+    goneKey.split(',').forEach((id) => cartStore.remove(id));
+    setHasDroppedApps(true);
   }, [goneKey]);
 
   const apps = results.map((result) => result.data).filter((app): app is AppDto => app !== undefined);
@@ -59,6 +64,7 @@ export function useCart(): CartState {
     pricing,
     isLoading: results.some((result) => result.isPending),
     error: results.find((result) => result.isError && !isGone(result.error))?.error ?? null,
+    hasDroppedApps,
     refetch: () => results.forEach((result) => void result.refetch()),
   };
 }

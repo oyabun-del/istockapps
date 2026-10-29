@@ -181,6 +181,16 @@ describe('admin commands', () => {
     expect(admin.balanceText).not.toHaveBeenCalled();
   });
 
+  it('stays silent in groups so partner figures are not posted there', async () => {
+    const { context, reply } = fakeContext();
+    const groupContext = { ...context, chat: { id: -100, type: 'supergroup' } } as unknown as Context;
+
+    await handleAdminCommand(groupContext, { ...deps, adminIds: [BUYER.id], partnerAdmin: admin }, (a) => a.balanceText());
+
+    expect(reply).not.toHaveBeenCalled();
+    expect(admin.balanceText).not.toHaveBeenCalled();
+  });
+
   it('answers admins with HTML and explains when the integration is off', async () => {
     const { context, reply } = fakeContext();
     const adminDeps = { ...deps, adminIds: [BUYER.id] };

@@ -21,6 +21,23 @@ import { webhookRoutes } from './routes/webhook-routes.js';
 const GLOBAL_RATE_LIMIT = { max: 120, timeWindow: '1 minute' };
 const BODY_LIMIT_BYTES = 64 * 1024;
 
+/**
+ * Policy for the Mini App pages. No frame-ancestors: Telegram Web shows the app in an iframe.
+ * The build has no inline scripts; styles stay 'unsafe-inline' for Motion and the Telegram SDK.
+ * Images come from the catalog and Telegram over https (placeholders are data: URIs).
+ */
+const MINIAPP_CSP = [
+  "default-src 'self'",
+  "script-src 'self' https://telegram.org",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  'font-src https://fonts.gstatic.com',
+  "img-src 'self' https: data:",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join('; ');
+
 export interface AppDeps {
   botToken: string;
   /** Reverse proxies in front of the app; 0 disables X-Forwarded-For trust. */
@@ -75,7 +92,14 @@ export async function buildApp(deps: AppDeps, loggerInstance?: FastifyBaseLogger
   }
 
   if (deps.miniappDir && existsSync(deps.miniappDir)) {
-    await app.register(fastifyStatic, { root: deps.miniappDir, prefix: '/', index: 'index.html' });
+    await app.register(fastifyStatic, {
+      root: deps.miniappDir,
+      prefix: '/',
+      index: 'index.html',
+      setHeaders: (reply, filePath) => {
+        if (filePath.endsWith('.html')) reply.header('content-security-policy', MINIAPP_CSP);
+      },
+    });
   }
 
   return app;

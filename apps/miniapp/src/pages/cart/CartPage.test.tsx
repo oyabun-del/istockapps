@@ -29,7 +29,7 @@ describe('CartPage', () => {
     renderCart();
 
     expect(screen.getByRole('heading', { name: 'Корзина пуста' })).toBeInTheDocument();
-    expect(screen.getByText(/от 3 приложений — скидка 100 ₽ на каждое, от 5 приложений — скидка 150 ₽/)).toBeInTheDocument();
+    expect(screen.getByText(/от 3 приложений — скидка 100 ₽ на каждое, от 5 приложений — скидка 250 ₽/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Перейти в каталог' })).toHaveAttribute('href', '/');
   });
 
@@ -57,10 +57,10 @@ describe('CartPage', () => {
     expect(within(summary).getByText('747 ₽')).toBeInTheDocument();
     expect(within(summary).getByText('−300 ₽')).toBeInTheDocument();
     expect(within(summary).getByText('447 ₽')).toBeInTheDocument();
-    expect(screen.getByText('Добавьте ещё 2 приложения для скидки 750 ₽')).toBeInTheDocument();
+    expect(screen.getByText('Добавьте ещё 2 приложения для скидки 1 250 ₽')).toBeInTheDocument();
   });
 
-  it('applies 150 ₽ per app from five apps', async () => {
+  it('applies 250 ₽ per app from five apps, down to 1 ₽ for cheap ones', async () => {
     mockCatalog();
     vi.spyOn(api, 'paymentMethods').mockResolvedValue([{ method: 'SBP' }]);
     fillCart(5);
@@ -68,8 +68,8 @@ describe('CartPage', () => {
     renderCart();
 
     const summary = await screen.findByLabelText('Итог');
-    expect(within(summary).getByText('−750 ₽')).toBeInTheDocument();
-    expect(within(summary).getByText('495 ₽')).toBeInTheDocument();
+    expect(within(summary).getByText('−1 094 ₽')).toBeInTheDocument();
+    expect(within(summary).getByText('151 ₽')).toBeInTheDocument();
     expect(screen.getByText('Максимальная скидка применена')).toBeInTheDocument();
   });
 

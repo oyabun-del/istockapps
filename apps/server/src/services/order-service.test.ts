@@ -42,11 +42,12 @@ describe('OrderService.createOrder', () => {
     expect((await ctx.payments.getPayment(order.paymentId as string)).amountKopecks).toBe(54700);
   });
 
-  it('takes 150 ₽ off each app when five apps are bought at once', async () => {
+  it('takes 250 ₽ off each app when five apps are bought at once, never below 1 ₽', async () => {
     const order = await ctx.orders.createOrder(BUYER, { appIds: FIVE_APPS, paymentMethod: 'SBP' });
 
-    expect(order.items.every((item) => item.discountKopecks === 15000)).toBe(true);
-    expect(order).toMatchObject({ subtotalKopecks: 129500, discountKopecks: 75000, amountKopecks: 54500 });
+    // 349, 199, 299, 249 and 199 ₽: the cheaper apps stop at 1 ₽.
+    expect(order.items.map((item) => item.discountKopecks)).toEqual([25000, 19800, 25000, 24800, 19800]);
+    expect(order).toMatchObject({ subtotalKopecks: 129500, discountKopecks: 114400, amountKopecks: 15100 });
   });
 
   it('names the apps in the payment description', async () => {

@@ -34,15 +34,15 @@ describe('calculateCartPricing', () => {
     expect(pricing.discountPerItemKopecks).toBe(10000);
     expect(pricing.discountKopecks).toBe(10000 * count);
     expect(pricing.totalKopecks).toBe((PRICE - 10000) * count);
-    expect(pricing.nextTier).toEqual({ itemsNeeded: 5 - count, perItemKopecks: 15000 });
+    expect(pricing.nextTier).toEqual({ itemsNeeded: 5 - count, perItemKopecks: 25000 });
   });
 
-  it.each([5, 6, MAX_ORDER_ITEMS])('takes 150 ₽ off each app for %i apps', (count) => {
+  it.each([5, 6, MAX_ORDER_ITEMS])('takes 250 ₽ off each app for %i apps', (count) => {
     const pricing = calculateCartPricing(pricesOf(count));
 
-    expect(pricing.discountPerItemKopecks).toBe(15000);
-    expect(pricing.discountKopecks).toBe(15000 * count);
-    expect(pricing.totalKopecks).toBe((PRICE - 15000) * count);
+    expect(pricing.discountPerItemKopecks).toBe(25000);
+    expect(pricing.discountKopecks).toBe(25000 * count);
+    expect(pricing.totalKopecks).toBe((PRICE - 25000) * count);
     expect(pricing.nextTier).toBeNull();
   });
 
@@ -60,8 +60,8 @@ describe('calculateCartPricing', () => {
   it('never discounts a cheap app below 1 ₽', () => {
     const pricing = calculateCartPricing([12000, 9000, 50, PRICE, PRICE]);
 
-    expect(pricing.items.map((item) => item.totalKopecks)).toEqual([100, 100, 50, PRICE - 15000, PRICE - 15000]);
-    expect(pricing.discountKopecks).toBe(11900 + 8900 + 0 + 15000 + 15000);
+    expect(pricing.items.map((item) => item.totalKopecks)).toEqual([100, 100, 50, PRICE - 25000, PRICE - 25000]);
+    expect(pricing.discountKopecks).toBe(11900 + 8900 + 0 + 25000 + 25000);
     expect(pricing.totalKopecks).toBe(pricing.subtotalKopecks - pricing.discountKopecks);
   });
 });

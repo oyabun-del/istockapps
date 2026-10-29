@@ -28,7 +28,7 @@ describe('NotificationService', () => {
 
     const [admin, , buyer] = ctx.sender.sent.map((message) => message.html);
     expect(admin).toContain('СберБанк Онлайн, Т-Банк, Canva');
-    expect(admin).toContain('Скидка: <b>300 ₽</b>');
+    expect(admin).toContain('Скидка: <b>300\u00a0₽</b>');
     expect(buyer).toContain('СберБанк Онлайн, Т-Банк, Canva');
   });
 

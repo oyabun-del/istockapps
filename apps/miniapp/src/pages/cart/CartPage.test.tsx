@@ -97,7 +97,7 @@ describe('CartPage', () => {
     renderCart();
 
     await screen.findByText('СБП');
-    await userEvent.click(screen.getByRole('button', { name: 'Оплатить 447 ₽' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Оплатить 447\u00a0₽' }));
 
     await waitFor(() =>
       expect(createOrder).toHaveBeenCalledWith({
@@ -134,12 +134,12 @@ describe('CartPage', () => {
     fillCart(1);
     renderCart();
 
-    await screen.findByRole('button', { name: 'Оплатить 349 ₽' });
+    await screen.findByRole('button', { name: 'Оплатить 349\u00a0₽' });
     app.mockResolvedValue({ ...SBER, priceKopecks: 39900 });
     await userEvent.click(screen.getByRole('button', { name: /Оплатить/ }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Цена изменилась: теперь 399 ₽. Проверьте и оплатите ещё раз.');
-    expect(screen.getByRole('button', { name: 'Оплатить 399 ₽' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Оплатить 399\u00a0₽' })).toBeInTheDocument();
   });
 
   it('clears a checkout error once the cart changes', async () => {
@@ -177,7 +177,7 @@ describe('CartPage', () => {
     renderCart();
 
     await waitFor(() => expect(cartStore.getSnapshot()).toEqual(['sberbank']));
-    expect(await screen.findByRole('button', { name: 'Оплатить 349 ₽' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Оплатить 349\u00a0₽' })).toBeInTheDocument();
     expect(screen.getByText('Некоторые приложения больше недоступны и убраны из корзины')).toHaveAttribute('role', 'status');
   });
 
@@ -191,6 +191,6 @@ describe('CartPage', () => {
     expect(await screen.findByText('Каталог недоступен')).toBeInTheDocument();
     app.mockResolvedValue(SBER);
     await userEvent.click(screen.getByRole('button', { name: /Повторить/ }));
-    expect(await screen.findByRole('button', { name: 'Оплатить 349 ₽' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Оплатить 349\u00a0₽' })).toBeInTheDocument();
   });
 });

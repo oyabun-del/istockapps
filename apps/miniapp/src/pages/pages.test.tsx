@@ -65,7 +65,7 @@ describe('CatalogPage cart', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: 'Добавить СберБанк Онлайн в корзину' }));
     expect(await screen.findByRole('status')).toHaveTextContent('Добавьте ещё 2 приложения для скидки 300 ₽');
-    expect(screen.getByRole('link', { name: /Корзина: 1 приложение/ })).toHaveTextContent('349 ₽');
+    expect(screen.getByRole('link', { name: /Корзина: 1\u00a0приложение/ })).toHaveTextContent('349 ₽');
 
     await userEvent.click(screen.getByRole('button', { name: 'Добавить Т-Банк в корзину' }));
     await userEvent.click(screen.getByRole('button', { name: 'Добавить Canva в корзину' }));
@@ -73,7 +73,7 @@ describe('CatalogPage cart', () => {
     await waitFor(() =>
       expect(screen.getByRole('status')).toHaveTextContent('Добавьте ещё 2 приложения для скидки 1 250 ₽'),
     );
-    const bar = screen.getByRole('link', { name: 'Корзина: 3 приложения, скидка 300 ₽' });
+    const bar = screen.getByRole('link', { name: 'Корзина: 3\u00a0приложения, скидка 300\u00a0₽' });
     expect(within(bar).getByText('747 ₽')).toBeInTheDocument();
     expect(within(bar).getByText('447 ₽')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Убрать Canva из корзины' })).toHaveAttribute('aria-pressed', 'true');
@@ -103,7 +103,7 @@ describe('AppPage', () => {
 
     expect(await screen.findByText('Добавьте 3 приложения для скидки 300 ₽')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Оплатить/ })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'В корзину за 349 ₽' }));
+    await userEvent.click(screen.getByRole('button', { name: 'В корзину за 349\u00a0₽' }));
 
     expect(cartStore.getSnapshot()).toEqual(['sberbank']);
     expect(await screen.findByRole('status')).toHaveTextContent('Добавьте ещё 2 приложения для скидки 300 ₽');
@@ -120,7 +120,7 @@ describe('AppPage', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: 'Убрать из корзины' }));
     expect(cartStore.getSnapshot()).toEqual([]);
-    expect(screen.getByRole('button', { name: 'В корзину за 349 ₽' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'В корзину за 349\u00a0₽' })).toBeInTheDocument();
   });
 
   it('blocks adding when the cart is full', async () => {

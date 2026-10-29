@@ -20,7 +20,7 @@ export function DiscountProgress({ itemCount }: Props) {
     <section aria-labelledby="discount-heading" className="rounded-xl bg-surface-container p-4">
       <h2 id="discount-heading" className="flex items-center gap-2 text-label-lg text-on-surface">
         <Icon name="sell" className="text-[20px] text-secondary" />
-        Скидка за количество
+        Скидка на каждое приложение
       </h2>
 
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-container-highest" aria-hidden="true">
@@ -42,16 +42,18 @@ export function DiscountProgress({ itemCount }: Props) {
                 isReached ? 'bg-success/15 text-success' : 'bg-surface-container-high text-on-surface-variant'
               }`}
             >
-              <Icon name={isReached ? 'check_circle' : 'sell'} className="text-[18px]" />
-              <span>
-                от {tier.minItems}: <span className="tabular font-semibold">−{formatRub(tier.perItemKopecks)}</span> за каждое
+              {/* Hidden on the narrowest phones so "от 5 приложений" fits one line; the colour shows the state. */}
+              <Icon name={isReached ? 'check_circle' : 'sell'} className="hidden shrink-0 text-[18px] min-[360px]:block" />
+              <span className="flex min-w-0 flex-col">
+                <span className="tabular text-label-lg">−{formatRub(tier.perItemKopecks)}</span>
+                <span className="text-label-sm font-medium opacity-80">{`от ${tier.minItems} приложений`}</span>
               </span>
             </li>
           );
         })}
       </ul>
 
-      <p role="status" className="mt-3 text-body-sm text-on-surface-variant">
+      <p role="status" className="mt-3 text-balance text-body-sm text-on-surface-variant">
         {hint ?? 'Максимальная скидка применена'}
       </p>
     </section>

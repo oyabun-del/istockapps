@@ -4,15 +4,17 @@ import { appIdParamSchema, createOrderSchema } from './schemas.js';
 
 describe('formatRub', () => {
   it('formats whole rubles without fraction', () => {
-    expect(formatRub(34900)).toBe('349 ₽');
+    expect(formatRub(34900)).toBe('349\u00a0₽');
   });
 
   it('formats fractional amounts with two digits', () => {
-    expect(formatRub(34950)).toBe('349,50 ₽');
+    expect(formatRub(34950)).toBe('349,50\u00a0₽');
   });
 
-  it('groups thousands with a regular space', () => {
-    expect(formatRub(1_234_500)).toBe('12 345 ₽');
+  it('never lets an amount break across lines', () => {
+    // "1 250 ₽" split after "1" reads as 250 ₽.
+    expect(formatRub(125_000)).toBe('1\u00a0250\u00a0₽');
+    expect(formatRub(1_234_500)).toBe('12\u00a0345\u00a0₽');
   });
 });
 

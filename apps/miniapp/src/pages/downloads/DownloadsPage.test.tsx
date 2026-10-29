@@ -53,7 +53,7 @@ describe('DownloadsPage', () => {
     expect(within(card(1)).getByRole('link', { name: /Инструкция/ })).toHaveAttribute('href', '/guide');
     expect(within(card(2)).getByText(/осталось 1[12]:\d\d/)).toBeInTheDocument();
 
-    await userEvent.click(within(card(2)).getByRole('button', { name: 'Оплатить 349 ₽' }));
+    await userEvent.click(within(card(2)).getByRole('button', { name: 'Оплатить 349\u00a0₽' }));
     expect(open).toHaveBeenCalledWith('https://pay.example.com/2', '_blank', 'noopener,noreferrer');
 
     await userEvent.click(within(card(3)).getByRole('button', { name: /Оформить заново/ }));

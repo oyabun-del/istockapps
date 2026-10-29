@@ -68,19 +68,19 @@ describe('cartStore', () => {
 
 describe('discount copy', () => {
   it('tells how many apps are left to the next discount', () => {
-    expect(discountHint(0)).toBe('Добавьте 3 приложения для скидки 300 ₽');
-    expect(discountHint(1)).toBe('Добавьте ещё 2 приложения для скидки 300 ₽');
-    expect(discountHint(2)).toBe('Добавьте ещё 1 приложение для скидки 300 ₽');
-    expect(discountHint(3)).toBe('Добавьте ещё 2 приложения для скидки 1 250 ₽');
-    expect(discountHint(4)).toBe('Добавьте ещё 1 приложение для скидки 1 250 ₽');
+    expect(discountHint(0)).toBe('Добавьте 3\u00a0приложения для скидки 300\u00a0₽');
+    expect(discountHint(1)).toBe('Добавьте ещё 2\u00a0приложения для скидки 300\u00a0₽');
+    expect(discountHint(2)).toBe('Добавьте ещё 1\u00a0приложение для скидки 300\u00a0₽');
+    expect(discountHint(3)).toBe('Добавьте ещё 2\u00a0приложения для скидки 1\u00a0250\u00a0₽');
+    expect(discountHint(4)).toBe('Добавьте ещё 1\u00a0приложение для скидки 1\u00a0250\u00a0₽');
     expect(discountHint(5)).toBeNull();
   });
 
   it('keeps pointing to the next discount, marking a just reached tier', () => {
-    expect(discountNotice(1)).toEqual({ isReached: false, text: 'Добавьте ещё 2 приложения для скидки 300 ₽' });
-    expect(discountNotice(3)).toEqual({ isReached: true, text: 'Добавьте ещё 2 приложения для скидки 1 250 ₽' });
-    expect(discountNotice(4)).toEqual({ isReached: false, text: 'Добавьте ещё 1 приложение для скидки 1 250 ₽' });
-    expect(discountNotice(5)).toEqual({ isReached: true, text: 'Скидка 250 ₽ на каждое приложение' });
-    expect(discountNotice(7)).toEqual({ isReached: true, text: 'Скидка 250 ₽ на каждое приложение' });
+    expect(discountNotice(1)).toEqual({ isReached: false, text: 'Добавьте ещё 2\u00a0приложения для скидки 300\u00a0₽' });
+    expect(discountNotice(3)).toEqual({ isReached: true, text: 'Добавьте ещё 2\u00a0приложения для скидки 1\u00a0250\u00a0₽' });
+    expect(discountNotice(4)).toEqual({ isReached: false, text: 'Добавьте ещё 1\u00a0приложение для скидки 1\u00a0250\u00a0₽' });
+    expect(discountNotice(5)).toEqual({ isReached: true, text: 'Скидка 250\u00a0₽ на каждое приложение' });
+    expect(discountNotice(7)).toEqual({ isReached: true, text: 'Скидка 250\u00a0₽ на каждое приложение' });
   });
 });

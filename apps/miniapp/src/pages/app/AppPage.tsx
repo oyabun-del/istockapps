@@ -39,8 +39,9 @@ function CartActions({ app }: { app: AppDto }) {
           В корзину за {formatRub(app.priceKopecks)}
         </Button>
       )}
-      <p className="flex items-center justify-center gap-1.5 text-center text-label-md text-on-surface-variant">
-        <Icon name="sell" className="text-[16px] text-secondary" />
+      {/* The icon sits inline, so it stays next to the first word when the hint wraps. */}
+      <p className="text-balance text-center text-label-md text-on-surface-variant">
+        <Icon name="sell" className="mr-1 inline-block align-[-3px] text-[16px] text-secondary" />
         {isCartFull ? `В одном заказе не больше ${MAX_ORDER_ITEMS} приложений` : hint}
       </p>
     </div>

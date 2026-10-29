@@ -18,6 +18,7 @@ describe('NotificationService', () => {
     expect(ctx.sender.sent.map((message) => message.chatId)).toEqual(ADMIN_IDS);
     expect(ctx.sender.sent[0]?.html).toContain('Иван &lt;b&gt;');
     expect(ctx.sender.sent[0]?.html).toContain('@ivan');
+    expect(ctx.sender.sent[0]?.button).toEqual({ text: '💬 Написать покупателю', url: 'https://t.me/ivan' });
   });
 
   it('lists every app and the bulk discount of the purchase', async () => {
@@ -27,7 +28,7 @@ describe('NotificationService', () => {
     await ctx.notifications.notifyBuyerPaid(order);
 
     const [admin, , buyer] = ctx.sender.sent.map((message) => message.html);
-    expect(admin).toContain('СберБанк Онлайн, Т-Банк, Canva');
+    expect(admin).toContain('<blockquote>СберБанк Онлайн\nТ-Банк\nCanva</blockquote>');
     expect(admin).toContain('Скидка: <b>300\u00a0₽</b>');
     expect(buyer).toContain('СберБанк Онлайн, Т-Банк, Canva');
   });
@@ -51,7 +52,7 @@ describe('NotificationService', () => {
     const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
     await ctx.notifications.purchaseCompleted({ ...order, paymentMethod: 'CRYPTO' }, null, true);
     const html = ctx.sender.sent[0]?.html ?? '';
-    expect(html).toContain('тестовый платёж');
+    expect(html).toContain('Тестовый платёж');
     expect(html).toContain('Крипта');
     expect(html).toContain(`id <code>${BUYER.id}</code>`);
   });

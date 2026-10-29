@@ -132,7 +132,7 @@ export function createContainer(env: Env, telegram: TelegramAdapters, logger: Lo
     mockPayments,
     orders,
     checkout,
-    delivery: new DeliveryService({ repos, delivery, logger }),
+    delivery: new DeliveryService({ repos, delivery, notifications, logger }),
     subscription,
     miniappDir: env.SERVE_MINIAPP ? MINIAPP_DIST : null,
   };
@@ -158,7 +158,7 @@ export function createContainer(env: Env, telegram: TelegramAdapters, logger: Lo
   const shopAdmin = new ShopAdminService({
     checkout,
     repos,
-    notifyAdmins: (html, exceptId) => notifications.notifyAdmins(html, exceptId),
+    notifyAdmins: (html, exceptId) => notifications.notifyAdmins(html, { exceptId }),
   });
   const salesStats = new SalesStatsService({ stats: repos.stats, checkout, timeZone: env.STATS_TIME_ZONE });
   const dailyReport = new DailyReportScheduler({

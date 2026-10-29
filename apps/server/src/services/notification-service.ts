@@ -1,9 +1,10 @@
-import { formatRub, type PaymentMethod } from '@istock/shared';
+import { formatRub } from '@istock/shared';
 import type { Order, User } from '../domain/models.js';
 import { describeApps } from '../domain/order-items.js';
 import { getErrorMessage } from '../lib/app-error.js';
 import { escapeHtml } from '../lib/html.js';
 import type { Logger } from '../lib/logger.js';
+import { activationMessage, purchaseMessage } from './admin-messages.js';
 
 export interface MessageButton {
   text: string;
@@ -17,17 +18,10 @@ export interface MessageSender {
   send(chatId: number, html: string, button?: MessageButton): Promise<void>;
 }
 
-const METHOD_LABELS: Record<PaymentMethod, string> = {
-  SBP: 'СБП',
-  CARD: 'Карта',
-  CRYPTO: 'Крипта (USDT)',
-};
-
-function describeUser(user: User | null, userId: number): string {
-  if (!user) return `id <code>${userId}</code>`;
-  const name = escapeHtml([user.firstName, user.lastName].filter(Boolean).join(' '));
-  const username = user.username ? ` @${escapeHtml(user.username)}` : '';
-  return `<a href="tg://user?id=${user.id}">${name}</a>${username} (id <code>${user.id}</code>)`;
+export interface AdminNotifyOptions {
+  /** The admin who caused the event already knows about it. */
+  exceptId?: number;
+  button?: MessageButton;
 }
 
 export interface NotificationServiceDeps {
@@ -41,14 +35,14 @@ export class NotificationService {
   constructor(private readonly deps: NotificationServiceDeps) {}
 
   async purchaseCompleted(order: Order, user: User | null, isSandbox: boolean): Promise<void> {
-    const lines = [
-      `🛒 <b>Новая покупка</b>${isSandbox ? ' <i>(тестовый платёж)</i>' : ''}`,
-      `Заказ <b>#${order.id}</b>: ${escapeHtml(describeApps(order))}`,
-      `Сумма: <b>${formatRub(order.amountKopecks)}</b> (${METHOD_LABELS[order.paymentMethod]})`,
-      order.discountKopecks > 0 ? `Скидка: <b>${formatRub(order.discountKopecks)}</b>` : null,
-      `Покупатель: ${describeUser(user, order.userId)}`,
-    ];
-    await this.notifyAdmins(lines.filter((line) => line !== null).join('\n'));
+    const { html, button } = purchaseMessage(order, user, isSandbox);
+    await this.notifyAdmins(html, { button });
+  }
+
+  /** The buyer pressed «Приложение работает». */
+  async activationCompleted(order: Order, user: User | null): Promise<void> {
+    const { html, button } = activationMessage(order, user);
+    await this.notifyAdmins(html, { button });
   }
 
   async orderRefunded(order: Order): Promise<void> {
@@ -84,9 +78,9 @@ export class NotificationService {
    * Sends to every admin (but `exceptId`); one failing admin never blocks the others.
    * Returns how many admins got the message.
    */
-  async notifyAdmins(html: string, exceptId?: number): Promise<number> {
+  async notifyAdmins(html: string, { exceptId, button }: AdminNotifyOptions = {}): Promise<number> {
     const adminIds = this.deps.adminIds.filter((id) => id !== exceptId);
-    const results = await Promise.allSettled(adminIds.map((id) => this.deps.sender.send(id, html)));
+    const results = await Promise.allSettled(adminIds.map((id) => this.deps.sender.send(id, html, button)));
     results.forEach((result, index) => {
       if (result.status === 'rejected') {
         this.deps.logger.error(

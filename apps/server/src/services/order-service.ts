@@ -19,7 +19,7 @@ import type { PaymentProvider, PaymentStatus } from '../providers/payment/paymen
 import type { Repositories } from '../repositories/repositories.js';
 import { promoLimitError, type CheckoutGate } from './checkout-gate.js';
 import type { NotificationService } from './notification-service.js';
-import { getOwnedOrder } from './order-access.js';
+import { findBuyer, getOwnedOrder } from './order-access.js';
 import { recordOrderEvent } from './order-events.js';
 
 /** A fresh unpaid order for the same app is reused instead of creating a new invoice. */
@@ -355,7 +355,8 @@ export class OrderService {
         if (!paid) return; // already processed
         // The transition is committed and a retry would skip it, so nothing below may throw.
         await this.recordEvent(order.id, 'paid', { sandbox: update.isSandbox });
-        await notifications.purchaseCompleted(paid, await this.findBuyer(paid.userId), update.isSandbox);
+        const buyer = await findBuyer(this.deps.repos.users, this.deps.logger, paid.userId);
+        await notifications.purchaseCompleted(paid, buyer, update.isSandbox);
         await notifications.notifyBuyerPaid(paid);
         return;
       }
@@ -380,15 +381,5 @@ export class OrderService {
 
   private recordEvent(orderId: number, type: string, data?: Record<string, unknown>): Promise<void> {
     return recordOrderEvent(this.deps.repos.orderEvents, this.deps.logger, orderId, type, data);
-  }
-
-  /** The admin notification still goes out (with the bare id) if the user lookup fails. */
-  private async findBuyer(userId: number): Promise<User | null> {
-    try {
-      return await this.deps.repos.users.findById(userId);
-    } catch (error: unknown) {
-      this.deps.logger.error({ userId, err: getErrorMessage(error) }, 'Failed to load buyer for notification');
-      return null;
-    }
   }
 }

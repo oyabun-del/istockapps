@@ -6,7 +6,7 @@ import {
   DeliveryRateLimitedError,
 } from '../providers/delivery/delivery-provider.js';
 import { MOCK_CODE_AFTER_POLLS, MOCK_CODE_VALID_SECONDS } from '../providers/delivery/mock-delivery-provider.js';
-import { BUYER, OTHER_USER, createPaidOrder, createTestContext, type TestContext } from '../test/fixtures.js';
+import { ADMIN_IDS, BUYER, OTHER_USER, createPaidOrder, createTestContext, type TestContext } from '../test/fixtures.js';
 import {
   HOUR_MS,
   ScriptedDeliveryProvider,
@@ -78,6 +78,43 @@ describe('DeliveryService happy path (mock provider)', () => {
   });
 });
 
+describe('DeliveryService activation notice', () => {
+  const activationNotices = () => ctx.sender.sent.filter((message) => message.html.includes('Активация завершена'));
+
+  it('tells every admin once, however many times the buyer confirms', async () => {
+    const paid = await orderWithCredentials();
+    await ctx.deliveryService.skipCode(BUYER.id, paid.id);
+
+    await Promise.all([
+      ctx.deliveryService.complete(BUYER.id, paid.id),
+      ctx.deliveryService.complete(BUYER.id, paid.id).catch(() => null),
+    ]);
+    await ctx.deliveryService.complete(BUYER.id, paid.id);
+
+    expect(activationNotices().map((message) => message.chatId)).toEqual(ADMIN_IDS);
+    expect(activationNotices()[0]?.html).toContain(`заказ <b>#${paid.id}</b>`);
+    expect(activationNotices()[0]?.button?.url).toBe('https://t.me/ivan');
+  });
+
+  it('completes the order even when no admin can be reached', async () => {
+    ADMIN_IDS.forEach((id) => ctx.sender.failFor.add(id));
+    const paid = await orderWithCredentials();
+    await ctx.deliveryService.skipCode(BUYER.id, paid.id);
+
+    expect((await ctx.deliveryService.complete(BUYER.id, paid.id)).status).toBe('completed');
+  });
+
+  it('still notifies with the bare id when the buyer cannot be loaded', async () => {
+    const paid = await orderWithCredentials();
+    await ctx.deliveryService.skipCode(BUYER.id, paid.id);
+    vi.spyOn(ctx.repos.users, 'findById').mockRejectedValue(new Error('db down'));
+
+    await ctx.deliveryService.complete(BUYER.id, paid.id);
+
+    expect(activationNotices()[0]?.html).toContain(`👤 id <code>${BUYER.id}</code>`);
+  });
+});
+
 describe('DeliveryService code step', () => {
   it('keeps the last step locked until a code was received or skipped', async () => {
     const paid = await orderWithCredentials();
@@ -144,7 +181,13 @@ describe('DeliveryService with Install-IOS semantics', () => {
 
   beforeEach(() => {
     provider = new ScriptedDeliveryProvider();
-    service = new DeliveryService({ repos: ctx.repos, delivery: provider, logger: silentLogger, now: ctx.clock.now });
+    service = new DeliveryService({
+      repos: ctx.repos,
+      delivery: provider,
+      notifications: ctx.notifications,
+      logger: silentLogger,
+      now: ctx.clock.now,
+    });
   });
 
   it('creates the delivery once with the stable external id and the app id only', async () => {

@@ -74,7 +74,7 @@ export function createTestContext(): TestContext {
   });
   const channel = new ChannelInfoService({
     channel: '@test_channel',
-    fetchChannel: async () => ({ title: 'AppDrop', memberCount: 42_800 }),
+    fetchChannel: async () => ({ title: 'iStockApps', memberCount: 42_800 }),
     logger: silentLogger,
     now: () => clock.current.getTime(),
   });

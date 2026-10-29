@@ -154,7 +154,7 @@ describe('profile and gate data', () => {
 
     expect(me.json().data).toMatchObject({
       termsUrl: 'https://telegra.ph/terms',
-      channel: { title: 'AppDrop', subscriberCount: 42_800 },
+      channel: { title: 'iStockApps', subscriberCount: 42_800 },
     });
   });
 });

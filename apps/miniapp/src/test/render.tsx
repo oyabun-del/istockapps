@@ -29,7 +29,7 @@ export const ME: MeDto = {
   channelUrl: 'https://t.me/test_channel',
   supportUrl: 'https://t.me/support',
   termsUrl: null,
-  channel: { title: 'AppDrop', subscriberCount: 42_800 },
+  channel: { title: 'iStockApps', subscriberCount: 42_800 },
 };
 
 export const SBER: AppDto = {

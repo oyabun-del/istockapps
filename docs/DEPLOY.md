@@ -147,6 +147,8 @@ curl https://shop.example.com/health # {"success":true,"data":{"status":"ok"},..
 4. Если проверяющий платит из «Песочницы», временно включите `ALLOW_SANDBOX_PAYMENTS=true`: иначе тестовый платёж не засчитается и заказ останется неоплаченным. Выдача через Install-IOS при этом настоящая, лимит кода ограничивает расход. Тестовые оплаты в `/stats` не входят в выручку.
 5. После проверки: `/payments` → «🟢 Открыть для всех», `/promo off КОД`, `ALLOW_SANDBOX_PAYMENTS=false`.
 
+**Без реквизитов CISPAY.** `PAYMENT_PROVIDER=mock` и `ALLOW_MOCK_PAYMENTS=true` в `.env`: вместо CISPAY открывается тестовая страница оплаты, а приложения (настоящие, из Install-IOS) выдаются только по промокоду — режим «открыт для всех» в `/payments` недоступен. `DEV_USER_ID` в production запрещён.
+
 `/payments` → «🔴 Закрыть» останавливает приём оплат для всех, например на время работ у поставщика.
 
 ## 8. Install-IOS

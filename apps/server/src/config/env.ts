@@ -125,6 +125,14 @@ const envSchema = z
       .enum(['true', 'false'])
       .default('false')
       .transform((value) => value === 'true'),
+    /**
+     * Production without CISPAY: PAYMENT_PROVIDER=mock is refused unless this is true. Real apps are
+     * then handed out by promo code only (see CheckoutGate.isOpenModeAllowed).
+     */
+    ALLOW_MOCK_PAYMENTS: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
 
     CATALOG_PROVIDER: z.enum(['mock', 'installios']).default('mock'),
     DELIVERY_PROVIDER: z.enum(['mock', 'installios']).default('mock'),
@@ -173,8 +181,12 @@ const envSchema = z
         message: 'CISPAY_SHOP_ID and CISPAY_API_KEY are required when PAYMENT_PROVIDER=cispay',
       });
     }
-    if (env.NODE_ENV === 'production' && env.PAYMENT_PROVIDER === 'mock') {
-      ctx.addIssue({ code: 'custom', path: ['PAYMENT_PROVIDER'], message: 'Mock payments are not allowed in production' });
+    if (env.NODE_ENV === 'production' && env.PAYMENT_PROVIDER === 'mock' && !env.ALLOW_MOCK_PAYMENTS) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['PAYMENT_PROVIDER'],
+        message: 'Mock payments are not allowed in production (ALLOW_MOCK_PAYMENTS=true hands out apps by promo code only)',
+      });
     }
     if (env.NODE_ENV === 'production') {
       for (const key of ['WEBAPP_URL', 'PUBLIC_URL'] as const) {

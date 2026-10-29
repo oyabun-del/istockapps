@@ -1,6 +1,7 @@
 import type { Broadcast as BroadcastRow, Prisma, PrismaClient, User as UserRow } from '@prisma/client';
-import type { OrderStatus, PaymentMethod } from '@istock/shared';
+import { PAID_STATUSES, type OrderStatus, type PaymentMethod } from '@istock/shared';
 import { DRAFT_STATUSES } from '../../domain/broadcast-status.js';
+import { PROMO_PENDING_STATUSES } from '../../domain/promo.js';
 import type {
   Broadcast,
   BroadcastButton,
@@ -22,6 +23,8 @@ import type {
   Repositories,
   UserRepository,
 } from '../repositories.js';
+import { PrismaPromoCodeRepository, PrismaSettingRepository } from './settings-repositories.js';
+import { PrismaStatsRepository } from './stats-repository.js';
 
 function toUser(row: UserRow): User {
   return {
@@ -61,6 +64,8 @@ function toOrder(row: OrderRow): Order {
     paymentId: row.paymentId,
     paymentUrl: row.paymentUrl,
     paymentSyncedAt: row.paymentSyncedAt,
+    isSandbox: row.isSandbox,
+    promoCodeId: row.promoCodeId,
     deliveryRef: row.deliveryRef,
     deliveryExpiresAt: row.deliveryExpiresAt,
     codeReceivedAt: row.codeReceivedAt,
@@ -113,16 +118,52 @@ class PrismaUserRepository implements UserRepository {
   }
 }
 
+function orderCreateArgs(order: NewOrder) {
+  const { items, ...fields } = order;
+  return {
+    data: { ...fields, userId: BigInt(order.userId), items: { create: items } },
+    include: WITH_ITEMS,
+  } satisfies Prisma.OrderCreateArgs;
+}
+
+/** Same rule as holdsPromoApps in domain/promo. */
+function promoHoldWhere(promoCodeId: number, holdSince: Date): Prisma.OrderWhereInput {
+  return {
+    promoCodeId,
+    OR: [
+      { status: { in: [...PAID_STATUSES] } },
+      { status: { in: [...PROMO_PENDING_STATUSES] }, createdAt: { gt: holdSince } },
+    ],
+  };
+}
+
+function countPromoApps(db: Prisma.TransactionClient, promoCodeId: number, holdSince: Date): Promise<number> {
+  return db.orderItem.count({ where: { order: promoHoldWhere(promoCodeId, holdSince) } });
+}
+
 class PrismaOrderRepository implements OrderRepository {
   constructor(private readonly db: PrismaClient) {}
 
   async create(order: NewOrder): Promise<Order> {
-    const { items, ...fields } = order;
-    const row = await this.db.order.create({
-      data: { ...fields, userId: BigInt(order.userId), items: { create: items } },
-      include: WITH_ITEMS,
+    return toOrder(await this.db.order.create(orderCreateArgs(order)));
+  }
+
+  async countPromoApps(promoCodeId: number, holdSince: Date): Promise<number> {
+    return countPromoApps(this.db, promoCodeId, holdSince);
+  }
+
+  async createWithinPromo(
+    order: NewOrder & { promoCodeId: number },
+    maxApps: number,
+    holdSince: Date,
+  ): Promise<Order | null> {
+    return this.db.$transaction(async (tx) => {
+      // Checkouts with the same code queue on this row lock, so each one sees the orders of the others.
+      await tx.$queryRaw`SELECT "id" FROM "PromoCode" WHERE "id" = ${order.promoCodeId} FOR UPDATE`;
+      const used = await countPromoApps(tx, order.promoCodeId, holdSince);
+      if (used + order.items.length > maxApps) return null;
+      return toOrder(await tx.order.create(orderCreateArgs(order)));
     });
-    return toOrder(row);
   }
 
   async findById(id: number): Promise<Order | null> {
@@ -316,5 +357,8 @@ export function createPrismaRepositories(db: PrismaClient): Repositories {
     orderEvents: new PrismaOrderEventRepository(db),
     codeWaits: new PrismaCodeWaitAttemptRepository(db),
     broadcasts: new PrismaBroadcastRepository(db),
+    settings: new PrismaSettingRepository(db),
+    promoCodes: new PrismaPromoCodeRepository(db),
+    stats: new PrismaStatsRepository(db),
   };
 }

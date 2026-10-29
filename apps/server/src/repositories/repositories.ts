@@ -6,8 +6,11 @@ import type {
   CodeWaitAttempt,
   NewCodeWaitAttempt,
   NewOrder,
+  NewPromoCode,
   Order,
   OrderPatch,
+  PromoCode,
+  SalesSummary,
   User,
 } from '../domain/models.js';
 
@@ -39,6 +42,13 @@ export interface OrderRepository {
    * Returns the updated order, or null if the status did not match (concurrent change).
    */
   transition(id: number, from: readonly OrderStatus[], patch: OrderPatch & { status: OrderStatus }): Promise<Order | null>;
+  /** Apps of the code's orders that hold a place (see holdsPromoApps in domain/promo). */
+  countPromoApps(promoCodeId: number, holdSince: Date): Promise<number>;
+  /**
+   * Creates the order only if the code still covers its apps; the check and the insert are atomic,
+   * so two checkouts at once never overrun the limit. null when the code has no room left.
+   */
+  createWithinPromo(order: NewOrder & { promoCodeId: number }, maxApps: number, holdSince: Date): Promise<Order | null>;
 }
 
 export interface CodeWaitAttemptRepository {
@@ -71,10 +81,41 @@ export interface BroadcastRepository {
   ): Promise<Broadcast | null>;
 }
 
+/** Shop-wide string values by key. */
+export interface SettingRepository {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string): Promise<void>;
+  /** Writes `value` only if the current one is `expected` (null = not set yet); false when someone else wrote first. */
+  compareAndSet(key: string, expected: string | null, value: string): Promise<boolean>;
+}
+
+export interface PromoCodeRepository {
+  /** null when the code is already taken. */
+  create(promo: NewPromoCode): Promise<PromoCode | null>;
+  findByCode(code: string): Promise<PromoCode | null>;
+  /** Newest first. */
+  list(): Promise<PromoCode[]>;
+  /** Sets disabledAt (kept if already set); null when there is no such code. */
+  disable(code: string, at: Date): Promise<PromoCode | null>;
+}
+
+/** `from` null means since the first order. */
+export interface DateRange {
+  from: Date | null;
+  to: Date;
+}
+
+export interface StatsRepository {
+  summary(range: DateRange): Promise<SalesSummary>;
+}
+
 export interface Repositories {
   users: UserRepository;
   orders: OrderRepository;
   orderEvents: OrderEventRepository;
   codeWaits: CodeWaitAttemptRepository;
   broadcasts: BroadcastRepository;
+  settings: SettingRepository;
+  promoCodes: PromoCodeRepository;
+  stats: StatsRepository;
 }

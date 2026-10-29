@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { formatRub, isPaidStatus, isTerminalStatus, MAX_ORDER_ITEMS, rubToKopecks } from './index.js';
-import { appIdParamSchema, createOrderSchema } from './schemas.js';
+import {
+  formatRub,
+  isPaidStatus,
+  isTerminalStatus,
+  MAX_ORDER_ITEMS,
+  normalizePromoCode,
+  PROMO_CODE_PATTERN,
+  rubToKopecks,
+} from './index.js';
+import { appIdParamSchema, createOrderSchema, promoCheckSchema } from './schemas.js';
 
 describe('formatRub', () => {
   it('formats whole rubles without fraction', () => {
@@ -73,6 +81,26 @@ describe('request schemas', () => {
     expect(createOrderSchema.safeParse({ ...base, expectedTotalKopecks: 34900 }).success).toBe(true);
     for (const expectedTotalKopecks of [-1, 1.5, '34900']) {
       expect(createOrderSchema.safeParse({ ...base, expectedTotalKopecks }).success).toBe(false);
+    }
+  });
+
+  it('normalizes the promo code of an order and of a promo check', () => {
+    const base = { appIds: ['sber'], paymentMethod: 'SBP' };
+
+    expect(createOrderSchema.parse({ ...base, promoCode: '  ios-Review ' }).promoCode).toBe('IOS-REVIEW');
+    expect(promoCheckSchema.parse({ code: 'abc_123' }).code).toBe('ABC_123');
+    expect(createOrderSchema.safeParse({ ...base, promoCode: 'x'.repeat(65) }).success).toBe(false);
+    expect(promoCheckSchema.safeParse({ code: 42 }).success).toBe(false);
+  });
+});
+
+describe('promo codes', () => {
+  it('accepts 6 to 32 latin letters, digits, underscores and dashes after normalizing', () => {
+    for (const raw of ['ios-review', 'ABCDEF', ' x_1-y2 ', 'A'.repeat(32)]) {
+      expect(PROMO_CODE_PATTERN.test(normalizePromoCode(raw))).toBe(true);
+    }
+    for (const raw of ['abcde', 'A'.repeat(33), 'промокод', 'a b c d e f', 'code!!']) {
+      expect(PROMO_CODE_PATTERN.test(normalizePromoCode(raw))).toBe(false);
     }
   });
 });

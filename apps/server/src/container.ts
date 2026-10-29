@@ -20,11 +20,15 @@ import type { Repositories } from './repositories/repositories.js';
 import { BroadcastRunner } from './services/broadcast-runner.js';
 import { BroadcastService } from './services/broadcast-service.js';
 import { ChannelInfoService } from './services/channel-info-service.js';
+import { CheckoutGate } from './services/checkout-gate.js';
+import { DailyReportScheduler } from './services/daily-report-scheduler.js';
 import { DeliveryService } from './services/delivery-service.js';
 import { NotificationService } from './services/notification-service.js';
 import { OrderService } from './services/order-service.js';
 import { PartnerAdminService } from './services/partner-admin-service.js';
 import { PaymentReconciler } from './services/payment-reconciler.js';
+import { SalesStatsService } from './services/sales-stats-service.js';
+import { ShopAdminService } from './services/shop-admin-service.js';
 import { SubscriptionService } from './services/subscription-service.js';
 
 const MINIAPP_DIST = fileURLToPath(new URL('../../miniapp/dist', import.meta.url));
@@ -37,6 +41,10 @@ export interface Container {
   /** null when the shop runs on mock catalog and delivery. */
   partnerAdmin: PartnerAdminService | null;
   broadcasts: BroadcastService;
+  /** /payments and /promo in the bot. */
+  shopAdmin: ShopAdminService;
+  /** /stats in the bot. */
+  salesStats: SalesStatsService;
   /** Background jobs: start after the server listens, stop (and let the current step finish) on shutdown. */
   background: { start(): void; stop(): Promise<void> };
 }
@@ -95,11 +103,13 @@ export function createContainer(env: Env, telegram: TelegramAdapters, logger: Lo
     fetchMember: telegram.fetchMember,
     logger,
   });
+  const checkout = new CheckoutGate({ repos });
   const orders = new OrderService({
     repos,
     catalog,
     payments,
     notifications,
+    checkout,
     logger,
     returnUrl: (order) => (env.BOT_USERNAME ? `https://t.me/${env.BOT_USERNAME}?start=${order.id}` : null),
     acceptSandboxPayments: env.NODE_ENV !== 'production' || env.ALLOW_SANDBOX_PAYMENTS,
@@ -118,6 +128,7 @@ export function createContainer(env: Env, telegram: TelegramAdapters, logger: Lo
     payments,
     mockPayments,
     orders,
+    checkout,
     delivery: new DeliveryService({ repos, delivery, logger }),
     subscription,
     miniappDir: env.SERVE_MINIAPP ? MINIAPP_DIST : null,
@@ -141,19 +152,36 @@ export function createContainer(env: Env, telegram: TelegramAdapters, logger: Lo
 
   const paymentReconciler = new PaymentReconciler({ orders, logger });
 
+  const shopAdmin = new ShopAdminService({
+    checkout,
+    repos,
+    notifyAdmins: (html, exceptId) => notifications.notifyAdmins(html, exceptId),
+  });
+  const salesStats = new SalesStatsService({ stats: repos.stats, checkout, timeZone: env.STATS_TIME_ZONE });
+  const dailyReport = new DailyReportScheduler({
+    stats: salesStats,
+    settings: repos.settings,
+    notifyAdmins: (html) => notifications.notifyAdmins(html),
+    timeZone: env.STATS_TIME_ZONE,
+    reportAt: env.DAILY_REPORT_TIME,
+    logger,
+  });
+
   const background = {
     start: () => {
       installiosCatalog?.start();
       broadcastRunner.start();
       paymentReconciler.start();
+      dailyReport.start();
     },
     stop: async () => {
       installiosCatalog?.stop();
       broadcastRunner.stop();
       paymentReconciler.stop();
-      await Promise.all([broadcastRunner.idle(), paymentReconciler.idle()]);
+      dailyReport.stop();
+      await Promise.all([broadcastRunner.idle(), paymentReconciler.idle(), dailyReport.idle()]);
     },
   };
 
-  return { db, repos, appDeps, subscription, partnerAdmin, broadcasts, background };
+  return { db, repos, appDeps, subscription, partnerAdmin, broadcasts, shopAdmin, salesStats, background };
 }

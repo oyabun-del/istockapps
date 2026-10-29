@@ -1,10 +1,11 @@
-import type { MeDto, PaymentMethodDto, SellerDto } from '@istock/shared';
+import type { CheckoutDto, MeDto, PaymentMethodDto, PromoCheckDto, SellerDto } from '@istock/shared';
 import {
   appIdParamSchema,
   catalogQuerySchema,
   codeWaitParamSchema,
   createOrderSchema,
   orderIdParamSchema,
+  promoCheckSchema,
   startCodeSchema,
 } from '@istock/shared/schemas';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -12,6 +13,7 @@ import { AppError, getErrorMessage } from '../../lib/app-error.js';
 import type { CatalogProvider } from '../../providers/catalog/catalog-provider.js';
 import type { Repositories } from '../../repositories/repositories.js';
 import type { ChannelInfoService } from '../../services/channel-info-service.js';
+import type { CheckoutGate } from '../../services/checkout-gate.js';
 import type { DeliveryService } from '../../services/delivery-service.js';
 import type { OrderService } from '../../services/order-service.js';
 import type { SubscriptionService } from '../../services/subscription-service.js';
@@ -41,11 +43,14 @@ function perBuyer(max: number) {
 
 const ORDER_CREATE_RATE_LIMIT = perBuyer(10);
 const DELIVERY_READ_RATE_LIMIT = perBuyer(30);
+/** Codes must not be guessable by trying many of them. */
+const PROMO_CHECK_RATE_LIMIT = perBuyer(10);
 
 export interface ApiRoutesDeps {
   repos: Repositories;
   catalog: CatalogProvider;
   orders: OrderService;
+  checkout: Pick<CheckoutGate, 'getMode' | 'checkPromo'>;
   delivery: DeliveryService;
   subscription: SubscriptionService;
   links: { channelUrl: string; supportUrl: string };
@@ -105,6 +110,18 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiRoutesDeps): vo
   app.get('/payment-methods', async () => {
     const methods = await deps.orders.listPaymentMethods();
     const dto: PaymentMethodDto[] = methods.map((method) => ({ method }));
+    return ok(dto);
+  });
+
+  app.get('/checkout', async () => {
+    const dto: CheckoutDto = { paymentsMode: await deps.checkout.getMode() };
+    return ok(dto);
+  });
+
+  app.post('/promo/check', { config: { rateLimit: PROMO_CHECK_RATE_LIMIT } }, async (request) => {
+    const { code } = parseInput(promoCheckSchema, request.body);
+    const { promo, appsLeft } = await deps.checkout.checkPromo(code);
+    const dto: PromoCheckDto = { code: promo.code, appsLeft };
     return ok(dto);
   });
 

@@ -39,6 +39,24 @@ describe('parseEnv', () => {
     expect(() => parseEnv({ ...BASE, BROADCAST_RATE_PER_SEC: '0' })).toThrow(/BROADCAST_RATE_PER_SEC/);
   });
 
+  it('counts stats days in Moscow and sends the daily report at 23:55 by default', () => {
+    const env = parseEnv(BASE);
+
+    expect(env.STATS_TIME_ZONE).toBe('Europe/Moscow');
+    expect(env.DAILY_REPORT_TIME).toEqual({ hour: 23, minute: 55 });
+  });
+
+  it('accepts another time zone and report time, and rejects malformed ones', () => {
+    const env = parseEnv({ ...BASE, STATS_TIME_ZONE: 'Asia/Yekaterinburg', DAILY_REPORT_TIME: '09:05' });
+
+    expect(env.STATS_TIME_ZONE).toBe('Asia/Yekaterinburg');
+    expect(env.DAILY_REPORT_TIME).toEqual({ hour: 9, minute: 5 });
+    expect(() => parseEnv({ ...BASE, STATS_TIME_ZONE: 'Mars/Olympus' })).toThrow(/STATS_TIME_ZONE/);
+    for (const time of ['24:00', '9:05', '23:60', 'noon']) {
+      expect(() => parseEnv({ ...BASE, DAILY_REPORT_TIME: time })).toThrow(/DAILY_REPORT_TIME/);
+    }
+  });
+
   describe('TELEGRAM_OFFLINE', () => {
     const { BOT_TOKEN: _token, ...WITHOUT_TOKEN } = BASE;
     const OFFLINE = { ...WITHOUT_TOKEN, TELEGRAM_OFFLINE: 'true', DEV_USER_ID: '1' };

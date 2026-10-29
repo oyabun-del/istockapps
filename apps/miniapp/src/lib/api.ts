@@ -3,6 +3,7 @@ import type {
   AppDto,
   CatalogQuery,
   CategoryDto,
+  CheckoutDto,
   CodeWaitDto,
   CreateOrderInput,
   CredentialsDto,
@@ -11,6 +12,7 @@ import type {
   MeDto,
   OrderDto,
   PaymentMethodDto,
+  PromoCheckDto,
   SubscriptionDto,
 } from '@istock/shared';
 import { getInitData } from './telegram';
@@ -74,6 +76,8 @@ export const api = {
   apps: (query: CatalogQuery) => request<AppDto[]>('GET', `/catalog/apps${toQuery(query)}`),
   app: (appId: string) => request<AppDto>('GET', `/catalog/apps/${encodeURIComponent(appId)}`),
   paymentMethods: () => request<PaymentMethodDto[]>('GET', '/payment-methods'),
+  checkout: () => request<CheckoutDto>('GET', '/checkout'),
+  checkPromo: (code: string) => request<PromoCheckDto>('POST', '/promo/check', { code }),
 
   createOrder: (input: CreateOrderInput) => request<OrderDto>('POST', '/orders', input),
   orders: () => request<OrderDto[]>('GET', '/orders'),

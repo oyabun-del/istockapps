@@ -15,6 +15,7 @@ export const queryKeys = {
   apps: (query: CatalogQuery) => ['apps', query] as const,
   app: (appId: string) => ['app', appId] as const,
   paymentMethods: ['payment-methods'] as const,
+  checkout: ['checkout'] as const,
   orders: ['orders'] as const,
   order: (id: number) => ['order', id] as const,
   delivery: (id: number) => ['delivery', id] as const,

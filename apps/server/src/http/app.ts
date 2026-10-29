@@ -9,6 +9,7 @@ import type { MockPaymentProvider } from '../providers/payment/mock-payment-prov
 import type { PaymentProvider } from '../providers/payment/payment-provider.js';
 import type { Repositories } from '../repositories/repositories.js';
 import type { ChannelInfoService } from '../services/channel-info-service.js';
+import type { CheckoutGate } from '../services/checkout-gate.js';
 import type { DeliveryService } from '../services/delivery-service.js';
 import type { OrderService } from '../services/order-service.js';
 import type { SubscriptionService } from '../services/subscription-service.js';
@@ -54,6 +55,8 @@ export interface AppDeps {
   /** Set only when PAYMENT_PROVIDER=mock: enables the fake payment page. */
   mockPayments?: MockPaymentProvider;
   orders: OrderService;
+  /** Payments mode and promo codes. */
+  checkout: CheckoutGate;
   delivery: DeliveryService;
   subscription: SubscriptionService;
   /** Built Mini App to serve from "/", if present. */

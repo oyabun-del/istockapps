@@ -37,6 +37,11 @@ model Order {
   paymentId       String?      @unique
   paymentUrl      String?
   paymentSyncedAt DateTime?
+  // CISPAY test payment; never counted as revenue.
+  isSandbox       Boolean      @default(false)
+  // Set when payments were open by promo code only; the code's app limit counts this order.
+  promoCodeId     Int?
+  promoCode       PromoCode?   @relation(fields: [promoCodeId], references: [id])
   // Install-IOS order id and deadline. Links, credentials and codes are never stored.
   deliveryRef       String?   @unique
   deliveryExpiresAt DateTime?
@@ -51,6 +56,9 @@ model Order {
   codeWaits       CodeWaitAttempt[]
 
   @@index([userId, createdAt])
+  @@index([paidAt])
+  @@index([createdAt])
+  @@index([promoCodeId])
 }
 
 // One app of an order, priced when the order was created.
@@ -89,6 +97,7 @@ model OrderEvent {
   createdAt DateTime @default(now())
 
   @@index([orderId])
+  @@index([type, createdAt])
 }
 
 // A message an admin sent to the bot, copied to every user as is (formatting, custom emoji, media).
@@ -115,4 +124,23 @@ model Broadcast {
 
   @@index([authorId, status])
   @@index([status])
+}
+
+// Shop-wide switches changed from the bot (payments mode, last daily report).
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// Lets a buyer pay while payments are open by promo code only; covers maxApps apps in total.
+model PromoCode {
+  id         Int       @id @default(autoincrement())
+  // Upper case, see PROMO_CODE_PATTERN.
+  code       String    @unique
+  maxApps    Int
+  createdBy  BigInt
+  disabledAt DateTime?
+  createdAt  DateTime  @default(now())
+  orders     Order[]
 }

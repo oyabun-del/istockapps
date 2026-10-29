@@ -206,3 +206,95 @@ describe('CartPage', () => {
     expect(await screen.findByRole('button', { name: 'Оплатить 349\u00a0₽' })).toBeInTheDocument();
   });
 });
+
+describe('CartPage payments mode', () => {
+  function mockShop(paymentsMode: 'open' | 'promo' | 'closed') {
+    mockCatalog();
+    vi.spyOn(api, 'paymentMethods').mockResolvedValue([{ method: 'SBP' }]);
+    vi.spyOn(api, 'checkout').mockResolvedValue({ paymentsMode });
+  }
+
+  it('keeps the cart but refuses to pay while payments are closed', async () => {
+    mockShop('closed');
+    fillCart(1);
+
+    renderCart();
+
+    expect(await screen.findByText(/Приём оплат временно приостановлен/)).toHaveAttribute('role', 'status');
+    expect(screen.getByRole('button', { name: /Оплатить/ })).toBeDisabled();
+    expect(screen.queryByRole('textbox', { name: 'Промокод' })).not.toBeInTheDocument();
+  });
+
+  it('asks for a promo code and pays with it once it is applied', async () => {
+    mockShop('promo');
+    const checkPromo = vi.spyOn(api, 'checkPromo').mockResolvedValue({ code: 'IOS-REVIEW', appsLeft: 5 });
+    const createOrder = vi
+      .spyOn(api, 'createOrder')
+      .mockResolvedValue(makeOrder({ status: 'awaiting_payment', paymentUrl: 'https://pay.example.com/1' }));
+    vi.spyOn(window, 'open').mockReturnValue(null);
+    fillCart(2);
+    renderCart();
+
+    const input = await screen.findByRole('textbox', { name: 'Промокод' });
+    expect(screen.getByRole('button', { name: /Оплатить/ })).toBeDisabled();
+    await userEvent.type(input, 'ios-review');
+    await userEvent.click(screen.getByRole('button', { name: 'Применить' }));
+
+    expect(checkPromo).toHaveBeenCalledWith('ios-review');
+    expect(await screen.findByText('IOS-REVIEW')).toBeInTheDocument();
+    expect(screen.getByText(/^Можно оплатить ещё 5\sприложений$/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Оплатить/ }));
+
+    await waitFor(() =>
+      expect(createOrder).toHaveBeenCalledWith(
+        expect.objectContaining({ appIds: ['sberbank', 'tbank'], promoCode: 'IOS-REVIEW' }),
+      ),
+    );
+  });
+
+  it('shows why a promo code was not accepted', async () => {
+    mockShop('promo');
+    vi.spyOn(api, 'checkPromo').mockRejectedValue(
+      new ApiError('PROMO_INVALID', 'Промокод не найден или больше не действует', 400),
+    );
+    fillCart(1);
+    renderCart();
+
+    await userEvent.type(await screen.findByRole('textbox', { name: 'Промокод' }), 'nope');
+    await userEvent.click(screen.getByRole('button', { name: 'Применить' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Промокод не найден или больше не действует');
+    expect(screen.getByRole('button', { name: /Оплатить/ })).toBeDisabled();
+  });
+
+  it('warns when the cart has more apps than the code still covers, and the code can be removed', async () => {
+    mockShop('promo');
+    vi.spyOn(api, 'checkPromo').mockResolvedValue({ code: 'IOS-REVIEW', appsLeft: 1 });
+    fillCart(2);
+    renderCart();
+
+    await userEvent.type(await screen.findByRole('textbox', { name: 'Промокод' }), 'IOS-REVIEW');
+    await userEvent.click(screen.getByRole('button', { name: 'Применить' }));
+
+    expect(await screen.findByText(/По промокоду можно оплатить ещё 1\sприложение/)).toHaveAttribute('role', 'status');
+    // The server has the final word: this cart may be the buyer's own open invoice.
+    expect(screen.getByRole('button', { name: /Оплатить/ })).toBeEnabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Убрать промокод' }));
+    expect(screen.getByRole('textbox', { name: 'Промокод' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Оплатить/ })).toBeDisabled();
+  });
+
+  it('does not send a promo code while payments are open to everyone', async () => {
+    mockShop('open');
+    const createOrder = vi.spyOn(api, 'createOrder').mockResolvedValue(makeOrder({ status: 'awaiting_payment' }));
+    fillCart(1);
+    renderCart();
+
+    await screen.findByText('СБП');
+    expect(screen.queryByRole('textbox', { name: 'Промокод' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Оплатить/ }));
+
+    await waitFor(() => expect(createOrder).toHaveBeenCalled());
+    expect(createOrder.mock.calls[0]?.[0]).not.toHaveProperty('promoCode');
+  });
+});

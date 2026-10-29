@@ -38,6 +38,7 @@ function baseDeps(overrides: Partial<AppDeps> = {}): AppDeps {
     payments: ctx.payments,
     mockPayments: ctx.payments,
     orders: ctx.orders,
+    checkout: ctx.checkout,
     delivery: ctx.deliveryService,
     subscription: ctx.subscription,
     ...overrides,
@@ -363,6 +364,66 @@ describe('purchase flow through HTTP', () => {
   it('answers the mock pay page for unknown payments', async () => {
     const response = await app.inject({ method: 'GET', url: '/dev/mock-pay/unknown' });
     expect(response.body).toContain('Платёж не найден');
+  });
+});
+
+describe('payments mode and promo codes through HTTP', () => {
+  it('tells the Mini App who may pay', async () => {
+    const open = await app.inject({ method: 'GET', url: '/api/checkout', headers: authHeader() });
+    expect(open.json()).toMatchObject({ success: true, data: { paymentsMode: 'open' } });
+
+    await ctx.checkout.setMode('promo');
+    const promo = await app.inject({ method: 'GET', url: '/api/checkout', headers: authHeader() });
+    expect(promo.json().data).toEqual({ paymentsMode: 'promo' });
+  });
+
+  it('checks a promo code and says how many apps it still covers', async () => {
+    await ctx.repos.promoCodes.create({ code: 'IOS-REVIEW', maxApps: 5, createdBy: 111 });
+
+    const valid = await app.inject({
+      method: 'POST',
+      url: '/api/promo/check',
+      headers: authHeader(),
+      payload: { code: ' ios-review ' },
+    });
+    expect(valid.json()).toMatchObject({ success: true, data: { code: 'IOS-REVIEW', appsLeft: 5 } });
+
+    const unknown = await app.inject({
+      method: 'POST',
+      url: '/api/promo/check',
+      headers: authHeader(),
+      payload: { code: 'nope' },
+    });
+    expect(unknown.statusCode).toBe(400);
+    expect(unknown.json().error.code).toBe('PROMO_INVALID');
+  });
+
+  it('limits promo checks per buyer', async () => {
+    const check = () =>
+      app.inject({ method: 'POST', url: '/api/promo/check', headers: authHeader(), payload: { code: 'GUESS-1' } });
+    for (let attempt = 0; attempt < 10; attempt += 1) await check();
+
+    expect((await check()).statusCode).toBe(429);
+  });
+
+  it('opens an invoice by promo code only while payments are open by promo code', async () => {
+    await ctx.repos.promoCodes.create({ code: 'IOS-REVIEW', maxApps: 5, createdBy: 111 });
+    await ctx.checkout.setMode('promo');
+    const create = (promoCode?: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/orders',
+        headers: authHeader(),
+        payload: { appIds: ['sberbank'], paymentMethod: 'SBP', promoCode },
+      });
+
+    const refused = await create();
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json().error.code).toBe('PAYMENTS_CLOSED');
+
+    const created = await create('ios-review');
+    expect(created.statusCode).toBe(200);
+    expect(created.json().data.status).toBe('awaiting_payment');
   });
 });
 

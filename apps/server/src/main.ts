@@ -31,6 +31,8 @@ async function main(): Promise<void> {
       adminIds: env.ADMIN_IDS,
       partnerAdmin: container.partnerAdmin,
       broadcasts: container.broadcasts,
+      shopAdmin: container.shopAdmin,
+      salesStats: container.salesStats,
     });
   }
 

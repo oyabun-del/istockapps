@@ -105,6 +105,23 @@ describe('parseEnv', () => {
     expect(run).toThrow(/fake credentials/);
   });
 
+  it('allows mock payments in production only when explicitly asked, never with a dev user', () => {
+    const production = {
+      ...BASE,
+      ...SELLER,
+      NODE_ENV: 'production',
+      CATALOG_PROVIDER: 'installios',
+      DELIVERY_PROVIDER: 'installios',
+      INSTALLIOS_API_KEY: 'k'.repeat(32),
+      INSTALLIOS_DEFAULT_PRICE_RUB: '790',
+      ALLOW_MOCK_PAYMENTS: 'true',
+    };
+
+    expect(parseEnv(production)).toMatchObject({ PAYMENT_PROVIDER: 'mock', ALLOW_MOCK_PAYMENTS: true });
+    expect(() => parseEnv({ ...production, DEV_USER_ID: '1' })).toThrow(/DEV_USER_ID is allowed only/);
+    expect(() => parseEnv({ ...production, ALLOW_MOCK_PAYMENTS: 'false' })).toThrow(/Mock payments are not allowed/);
+  });
+
   it('defaults to production when NODE_ENV is missing', () => {
     const { NODE_ENV: _omit, ...rest } = BASE;
     expect(() => parseEnv(rest)).toThrow(/Mock payments are not allowed/);

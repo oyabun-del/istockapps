@@ -114,7 +114,8 @@ export function createContainer(env: Env, telegram: TelegramAdapters, logger: Lo
     checkout,
     logger,
     returnUrl: (order) => (env.BOT_USERNAME ? `https://t.me/${env.BOT_USERNAME}?start=${order.id}` : null),
-    acceptSandboxPayments: env.NODE_ENV !== 'production' || env.ALLOW_SANDBOX_PAYMENTS,
+    // Mock payments are all "sandbox": with the mock provider chosen, they are the only payments there are.
+    acceptSandboxPayments: env.NODE_ENV !== 'production' || env.ALLOW_SANDBOX_PAYMENTS || env.PAYMENT_PROVIDER === 'mock',
   });
 
   const appDeps: AppDeps = {

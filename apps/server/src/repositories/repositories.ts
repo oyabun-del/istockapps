@@ -28,8 +28,12 @@ export interface OrderRepository {
   /** Newest unpaid order with a payment link for exactly this set of apps (order of ids does not matter). */
   findPendingForApps(userId: number, appIds: readonly string[], createdAfter: Date): Promise<Order | null>;
   listByUser(userId: number, limit: number): Promise<Order[]>;
+  /** Orders with a payment in one of `statuses`, created after `createdAfter`, oldest first. */
+  listForPaymentSync(statuses: readonly OrderStatus[], createdAfter: Date, limit: number): Promise<Order[]>;
   /** Unconditional field update (never changes status). */
   update(id: number, patch: Omit<OrderPatch, 'status'>): Promise<Order>;
+  /** Sets `codeReceivedAt` only if it is still empty; null when another request set it first. */
+  markCodeReceived(id: number, at: Date): Promise<Order | null>;
   /**
    * Atomic compare-and-set: applies `patch` only if the current status is one of `from`.
    * Returns the updated order, or null if the status did not match (concurrent change).

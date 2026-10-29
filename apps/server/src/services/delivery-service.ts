@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { isPaidStatus, type CodeWaitDto, type CredentialsDto, type DeliveryDto, type OrderStatus } from '@istock/shared';
 import type { Order } from '../domain/models.js';
 import { AppError, getErrorMessage } from '../lib/app-error.js';
+import { KeyedLock } from '../lib/keyed-lock.js';
 import type { Logger } from '../lib/logger.js';
 import {
   DeliveryAccessRevokedError,
@@ -15,6 +16,7 @@ import {
 import type { Repositories } from '../repositories/repositories.js';
 import { isGroupUsable, toCodeWaitDto, toDeliveryDto } from './delivery-view.js';
 import { getOwnedOrder } from './order-access.js';
+import { recordOrderEvent } from './order-events.js';
 
 /** The API asks for at most one status check per second for each wait. */
 export const CODE_POLL_MIN_INTERVAL_MS = 1_000;
@@ -54,6 +56,8 @@ export class DeliveryService {
   private readonly now: () => Date;
   private readonly refreshes = new Map<number, Promise<DeliverySnapshot>>();
   private readonly polls = new Map<string, CachedPoll>();
+  /** Two taps at once must not both miss the running wait and spend two of the account's codes. */
+  private readonly codeStarts = new KeyedLock<string>();
 
   constructor(private readonly deps: DeliveryServiceDeps) {
     this.now = deps.now ?? (() => new Date());
@@ -72,7 +76,7 @@ export class DeliveryService {
       throw new AppError('INVALID_STATE', 'Заказ ещё не оплачен');
     }
     const updated = await this.deps.repos.orders.transition(order.id, ['paid'], { status: 'download_confirmed' });
-    if (updated) await this.deps.repos.orderEvents.add(order.id, 'download_confirmed');
+    if (updated) await this.recordEvent(order.id, 'download_confirmed');
     return updated ?? (await getOwnedOrder(this.deps.repos.orders, userId, orderId));
   }
 
@@ -89,7 +93,7 @@ export class DeliveryService {
       const updated = await this.deps.repos.orders.transition(order.id, ['download_confirmed'], {
         status: 'credentials_issued',
       });
-      if (updated) await this.deps.repos.orderEvents.add(order.id, 'credentials_issued');
+      if (updated) await this.recordEvent(order.id, 'credentials_issued');
     }
     return { groups: groups.map(({ groupId, login, password }) => ({ groupId, login, password })) };
   }
@@ -97,6 +101,10 @@ export class DeliveryService {
   /** Turns on the wait for a code; only after that may the buyer request the code on the iPhone. */
   async startCode(userId: number, orderId: number, groupId: string): Promise<CodeWaitDto> {
     const order = await this.codeOrder(userId, orderId);
+    return this.codeStarts.run(`${order.id}:${groupId}`, () => this.startCodeWait(order, groupId));
+  }
+
+  private async startCodeWait(order: Order, groupId: string): Promise<CodeWaitDto> {
     const snapshot = await this.refresh(order);
     const group = snapshot.groups.find((item) => item.id === groupId);
     if (!group || !isGroupUsable(group, snapshot, this.now())) {
@@ -110,7 +118,7 @@ export class DeliveryService {
     if (latest?.waitId) {
       // A second tap while the previous wait is still running resumes it instead of starting another.
       const current = await this.pollWait(order, latest.waitId).catch(() => null);
-      if (current?.status === 'active') return toCodeWaitDto(current, groupId, this.now());
+      if (current?.status === 'active') return toCodeWaitDto(current, groupId);
     }
 
     // An attempt the API never confirmed is retried with its own key, so it cannot start twice.
@@ -127,8 +135,8 @@ export class DeliveryService {
     );
     await this.deps.repos.codeWaits.setWaitId(attempt.id, wait.id);
     await this.saveExpiry(order, wait.orderExpiresAt);
-    await this.deps.repos.orderEvents.add(order.id, 'code_wait_started');
-    return toCodeWaitDto(wait, groupId, this.now());
+    await this.recordEvent(order.id, 'code_wait_started');
+    return toCodeWaitDto(wait, groupId);
   }
 
   async getCodeWait(userId: number, orderId: number, waitId: string): Promise<CodeWaitDto> {
@@ -138,7 +146,7 @@ export class DeliveryService {
     const wait = await this.pollWait(order, waitId);
     await this.saveExpiry(order, wait.orderExpiresAt);
     if (wait.status === 'succeeded') await this.markCodeStepDone(order, 'code_received');
-    return toCodeWaitDto(wait, attempt.groupId, this.now());
+    return toCodeWaitDto(wait, attempt.groupId);
   }
 
   /** Apple does not always ask for a code: the buyer may finish the code step without one. */
@@ -158,7 +166,7 @@ export class DeliveryService {
       completedAt: this.now(),
     });
     if (!updated) throw new AppError('INVALID_STATE', 'Сначала войдите в аккаунт по выданным данным');
-    await this.deps.repos.orderEvents.add(order.id, 'completed');
+    await this.recordEvent(order.id, 'completed');
     return updated;
   }
 
@@ -170,12 +178,17 @@ export class DeliveryService {
     return order;
   }
 
-  /** Unlocks the last step once; repeated calls keep the first time. */
+  /** Unlocks the last step once; repeated and concurrent calls keep the first time. */
   private async markCodeStepDone(order: Order, event: 'code_received' | 'code_skipped'): Promise<Order> {
     if (order.codeReceivedAt) return order;
-    const updated = await this.deps.repos.orders.update(order.id, { codeReceivedAt: this.now() });
-    await this.deps.repos.orderEvents.add(order.id, event);
+    const updated = await this.deps.repos.orders.markCodeReceived(order.id, this.now());
+    if (!updated) return (await this.deps.repos.orders.findById(order.id)) ?? order;
+    await this.recordEvent(order.id, event);
     return updated;
+  }
+
+  private recordEvent(orderId: number, type: string, data?: Record<string, unknown>): Promise<void> {
+    return recordOrderEvent(this.deps.repos.orderEvents, this.deps.logger, orderId, type, data);
   }
 
   /** Fresh credentials matched by the ids of the groups that are usable right now. */
@@ -222,7 +235,7 @@ export class DeliveryService {
     if (isNew || order.deliveryExpiresAt?.getTime() !== snapshot.expiresAt.getTime()) {
       await this.deps.repos.orders.update(order.id, { deliveryRef: snapshot.ref, deliveryExpiresAt: snapshot.expiresAt });
     }
-    if (isNew) await this.deps.repos.orderEvents.add(order.id, 'delivery_created', { sandbox: snapshot.isSandbox });
+    if (isNew) await this.recordEvent(order.id, 'delivery_created', { sandbox: snapshot.isSandbox });
     return snapshot;
   }
 

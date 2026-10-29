@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppError } from '../lib/app-error.js';
 import { ADMIN_IDS, BUYER, OTHER_USER, createPaidOrder, createTestContext, type TestContext } from '../test/fixtures.js';
 import { silentLogger } from '../lib/logger.js';
-import { OrderService, PAYMENT_SYNC_INTERVAL_MS } from './order-service.js';
+import { LATE_PAYMENT_WINDOW_MS, OrderService, PAYMENT_SYNC_INTERVAL_MS } from './order-service.js';
 
 const THREE_APPS = ['sberbank', 'tbank', 'minecraft'];
 const FIVE_APPS = ['sberbank', 'tbank', 'minecraft', 'brawl-stars', 'canva'];
@@ -454,5 +454,72 @@ describe('OrderService.getOrder', () => {
 
     const list = await ctx.orders.listOrders(BUYER.id);
     expect(list.map((order) => order.items[0]?.appId)).toEqual(['minecraft', 'sberbank']);
+  });
+});
+
+describe('OrderService late payments and races', () => {
+  it('creates one order when the same cart is checked out twice at once', async () => {
+    const [first, second] = await Promise.all([
+      ctx.orders.createOrder(BUYER, { appIds: THREE_APPS, paymentMethod: 'SBP' }),
+      ctx.orders.createOrder(BUYER, { appIds: THREE_APPS, paymentMethod: 'SBP' }),
+    ]);
+
+    expect(second.id).toBe(first.id);
+    expect(await ctx.orders.listOrders(BUYER.id)).toHaveLength(1);
+  });
+
+  it('finds a late payment of a cancelled invoice by polling', async () => {
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
+    await ctx.orders.cancelOrder(BUYER.id, order.id);
+    ctx.payments.setStatus(order.paymentId as string, 'PAID');
+
+    expect((await ctx.orders.getOrder(BUYER.id, order.id)).status).toBe('paid');
+  });
+
+  it('reconciles recent unpaid and cancelled orders in the background', async () => {
+    const unpaid = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
+    const cancelled = await ctx.orders.createOrder(BUYER, { appIds: ['tbank'], paymentMethod: 'SBP' });
+    await ctx.orders.cancelOrder(BUYER.id, cancelled.id);
+    ctx.payments.setStatus(unpaid.paymentId as string, 'PAID');
+    ctx.payments.setStatus(cancelled.paymentId as string, 'PAID');
+
+    await ctx.orders.reconcilePayments();
+
+    expect((await ctx.repos.orders.findById(unpaid.id))?.status).toBe('paid');
+    expect((await ctx.repos.orders.findById(cancelled.id))?.status).toBe('paid');
+  });
+
+  it('stops polling a closed invoice once it can no longer be paid', async () => {
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
+    await ctx.orders.cancelOrder(BUYER.id, order.id);
+    ctx.clock.advance(LATE_PAYMENT_WINDOW_MS + 1);
+    const spy = vi.spyOn(ctx.payments, 'getPayment');
+
+    await ctx.orders.getOrder(BUYER.id, order.id);
+    await ctx.orders.reconcilePayments();
+
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('polls again right away when applying a payment failed', async () => {
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
+    ctx.payments.setStatus(order.paymentId as string, 'PAID');
+    vi.spyOn(ctx.repos.orders, 'transition').mockRejectedValueOnce(new Error('db down'));
+
+    expect((await ctx.orders.getOrder(BUYER.id, order.id)).status).toBe('awaiting_payment');
+    expect((await ctx.orders.getOrder(BUYER.id, order.id)).status).toBe('paid');
+  });
+
+  it('alerts admins once when a webhook and a poll race on a mismatched payment', async () => {
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
+    const update = { paymentId: order.paymentId as string, status: 'PAID' as const, amountKopecks: 100, isSandbox: false };
+    vi.spyOn(ctx.payments, 'getPayment').mockResolvedValue({ ...update, orderId: order.paymentOrderId });
+
+    await Promise.all([
+      ctx.orders.handlePaymentWebhook(order.paymentOrderId, update),
+      ctx.orders.getOrder(BUYER.id, order.id),
+    ]);
+
+    expect(ctx.sender.sent).toHaveLength(ADMIN_IDS.length);
   });
 });

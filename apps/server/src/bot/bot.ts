@@ -169,7 +169,7 @@ export async function handleCheckSubscription(ctx: Context, deps: BotDeps): Prom
 
 type PartnerAdmin = NonNullable<BotDeps['partnerAdmin']>;
 
-/** Admin-only: other users get no reply, so the command stays invisible to them. */
+/** Admin-only, private chat only: others get no reply, and partner figures never land in a group. */
 export async function handleAdminCommand(
   ctx: Context,
   deps: BotDeps,
@@ -177,6 +177,7 @@ export async function handleAdminCommand(
 ): Promise<void> {
   const userId = ctx.from?.id;
   if (userId === undefined || !deps.adminIds?.includes(userId)) return;
+  if (ctx.chat?.type !== 'private') return;
   if (!deps.partnerAdmin) {
     await ctx.reply(BOT_TEXT.partnerDisabled);
     return;

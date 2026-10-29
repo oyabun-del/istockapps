@@ -41,7 +41,7 @@ export function CopyField({ label, value, isSecret = false }: Props) {
         <button
           type="button"
           onClick={() => setIsRevealed((value) => !value)}
-          className="flex h-9 w-9 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-high"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-high"
           aria-label={isRevealed ? 'Скрыть' : 'Показать'}
         >
           <Icon name={isRevealed ? 'visibility_off' : 'visibility'} className="text-[20px]" />
@@ -50,7 +50,7 @@ export function CopyField({ label, value, isSecret = false }: Props) {
       <button
         type="button"
         onClick={handleCopy}
-        className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-surface-container-high px-3 text-label-lg transition-[color,transform] active:scale-95 ${
+        className={`flex h-11 shrink-0 items-center gap-1.5 rounded-full bg-surface-container-high px-3 text-label-lg transition-[color,transform] active:scale-95 ${
           isCopied ? 'text-success' : 'text-on-surface'
         }`}
         aria-label={isCopied ? `${label} скопирован` : `Скопировать: ${label}`}

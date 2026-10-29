@@ -1,7 +1,7 @@
 import { ACTIVE_PAYMENT_METHOD, BULK_DISCOUNT_TIERS, formatRub, type CartPricing } from '@istock/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'motion/react';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Page } from '../../components/layout/Page';
 import { Button } from '../../components/ui/Button';
@@ -89,9 +89,14 @@ function useCheckout() {
   });
 }
 
+function isPriceChanged(error: unknown): boolean {
+  return error instanceof ApiError && error.code === 'PRICE_CHANGED';
+}
+
 export function CartPage() {
   const cart = useCart();
   const checkout = useCheckout();
+  const { reset } = checkout;
   const methods = useQuery({
     queryKey: queryKeys.paymentMethods,
     queryFn: api.paymentMethods,
@@ -105,10 +110,27 @@ export function CartPage() {
     if (pricing) checkout.mutate({ appIds: [...cart.ids], totalKopecks: pricing.totalKopecks });
   };
 
+  // An error about the previous set of apps no longer applies once the buyer changes the cart.
+  const cartKey = cart.ids.join(',');
+  useEffect(() => reset(), [cartKey, reset]);
+
+  // After PRICE_CHANGED the cart re-reads prices; name the new total once it differs.
+  const attemptedKopecks = checkout.variables?.totalKopecks;
+  const checkoutError =
+    isPriceChanged(checkout.error) && pricing && attemptedKopecks !== undefined && pricing.totalKopecks !== attemptedKopecks
+      ? `Цена изменилась: теперь ${formatRub(pricing.totalKopecks)}. Проверьте и оплатите ещё раз.`
+      : errorMessage(checkout.error);
+
   return (
     <Page subtitle="Корзина" hasBackButton hasBottomNav={false}>
       <h1 className="mb-4 mt-1 text-headline-md tracking-tight text-on-surface">Корзина</h1>
 
+      {cart.hasDroppedApps && (
+        <p role="status" className="mb-4 flex items-start gap-1.5 rounded-lg bg-warning/10 p-space-sm text-body-sm text-warning">
+          <Icon name="warning" className="mt-0.5 text-[16px]" />
+          Некоторые приложения больше недоступны и убраны из корзины
+        </p>
+      )}
       {isEmpty && <EmptyCart />}
       {!isEmpty && cart.isLoading && !pricing && (
         <div className="flex flex-col gap-3">
@@ -155,7 +177,7 @@ export function CartPage() {
             </Button>
             {checkout.isError && (
               <p role="alert" className="mt-2.5 text-center text-body-sm text-error">
-                {errorMessage(checkout.error)}
+                {checkoutError}
               </p>
             )}
             <p className="mt-2.5 flex items-center justify-center gap-1 text-label-sm text-on-surface-variant">

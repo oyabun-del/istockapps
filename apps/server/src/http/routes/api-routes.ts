@@ -7,7 +7,7 @@ import {
   orderIdParamSchema,
   startCodeSchema,
 } from '@istock/shared/schemas';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { AppError, getErrorMessage } from '../../lib/app-error.js';
 import type { CatalogProvider } from '../../providers/catalog/catalog-provider.js';
 import type { Repositories } from '../../repositories/repositories.js';
@@ -24,6 +24,23 @@ const CODE_RATE_LIMIT = { max: 6, timeWindow: '1 minute' };
 /** The Mini App polls a running wait about once a second for up to five minutes. */
 const CODE_POLL_RATE_LIMIT = { max: 90, timeWindow: '1 minute' };
 const NO_STORE = 'no-store';
+
+/**
+ * Keyed by buyer, not by IP: each of these calls opens a CISPAY invoice or reads the Install-IOS API,
+ * so one buyer must not exhaust the partner limits for everyone (or a shared NAT for its neighbours).
+ * Runs after auth (preHandler), when the buyer is known.
+ */
+function perBuyer(max: number) {
+  return {
+    max,
+    timeWindow: '1 minute',
+    hook: 'preHandler' as const,
+    keyGenerator: (request: FastifyRequest) => (request.tgUser ? `user:${request.tgUser.id}` : `ip:${request.ip}`),
+  };
+}
+
+const ORDER_CREATE_RATE_LIMIT = perBuyer(10);
+const DELIVERY_READ_RATE_LIMIT = perBuyer(30);
 
 export interface ApiRoutesDeps {
   repos: Repositories;
@@ -90,7 +107,7 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiRoutesDeps): vo
   });
 
   // ---------- Orders ----------
-  app.post('/orders', async (request) => {
+  app.post('/orders', { config: { rateLimit: ORDER_CREATE_RATE_LIMIT } }, async (request) => {
     const input = parseInput(createOrderSchema, request.body);
     const order = await deps.orders.createOrder(requireUser(request), input);
     return ok(toOrderDto(order));
@@ -111,7 +128,7 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiRoutesDeps): vo
     return ok(toOrderDto(await deps.orders.cancelOrder(requireUser(request).id, id)));
   });
 
-  app.get('/orders/:id/delivery', async (request, reply) => {
+  app.get('/orders/:id/delivery', { config: { rateLimit: DELIVERY_READ_RATE_LIMIT } }, async (request, reply) => {
     const { id } = parseInput(orderIdParamSchema, request.params);
     reply.header('cache-control', NO_STORE);
     return ok(await deps.delivery.getDelivery(requireUser(request).id, id));
@@ -122,7 +139,7 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiRoutesDeps): vo
     return ok(toOrderDto(await deps.delivery.confirmDownload(requireUser(request).id, id)));
   });
 
-  app.post('/orders/:id/credentials', async (request, reply) => {
+  app.post('/orders/:id/credentials', { config: { rateLimit: DELIVERY_READ_RATE_LIMIT } }, async (request, reply) => {
     const { id } = parseInput(orderIdParamSchema, request.params);
     reply.header('cache-control', NO_STORE);
     return ok(await deps.delivery.getCredentials(requireUser(request).id, id));

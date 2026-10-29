@@ -17,6 +17,8 @@ describe('classifyCopyError', () => {
     [apiError(400, 'Bad Request: message to copy not found'), { kind: 'source_missing' }],
     [apiError(400, 'Bad Request: chat not found'), { kind: 'failed', reason: 'Bad Request: chat not found' }],
     [apiError(502, 'Bad Gateway'), { kind: 'unavailable', reason: 'Bad Gateway' }],
+    [apiError(401, 'Unauthorized'), { kind: 'unavailable', reason: 'Unauthorized' }],
+    [apiError(404, 'Not Found'), { kind: 'unavailable', reason: 'Not Found' }],
     [new Error('socket hang up'), { kind: 'unavailable', reason: 'socket hang up' }],
   ])('maps %s', (error, outcome) => {
     expect(classifyCopyError(error)).toEqual(outcome);

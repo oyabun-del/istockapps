@@ -1,7 +1,11 @@
 import type { AppDto, CatalogQuery, CategoryDto } from '@istock/shared';
 import { getErrorMessage } from '../../lib/app-error.js';
 import type { Logger } from '../../lib/logger.js';
-import { BACKGROUND_RETRY_DELAYS_MS, type InstalliosClient } from '../installios/installios-client.js';
+import {
+  BACKGROUND_RETRY_DELAYS_MS,
+  INTERACTIVE_RETRY_DELAYS_MS,
+  type InstalliosClient,
+} from '../installios/installios-client.js';
 import { ALL_CATEGORY, type CatalogProvider } from './catalog-provider.js';
 import { initialOf, placeholderIcon } from './placeholder-icon.js';
 
@@ -66,8 +70,8 @@ export class InstalliosCatalogProvider implements CatalogProvider {
   }
 
   /** Concurrent calls share one run. Resolves true when a fresh snapshot was installed. */
-  sync(): Promise<boolean> {
-    this.inflight ??= this.load().finally(() => {
+  sync(retryDelaysMs: readonly number[] = this.deps.retryDelaysMs ?? BACKGROUND_RETRY_DELAYS_MS): Promise<boolean> {
+    this.inflight ??= this.load(retryDelaysMs).finally(() => {
       this.inflight = null;
     });
     return this.inflight;
@@ -93,14 +97,15 @@ export class InstalliosCatalogProvider implements CatalogProvider {
 
   /** Before the first good sync, try once more instead of showing an incomplete list. */
   private async snapshot(): Promise<readonly AppDto[]> {
-    if (!this.apps) await this.sync();
+    // A buyer is waiting: retry briefly instead of on the background schedule.
+    if (!this.apps) await this.sync(this.deps.retryDelaysMs ?? INTERACTIVE_RETRY_DELAYS_MS);
     if (!this.apps) throw new CatalogUnavailableError();
     return this.apps;
   }
 
-  private async load(): Promise<boolean> {
+  private async load(retryDelaysMs: readonly number[]): Promise<boolean> {
     try {
-      const items = await this.fetchAll();
+      const items = await this.fetchAll(retryDelaysMs);
       const apps = items
         .map((item) => this.toAppDto(item))
         .sort((a, b) => a.name.localeCompare(b.name, 'ru-RU'));
@@ -117,14 +122,18 @@ export class InstalliosCatalogProvider implements CatalogProvider {
     }
   }
 
-  private async fetchAll(): Promise<CatalogItem[]> {
-    const retry = this.deps.retryDelaysMs ?? BACKGROUND_RETRY_DELAYS_MS;
+  private async fetchAll(retry: readonly number[]): Promise<CatalogItem[]> {
     const catalogs = await this.deps.client.listCatalogs(retry);
+    // A successful but empty answer during an outage must not wipe the storefront.
+    if (catalogs.length === 0) throw new Error('Install-IOS returned no catalogs');
     const pages = await Promise.all(
-      catalogs.map(async (catalog) => ({
-        catalogId: catalog.id,
-        applications: await this.deps.client.listApplications(catalog.id, retry),
-      })),
+      catalogs.map(async (catalog) => {
+        const applications = await this.deps.client.listApplications(catalog.id, retry);
+        if (applications.length === 0 && catalog.applications_count > 0) {
+          throw new Error(`Install-IOS catalog ${catalog.id} came back empty`);
+        }
+        return { catalogId: catalog.id, applications };
+      }),
     );
 
     const merged = new Map<string, CatalogItem>();

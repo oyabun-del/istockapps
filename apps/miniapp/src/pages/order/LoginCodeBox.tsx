@@ -15,6 +15,7 @@ import { hapticNotify } from '../../lib/telegram';
 
 /** The delivery API allows at most one status check per second. */
 export const CODE_POLL_MS = 1_500;
+const MS_PER_SECOND = 1000;
 
 type FinishedStatus = Exclude<CodeWaitStatus, 'active' | 'succeeded'>;
 
@@ -110,13 +111,20 @@ export function LoginCodeBox({ orderId, groupId, codesLeft }: Props) {
     queryFn: () => api.codeWait(orderId, waitId ?? ''),
     enabled: waitId !== null,
     refetchInterval: (query) => (query.state.data?.status === 'active' ? CODE_POLL_MS : false),
+    // The buyer asks for the code in iPhone Settings, with the Mini App in the background.
+    refetchIntervalInBackground: true,
     staleTime: 0,
     gcTime: 0,
     refetchOnWindowFocus: false,
   });
 
   const wait: CodeWaitDto | undefined = waitId ? status.data : undefined;
-  const codeSeconds = useSecondsUntil(wait?.codeExpiresAt ?? null);
+  // The TTL counts from when this answer arrived on the device, so a phone clock that is off
+  // from the server's can neither hide a fresh code nor keep a dead one on screen.
+  const codeExpiresAt = wait?.codeTtlSeconds
+    ? new Date(status.dataUpdatedAt + wait.codeTtlSeconds * MS_PER_SECOND).toISOString()
+    : null;
+  const codeSeconds = useSecondsUntil(codeExpiresAt);
   const hasFreshCode = wait?.status === 'succeeded' && wait.code !== null && codeSeconds > 0;
   const isCodeOver = wait?.status === 'succeeded' && codeSeconds === 0;
 

@@ -1,6 +1,6 @@
 import { isTerminalStatus, type CatalogQuery, type OrderDto } from '@istock/shared';
 import { QueryClient, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { ApiError, api } from './api';
 
 const STALE_TIME_MS = 30_000;
@@ -67,10 +67,14 @@ export function useOrder(id: number) {
     },
   });
 
-  // Keep "Мои загрузки" in sync whenever this order changes status.
+  // Keep "Мои загрузки" in sync whenever this order changes status (not on every visit).
   const status = order.data?.status;
+  const lastStatus = useRef(status);
   useEffect(() => {
-    if (status) void queryClient.invalidateQueries({ queryKey: queryKeys.orders });
+    if (!status) return;
+    const previous = lastStatus.current;
+    lastStatus.current = status;
+    if (previous && previous !== status) void queryClient.invalidateQueries({ queryKey: queryKeys.orders });
   }, [status, queryClient]);
 
   return order;

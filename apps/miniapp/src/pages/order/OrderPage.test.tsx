@@ -22,6 +22,30 @@ function unpaidOrder() {
   });
 }
 
+describe('OrderPage loading', () => {
+  it('sends a malformed order id back to the orders list', async () => {
+    const order = vi.spyOn(api, 'order');
+
+    renderWithProviders(<OrderPage />, { route: '/orders/abc', path: '/orders/:orderId' });
+
+    expect(await screen.findByTestId('navigated')).toBeInTheDocument();
+    expect(order).not.toHaveBeenCalled();
+  });
+
+  it('keeps the order on screen when a refresh fails', async () => {
+    vi.spyOn(api, 'order')
+      .mockResolvedValueOnce(unpaidOrder())
+      .mockRejectedValue(new ApiError('NETWORK_ERROR', 'Нет соединения', 0));
+
+    renderOrder();
+    await userEvent.click(await screen.findByRole('button', { name: /Проверить статус платежа/ }));
+
+    expect(await screen.findByText(/Нет соединения/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Проверить статус платежа/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Повторить/ })).not.toBeInTheDocument();
+  });
+});
+
 describe('OrderPage while unpaid', () => {
   it('counts down the invoice and opens the payment page for the chosen method', async () => {
     vi.spyOn(api, 'order').mockResolvedValue(unpaidOrder());
@@ -132,7 +156,7 @@ function codeWait(overrides: Partial<CodeWaitDto> = {}): CodeWaitDto {
     groupId: 'grp_1',
     status: 'active',
     code: null,
-    codeExpiresAt: null,
+    codeTtlSeconds: null,
     deadlineAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
     ...overrides,
   };
@@ -170,12 +194,16 @@ describe('OrderPage steps', () => {
   it('marks a completed order as done', async () => {
     vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'completed', isCodeReceived: true }));
     vi.spyOn(api, 'delivery').mockResolvedValue(delivery());
-    vi.spyOn(api, 'credentials').mockResolvedValue(credentialsFor());
+    const credentials = vi.spyOn(api, 'credentials').mockResolvedValue(credentialsFor());
 
     renderOrder();
 
     expect(await screen.findByText('Готово')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Приложение активировано' })).toBeInTheDocument();
+    // The buyer was told to sign out: the account is no longer re-read or shown.
+    expect(screen.getByText(/Активация завершена/)).toBeInTheDocument();
+    expect(screen.queryByText('id@example.com')).not.toBeInTheDocument();
+    expect(credentials).not.toHaveBeenCalled();
   });
 
   it('opens the last step when Apple did not ask for a code', async () => {
@@ -324,7 +352,7 @@ describe('OrderPage login code', () => {
       .mockResolvedValueOnce(codeWait())
       .mockImplementation(async () => {
         isCodeReceived = true;
-        return codeWait({ status: 'succeeded', code: '482913', codeExpiresAt: new Date(Date.now() + 60_000).toISOString() });
+        return codeWait({ status: 'succeeded', code: '482913', codeTtlSeconds: 60 });
       });
     const complete = vi.spyOn(api, 'complete').mockResolvedValue(makeOrder({ status: 'completed', isCodeReceived: true }));
 
@@ -344,11 +372,23 @@ describe('OrderPage login code', () => {
     expect(await screen.findByText('Приложение активировано')).toBeInTheDocument();
   });
 
+  it('shows a fresh code even when the phone clock is minutes off the server', async () => {
+    issuedOrder();
+    // The server only says how long the code lives; nothing is compared with the device clock.
+    vi.spyOn(Date, 'now').mockReturnValue(new Date('2030-01-01T00:00:00Z').getTime());
+    vi.spyOn(api, 'startCode').mockResolvedValue(codeWait({ status: 'succeeded', code: '654321', codeTtlSeconds: 60 }));
+
+    renderOrder();
+    await userEvent.click(await screen.findByRole('button', { name: /Включить ожидание кода/ }));
+
+    expect(await screen.findByText('654321')).toBeInTheDocument();
+    expect(screen.getByText(/Действует ещё/)).toBeInTheDocument();
+  });
+
   it('removes an expired code and offers a new attempt', async () => {
     issuedOrder();
-    vi.spyOn(api, 'startCode').mockResolvedValue(
-      codeWait({ status: 'succeeded', code: '111222', codeExpiresAt: new Date(Date.now() - 1000).toISOString() }),
-    );
+    // The server withholds a code that is no longer fresh.
+    vi.spyOn(api, 'startCode').mockResolvedValue(codeWait({ status: 'succeeded', code: null, codeTtlSeconds: null }));
 
     renderOrder();
     await userEvent.click(await screen.findByRole('button', { name: /Включить ожидание кода/ }));

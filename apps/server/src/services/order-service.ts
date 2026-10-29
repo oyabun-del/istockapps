@@ -11,18 +11,29 @@ import type { NewOrder, Order, User } from '../domain/models.js';
 import { describeApps } from '../domain/order-items.js';
 import { allowedSourcesFor, INVOICE_TTL_MS } from '../domain/order-transitions.js';
 import { AppError, getErrorMessage } from '../lib/app-error.js';
+import { KeyedLock } from '../lib/keyed-lock.js';
 import type { Logger } from '../lib/logger.js';
 import type { CatalogProvider } from '../providers/catalog/catalog-provider.js';
 import type { PaymentProvider, PaymentStatus } from '../providers/payment/payment-provider.js';
 import type { Repositories } from '../repositories/repositories.js';
 import type { NotificationService } from './notification-service.js';
 import { getOwnedOrder } from './order-access.js';
+import { recordOrderEvent } from './order-events.js';
 
 /** A fresh unpaid order for the same app is reused instead of creating a new invoice. */
 const PENDING_REUSE_WINDOW_MS = INVOICE_TTL_MS;
 /** Fallback polling of CISPAY when the webhook is late. */
 export const PAYMENT_SYNC_INTERVAL_MS = 15_000;
+/**
+ * A cancelled or expired order is still polled this long after creation: the buyer may pay the
+ * invoice until CISPAY closes it, and that payment must not depend on the webhook alone.
+ */
+export const LATE_PAYMENT_WINDOW_MS = INVOICE_TTL_MS + 30 * 60 * 1000;
+/** Orders checked by one background reconciliation pass. */
+const RECONCILE_BATCH_LIMIT = 100;
 const ORDER_LIST_LIMIT = 50;
+/** Statuses a payment can still move to "paid"; their invoices are worth polling. */
+const PAYABLE_STATUSES = allowedSourcesFor('paid');
 
 export interface PaymentUpdate {
   paymentId: string;
@@ -84,6 +95,10 @@ function buildNewOrder(
 
 export class OrderService {
   private readonly now: () => Date;
+  /** Two checkouts of one buyer at once must not both miss the pending order and open two invoices. */
+  private readonly checkoutLocks = new KeyedLock<number>();
+  /** Webhooks and polling of one order are applied one at a time (one-shot alerts check, then write). */
+  private readonly paymentLocks = new KeyedLock<number>();
 
   constructor(private readonly deps: OrderServiceDeps) {
     this.now = deps.now ?? (() => new Date());
@@ -116,14 +131,16 @@ export class OrderService {
 
     await repos.users.upsert(user);
 
-    const reuseAfter = new Date(this.now().getTime() - PENDING_REUSE_WINDOW_MS);
-    const pending = await repos.orders.findPendingForApps(user.id, input.appIds, reuseAfter);
-    const reusable = await this.reusablePendingOrder(pending, input.paymentMethod, pricing.totalKopecks);
-    if (reusable) return reusable;
+    return this.checkoutLocks.run(user.id, async () => {
+      const reuseAfter = new Date(this.now().getTime() - PENDING_REUSE_WINDOW_MS);
+      const pending = await repos.orders.findPendingForApps(user.id, input.appIds, reuseAfter);
+      const reusable = await this.reusablePendingOrder(pending, input.paymentMethod, pricing.totalKopecks);
+      if (reusable) return reusable;
 
-    const order = await repos.orders.create(buildNewOrder(user, apps, pricing, input.paymentMethod));
-    await repos.orderEvents.add(order.id, 'created', { method: input.paymentMethod, apps: order.items.length });
-    return this.openPayment(order, user);
+      const order = await repos.orders.create(buildNewOrder(user, apps, pricing, input.paymentMethod));
+      await repos.orderEvents.add(order.id, 'created', { method: input.paymentMethod, apps: order.items.length });
+      return this.openPayment(order, user);
+    });
   }
 
   private async openPayment(order: Order, user: User): Promise<Order> {
@@ -186,6 +203,20 @@ export class OrderService {
     return this.deps.repos.orders.listByUser(userId, ORDER_LIST_LIMIT);
   }
 
+  /** Background safety net for missed webhooks, including invoices paid after the buyer cancelled. */
+  async reconcilePayments(): Promise<void> {
+    const createdAfter = new Date(this.now().getTime() - LATE_PAYMENT_WINDOW_MS);
+    const orders = await this.deps.repos.orders.listForPaymentSync(PAYABLE_STATUSES, createdAfter, RECONCILE_BATCH_LIMIT);
+    for (const order of orders) {
+      if (!this.shouldSyncPayment(order)) continue;
+      try {
+        await this.syncPayment(order);
+      } catch (error: unknown) {
+        this.deps.logger.warn({ orderId: order.id, err: getErrorMessage(error) }, 'Payment reconciliation failed');
+      }
+    }
+  }
+
   /** Returns the order; for unpaid orders also polls CISPAY in case the webhook was missed. */
   async getOrder(userId: number, orderId: number): Promise<Order> {
     const order = await getOwnedOrder(this.deps.repos.orders, userId, orderId);
@@ -228,7 +259,7 @@ export class OrderService {
     const bound = order.paymentId
       ? order
       : await this.deps.repos.orders.update(order.id, { paymentId: update.paymentId });
-    await this.applyPaymentUpdate(bound, update);
+    await this.paymentLocks.run(order.id, () => this.applyPaymentUpdate(bound, update));
   }
 
   /** CISPAY reports CRYPTO webhooks in USD cents; its status API also returns the ruble amount. */
@@ -244,22 +275,27 @@ export class OrderService {
   }
 
   private shouldSyncPayment(order: Order): boolean {
-    if (order.status !== 'awaiting_payment' || !order.paymentId) return false;
+    if (!order.paymentId || !PAYABLE_STATUSES.includes(order.status)) return false;
+    const nowMs = this.now().getTime();
+    // A closed invoice is polled only while CISPAY may still accept a payment for it.
+    if (order.status !== 'awaiting_payment' && nowMs - order.createdAt.getTime() > LATE_PAYMENT_WINDOW_MS) return false;
     if (!order.paymentSyncedAt) return true;
-    return this.now().getTime() - order.paymentSyncedAt.getTime() >= PAYMENT_SYNC_INTERVAL_MS;
+    return nowMs - order.paymentSyncedAt.getTime() >= PAYMENT_SYNC_INTERVAL_MS;
   }
 
   private async syncPayment(order: Order): Promise<Order> {
     const paymentId = order.paymentId as string;
     const state = await this.deps.payments.getPayment(paymentId);
-    const synced = await this.deps.repos.orders.update(order.id, { paymentSyncedAt: this.now() });
-    await this.applyPaymentUpdate(synced, {
-      paymentId,
-      status: state.status,
-      amountKopecks: state.amountKopecks,
-      isSandbox: state.isSandbox,
-    });
-    return (await this.deps.repos.orders.findById(order.id)) ?? synced;
+    await this.paymentLocks.run(order.id, () =>
+      this.applyPaymentUpdate(order, {
+        paymentId,
+        status: state.status,
+        amountKopecks: state.amountKopecks,
+        isSandbox: state.isSandbox,
+      }),
+    );
+    // Throttle only after the update applied, so a failed one is retried on the next read.
+    return this.deps.repos.orders.update(order.id, { paymentSyncedAt: this.now() });
   }
 
   /** Shared by webhooks and polling, so both paths enforce the same rules. */
@@ -316,13 +352,8 @@ export class OrderService {
     }
   }
 
-  /** Audit trail after a committed transition: a failure is logged, never propagated. */
-  private async recordEvent(orderId: number, type: string, data?: Record<string, unknown>): Promise<void> {
-    try {
-      await this.deps.repos.orderEvents.add(orderId, type, data);
-    } catch (error: unknown) {
-      this.deps.logger.error({ orderId, type, err: getErrorMessage(error) }, 'Failed to record order event');
-    }
+  private recordEvent(orderId: number, type: string, data?: Record<string, unknown>): Promise<void> {
+    return recordOrderEvent(this.deps.repos.orderEvents, this.deps.logger, orderId, type, data);
   }
 
   /** The admin notification still goes out (with the bare id) if the user lookup fails. */

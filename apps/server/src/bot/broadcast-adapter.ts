@@ -3,7 +3,9 @@ import type { InlineButton, Keyboard } from '../domain/models.js';
 import { getErrorMessage } from '../lib/app-error.js';
 import type { BroadcastTelegram, CopyOutcome } from '../services/broadcast-port.js';
 
+const HTTP_UNAUTHORIZED = 401;
 const HTTP_FORBIDDEN = 403;
+const HTTP_NOT_FOUND = 404;
 const HTTP_TOO_MANY_REQUESTS = 429;
 const HTTP_SERVER_ERROR = 500;
 const MS_PER_SECOND = 1000;
@@ -26,6 +28,10 @@ export function classifyCopyError(error: unknown): CopyOutcome {
   // Not an API answer (network, timeout): the request never reached a verdict.
   if (!(error instanceof GrammyError)) return { kind: 'unavailable', reason: getErrorMessage(error) };
   if (error.error_code >= HTTP_SERVER_ERROR) return { kind: 'unavailable', reason: error.description };
+  // Revoked token or wrong API address: no user can get the copy, so pause instead of failing everyone.
+  if (error.error_code === HTTP_UNAUTHORIZED || error.error_code === HTTP_NOT_FOUND) {
+    return { kind: 'unavailable', reason: error.description };
+  }
   if (error.error_code === HTTP_TOO_MANY_REQUESTS) {
     return { kind: 'retry', afterMs: (error.parameters.retry_after ?? 1) * MS_PER_SECOND };
   }

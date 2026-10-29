@@ -66,11 +66,13 @@ function parseRetryAfter(value: string | null): number | null {
   return Math.min(Math.ceil(seconds), MAX_RETRY_AFTER_SECONDS);
 }
 
+/** null for a body that is not JSON; a body cut off by the timeout or the network throws. */
 async function readJson(response: Response): Promise<unknown> {
   try {
     return await response.json();
-  } catch {
-    return null;
+  } catch (error: unknown) {
+    if (error instanceof SyntaxError) return null;
+    throw error;
   }
 }
 
@@ -203,7 +205,13 @@ export class InstalliosClient {
       throw new InstalliosApiError(operation, 0, 'network_error');
     }
 
-    const body = await readJson(response);
+    let body: unknown;
+    try {
+      body = await readJson(response);
+    } catch {
+      this.logger.warn({ operation, requestId, ms: Date.now() - startedAt }, 'Install-IOS response was cut off');
+      throw new InstalliosApiError(operation, 0, 'network_error');
+    }
     const log = { operation, requestId, status: response.status, ms: Date.now() - startedAt };
     if (!response.ok) {
       const parsedError = errorBodySchema.safeParse(body);

@@ -190,6 +190,58 @@ describe('BroadcastRunner', () => {
     expect(telegram.edits.at(-1)?.html).toContain('остановлена');
   });
 
+  it('reports a broadcast stopped while the worker waits out an outage', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const [first] = await seedUsers(1);
+    const outage = Array.from({ length: 4 }, () => ({ kind: 'unavailable' as const, reason: 'socket hang up' }));
+    telegram.outcomes.set(first as number, outage);
+    const broadcast = await seedSending();
+    const runner = createRunner();
+    await runToEnd(runner);
+
+    await repos.broadcasts.transition(broadcast.id, ['sending'], { status: 'cancelled', finishedAt: new Date() });
+    await runner.cancel(broadcast.id);
+
+    const report = telegram.edits.at(-1);
+    expect(report).toMatchObject({ messageId: PROGRESS_MESSAGE });
+    expect(report?.html).toContain('остановлена');
+    expect(report?.keyboard).toBeUndefined();
+  });
+
+  it('repeats only a few copies when saving progress fails', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    await seedUsers(30);
+    const broadcast = await seedSending();
+    const update = repos.broadcasts.update.bind(repos.broadcasts);
+    let calls = 0;
+    vi.spyOn(repos.broadcasts, 'update').mockImplementation(async (id, patch) => {
+      calls += 1;
+      if (calls === 1) throw new Error('db down');
+      return update(id, patch);
+    });
+    const runner = createRunner();
+
+    await runToEnd(runner);
+    vi.advanceTimersByTime(30_000);
+    await runner.idle();
+
+    const chats = telegram.copies.map((copy) => copy.chatId);
+    expect(chats.length - new Set(chats).size).toBeLessThanOrEqual(10);
+    expect((await repos.broadcasts.findById(broadcast.id))?.status).toBe('done');
+  });
+
+  it('gives up when every copy fails in a row instead of failing the whole audience', async () => {
+    const ids = await seedUsers(60);
+    for (const id of ids) telegram.outcomes.set(id, [{ kind: 'failed', reason: 'Bad Request: wrong markup' }]);
+    const broadcast = await seedSending();
+
+    await runToEnd(createRunner());
+
+    const saved = await repos.broadcasts.findById(broadcast.id);
+    expect(saved).toMatchObject({ status: 'failed', failed: 25 });
+    expect(telegram.edits.at(-1)?.html).toContain('прервана');
+  });
+
   it('cuts a long flood wait short on shutdown without skipping the user', async () => {
     const [first, second] = await seedUsers(2);
     telegram.outcomes.set(second as number, [{ kind: 'retry', afterMs: 60_000 }]);

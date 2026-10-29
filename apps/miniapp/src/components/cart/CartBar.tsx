@@ -52,8 +52,8 @@ function Notice({ notice }: { notice: DiscountNotice }) {
       transition={POP_SPRING}
       className={`mb-2 flex items-center gap-2 rounded-2xl px-4 py-2.5 text-label-lg shadow-lg ${tone}`}
     >
-      <Icon name={notice.isReached ? 'sell' : 'add_shopping_cart'} className="text-[20px]" />
-      {notice.text}
+      <Icon name={notice.isReached ? 'sell' : 'add_shopping_cart'} className="shrink-0 text-[20px]" />
+      <span className="text-balance">{notice.text}</span>
     </motion.p>
   );
 }

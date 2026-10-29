@@ -71,7 +71,8 @@ export function useCartIds(): CartIds {
 
 /** 1 приложение, 2 приложения, 5 приложений. */
 export function formatAppCount(count: number): string {
-  return `${count} ${pluralRu(count, ['приложение', 'приложения', 'приложений'])}`;
+  // Non-breaking: a line must not end with a bare number.
+  return `${count}\u00a0${pluralRu(count, ['приложение', 'приложения', 'приложений'])}`;
 }
 
 /**

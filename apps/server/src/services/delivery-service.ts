@@ -15,7 +15,8 @@ import {
 } from '../providers/delivery/delivery-provider.js';
 import type { Repositories } from '../repositories/repositories.js';
 import { isGroupUsable, toCodeWaitDto, toDeliveryDto } from './delivery-view.js';
-import { getOwnedOrder } from './order-access.js';
+import type { NotificationService } from './notification-service.js';
+import { findBuyer, getOwnedOrder } from './order-access.js';
 import { recordOrderEvent } from './order-events.js';
 
 /** The API asks for at most one status check per second for each wait. */
@@ -33,6 +34,7 @@ const NO_ACCESS_MESSAGE = 'Доступ к аккаунту сейчас нед�
 export interface DeliveryServiceDeps {
   repos: Repositories;
   delivery: DeliveryProvider;
+  notifications: Pick<NotificationService, 'activationCompleted'>;
   logger: Logger;
   now?: () => Date;
 }
@@ -167,6 +169,9 @@ export class DeliveryService {
     });
     if (!updated) throw new AppError('INVALID_STATE', 'Сначала войдите в аккаунт по выданным данным');
     await this.recordEvent(order.id, 'completed');
+    // Only the call that made the transition gets here, so the admins hear about it once.
+    const buyer = await findBuyer(this.deps.repos.users, this.deps.logger, updated.userId);
+    await this.deps.notifications.activationCompleted(updated, buyer);
     return updated;
   }
 

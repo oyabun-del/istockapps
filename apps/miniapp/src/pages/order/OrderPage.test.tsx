@@ -241,6 +241,27 @@ describe('OrderPage delivery', () => {
     expect(await screen.findByRole('button', { name: /Получить логин и пароль/ })).toBeInTheDocument();
   });
 
+  it('warns after the download that an installed and deleted app cannot be downloaded again', async () => {
+    vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'download_confirmed' }));
+    vi.spyOn(api, 'delivery').mockResolvedValue(delivery());
+
+    renderOrder();
+
+    expect(await screen.findByRole('button', { name: 'Скачать' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Скачать снова/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/только если загрузка не завершилась/)).toBeInTheDocument();
+  });
+
+  it('shows no re-download warning before the download is confirmed', async () => {
+    vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'paid' }));
+    vi.spyOn(api, 'delivery').mockResolvedValue(delivery());
+
+    renderOrder();
+
+    expect(await screen.findByRole('button', { name: 'Скачать' })).toBeInTheDocument();
+    expect(screen.queryByText(/только если загрузка не завершилась/)).not.toBeInTheDocument();
+  });
+
   it('keeps the working app available while another one waits for a replacement', async () => {
     vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'paid' }));
     vi.spyOn(api, 'delivery').mockResolvedValue(

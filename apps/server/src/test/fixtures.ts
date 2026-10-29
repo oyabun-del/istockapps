@@ -92,7 +92,7 @@ export function createTestContext(): TestContext {
     acceptSandboxPayments: true,
     now: clock.now,
   });
-  const deliveryService = new DeliveryService({ repos, delivery, logger: silentLogger, now: clock.now });
+  const deliveryService = new DeliveryService({ repos, delivery, notifications, logger: silentLogger, now: clock.now });
 
   return {
     repos,

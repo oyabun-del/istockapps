@@ -152,8 +152,19 @@ describe('GuidePage', () => {
     const rules = screen.getByRole('region', { name: 'Важно до начала' });
     expect(within(rules).getByText(/никогда не входите с ними в iCloud/i)).toBeInTheDocument();
     expect(within(rules).getByText(/Сгружать неиспользуемые/)).toBeInTheDocument();
+    expect(within(rules).getByText(/Не удаляйте приложение/)).toBeInTheDocument();
     expect(screen.getByText('Код не приходит или не подходит')).toBeInTheDocument();
     expect(screen.getByText('Я удалил приложение')).toBeInTheDocument();
+    expect(screen.getByText('Можно ли скачать приложение ещё раз после активации?')).toBeInTheDocument();
+  });
+
+  it('matches the buttons of the order screen and never promises a free re-download', () => {
+    renderWithProviders(<GuidePage />);
+    const text = screen.getByRole('main').textContent ?? '';
+
+    expect(text).toContain('«Включить ожидание кода»');
+    expect(text).toContain('«Apple не запросил код»');
+    expect(text).not.toMatch(/«Получить код»|«Запросить новый код»|«Скачать снова»|Платить повторно не нужно/);
   });
 
   it('never mentions certificate, profile or IPA installation', () => {

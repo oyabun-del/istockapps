@@ -62,7 +62,7 @@ function AppLinks({ app, group, isDone, hasManyApps }: AppLinksProps) {
     <div className="flex flex-col gap-1.5">
       {title}
       <Button isFullWidth variant={isDone ? 'secondary' : 'primary'} icon="download" onClick={() => openExternalLink(main)}>
-        {isDone ? 'Скачать снова' : 'Скачать'}
+        Скачать
       </Button>
       <Button isFullWidth variant="ghost" icon="open_in_new" onClick={() => openExternalLink(reserve)}>
         Резервная ссылка
@@ -90,6 +90,12 @@ export function DeliveryApps({ delivery, isDone }: Props) {
       {entries.map(({ app, group }) => (
         <AppLinks key={`${group.id}:${app.id}`} app={app} group={group} isDone={isDone} hasManyApps={entries.length > 1} />
       ))}
+      {isDone && hasAvailable && (
+        <p className="flex items-start gap-1.5 rounded-lg bg-warning/10 p-space-sm text-body-sm text-warning">
+          <Icon name="warning" className="mt-0.5 text-[16px]" />
+          Нажимайте, только если загрузка не завершилась. Установленное и удалённое приложение скачать повторно нельзя.
+        </p>
+      )}
       {hasAvailable && (
         <p className="tabular flex items-center gap-1.5 text-label-md text-secondary">
           <Icon name="schedule" className="text-[16px]" />

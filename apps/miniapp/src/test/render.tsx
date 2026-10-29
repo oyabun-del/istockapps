@@ -1,4 +1,4 @@
-import type { AppDto, MeDto, OrderDto } from '@istock/shared';
+import type { AppDto, MeDto, OrderDto, SellerDto } from '@istock/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, type RenderResult } from '@testing-library/react';
 import type { ReactElement } from 'react';
@@ -23,12 +23,19 @@ export function renderWithProviders(
   return { ...result, client };
 }
 
+export const SELLER: SellerDto = {
+  name: 'ИП Иванов Иван Иванович',
+  inn: '500100732259',
+  ogrnip: '304500116000157',
+  email: 'shop@example.com',
+};
+
 export const ME: MeDto = {
   user: { id: 42, firstName: 'Иван', username: 'ivan', photoUrl: null },
   isSubscribed: true,
   channelUrl: 'https://t.me/test_channel',
   supportUrl: 'https://t.me/support',
-  termsUrl: null,
+  seller: SELLER,
   channel: { title: 'iStockApps', subscriberCount: 42_800 },
 };
 

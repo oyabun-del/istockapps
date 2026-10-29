@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { channelUrl, installiosPriceOf, parseEnv, supportUrl } from './env.js';
+import { channelUrl, installiosPriceOf, parseEnv, sellerOf, supportUrl } from './env.js';
 
 const BASE = {
   BOT_TOKEN: '123456:ABCdefGHIjklMNOpqrSTUvwxYZ0123456789',
@@ -11,6 +11,13 @@ const BASE = {
   DATABASE_URL: 'file:./dev.db',
   NODE_ENV: 'development',
   PAYMENT_PROVIDER: 'mock',
+};
+
+const SELLER = {
+  SELLER_NAME: 'ИП Иванов Иван Иванович',
+  SELLER_INN: '500100732259',
+  SELLER_OGRNIP: '304500116000157',
+  SELLER_EMAIL: 'shop@example.com',
 };
 
 describe('parseEnv', () => {
@@ -63,12 +70,6 @@ describe('parseEnv', () => {
     });
   });
 
-  it('accepts an optional https terms of service link', () => {
-    expect(parseEnv(BASE).TERMS_URL).toBeUndefined();
-    expect(parseEnv({ ...BASE, TERMS_URL: 'https://telegra.ph/terms' }).TERMS_URL).toBe('https://telegra.ph/terms');
-    expect(() => parseEnv({ ...BASE, TERMS_URL: 'http://telegra.ph/terms' })).toThrow(/TERMS_URL/);
-  });
-
   it('rejects invalid admin ids with a readable message', () => {
     expect(() => parseEnv({ ...BASE, ADMIN_IDS: '111,abc' })).toThrow(/ADMIN_IDS: Invalid admin ids: abc/);
   });
@@ -107,6 +108,35 @@ describe('parseEnv', () => {
 
   it('needs an explicit channel url for numeric channel ids', () => {
     expect(() => parseEnv({ ...BASE, REQUIRED_CHANNEL: '-1001234567890' })).toThrow(/REQUIRED_CHANNEL_URL/);
+  });
+});
+
+describe('seller details', () => {
+  it('parses the details shown in the legal documents', () => {
+    expect(sellerOf(parseEnv({ ...BASE, ...SELLER }))).toEqual({
+      name: 'ИП Иванов Иван Иванович',
+      inn: '500100732259',
+      ogrnip: '304500116000157',
+      email: 'shop@example.com',
+    });
+  });
+
+  it('is null in development when nothing is set', () => {
+    expect(sellerOf(parseEnv(BASE))).toBeNull();
+  });
+
+  it('rejects malformed INN, OGRNIP and email', () => {
+    expect(() => parseEnv({ ...BASE, ...SELLER, SELLER_INN: '7701234567' })).toThrow(/SELLER_INN/);
+    expect(() => parseEnv({ ...BASE, ...SELLER, SELLER_OGRNIP: '1027700132195' })).toThrow(/SELLER_OGRNIP/);
+    expect(() => parseEnv({ ...BASE, ...SELLER, SELLER_EMAIL: 'not-an-email' })).toThrow(/SELLER_EMAIL/);
+  });
+
+  it('refuses partly filled details', () => {
+    expect(() => parseEnv({ ...BASE, SELLER_NAME: SELLER.SELLER_NAME })).toThrow(/SELLER_INN/);
+  });
+
+  it('requires the details in production', () => {
+    expect(() => parseEnv({ ...BASE, NODE_ENV: 'production' })).toThrow(/SELLER_NAME/);
   });
 });
 
@@ -155,6 +185,7 @@ describe('Install-IOS settings', () => {
   it('lets production run on Install-IOS', () => {
     const env = parseEnv({
       ...INSTALLIOS,
+      ...SELLER,
       NODE_ENV: 'production',
       PAYMENT_PROVIDER: 'cispay',
       CISPAY_SHOP_ID: '0192a4b8-0000-7000-8000-000000000001',

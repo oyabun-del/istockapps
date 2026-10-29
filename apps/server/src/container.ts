@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import type { TelegramAdapters } from './bot/bot.js';
-import { channelUrl, installiosPriceOf, supportUrl, type Env } from './config/env.js';
+import { channelUrl, installiosPriceOf, sellerOf, supportUrl, type Env } from './config/env.js';
 import type { AppDeps } from './http/app.js';
 import type { Logger } from './lib/logger.js';
 import { initDataSecret } from './lib/telegram-init-data.js';
@@ -110,7 +110,8 @@ export function createContainer(env: Env, telegram: TelegramAdapters, logger: Lo
     trustProxyHops: env.TRUST_PROXY_HOPS,
     devUserId: env.DEV_USER_ID,
     allowedOrigin: new URL(env.WEBAPP_URL).origin,
-    links: { channelUrl: channelUrl(env), supportUrl: supportUrl(env), termsUrl: env.TERMS_URL ?? null },
+    links: { channelUrl: channelUrl(env), supportUrl: supportUrl(env) },
+    seller: sellerOf(env),
     channel: new ChannelInfoService({ channel: env.REQUIRED_CHANNEL, fetchChannel: telegram.fetchChannel, logger }),
     repos,
     catalog,

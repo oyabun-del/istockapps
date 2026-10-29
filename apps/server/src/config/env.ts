@@ -31,6 +31,11 @@ const usernameSchema = z
 
 const httpsUrl = z.url({ protocol: /^https$/ });
 
+/** Individual entrepreneur: 12-digit INN, 15-digit OGRNIP. */
+const innSchema = z.string().trim().regex(/^\d{12}$/, 'SELLER_INN must be 12 digits (INN of an individual entrepreneur)');
+const ogrnipSchema = z.string().trim().regex(/^\d{15}$/, 'SELLER_OGRNIP must be 15 digits');
+const SELLER_KEYS = ['SELLER_NAME', 'SELLER_INN', 'SELLER_OGRNIP', 'SELLER_EMAIL'] as const;
+
 const MAX_PRICE_RUB = 1_000_000;
 const rublesSchema = z.coerce.number().positive().max(MAX_PRICE_RUB).multipleOf(0.01);
 
@@ -73,8 +78,12 @@ const envSchema = z
     REQUIRED_CHANNEL_URL: httpsUrl.optional(),
     ADMIN_IDS: adminIdsSchema,
     SUPPORT_USERNAME: usernameSchema,
-    /** Terms of service page shown in the profile (e.g. a Telegraph article). */
-    TERMS_URL: httpsUrl.optional(),
+    /** Seller details for the terms and privacy policy; required in production (checked in superRefine). */
+    SELLER_NAME: z.string().trim().min(1).optional(),
+    SELLER_INN: innSchema.optional(),
+    SELLER_OGRNIP: ogrnipSchema.optional(),
+    /** Where buyers send personal data requests. */
+    SELLER_EMAIL: z.email().optional(),
     /** Broadcast copies per second; Telegram allows about 30 for bulk messages. */
     BROADCAST_RATE_PER_SEC: z.coerce.number().int().min(1).max(MAX_BROADCAST_RATE).default(DEFAULT_BROADCAST_RATE),
 
@@ -183,6 +192,13 @@ const envSchema = z
         message: 'CATALOG_PROVIDER and DELIVERY_PROVIDER must match: app ids of one are unknown to the other',
       });
     }
+    const missingSeller = SELLER_KEYS.filter((key) => !env[key]);
+    const isSellerPartial = missingSeller.length > 0 && missingSeller.length < SELLER_KEYS.length;
+    if (env.NODE_ENV === 'production' || isSellerPartial) {
+      for (const key of missingSeller) {
+        ctx.addIssue({ code: 'custom', path: [key], message: `${key} is required: the legal documents name the seller` });
+      }
+    }
     if (env.REQUIRED_CHANNEL.startsWith('-100') && !env.REQUIRED_CHANNEL_URL) {
       ctx.addIssue({
         code: 'custom',
@@ -219,6 +235,20 @@ export function installiosPriceOf(
   const fallback = env.INSTALLIOS_DEFAULT_PRICE_RUB;
   if (fallback === undefined) throw new Error('INSTALLIOS_DEFAULT_PRICE_RUB is not set');
   return (appId) => Math.round((env.INSTALLIOS_PRICES[appId] ?? fallback) * KOPECKS_PER_RUBLE);
+}
+
+export interface Seller {
+  name: string;
+  inn: string;
+  ogrnip: string;
+  email: string;
+}
+
+/** Seller details, or null when none are configured (development only, see superRefine). */
+export function sellerOf(env: Pick<Env, (typeof SELLER_KEYS)[number]>): Seller | null {
+  const { SELLER_NAME: name, SELLER_INN: inn, SELLER_OGRNIP: ogrnip, SELLER_EMAIL: email } = env;
+  if (!name || !inn || !ogrnip || !email) return null;
+  return { name, inn, ogrnip, email };
 }
 
 export function supportUrl(env: Pick<Env, 'SUPPORT_USERNAME'>): string {

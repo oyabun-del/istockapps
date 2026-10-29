@@ -1,8 +1,10 @@
 import type { MeDto } from '@istock/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'motion/react';
+import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
+import { LEGAL_PATHS, LEGAL_TITLES } from '../../content/legal';
 import { api, errorMessage } from '../../lib/api';
 import { formatSubscribers } from '../../lib/format';
 import { POP_SPRING, REVEAL } from '../../lib/motion';
@@ -116,6 +118,15 @@ export function SubscriptionGate({ me }: Props) {
         <Icon name="help" className="text-[18px]" />
         Нужна помощь? Поддержка
       </button>
+
+      <nav aria-label="Документы" className="flex flex-wrap justify-center gap-x-space-md gap-y-1 text-label-sm text-outline">
+        <Link to={LEGAL_PATHS.terms} className="transition-colors hover:text-primary">
+          {LEGAL_TITLES.terms}
+        </Link>
+        <Link to={LEGAL_PATHS.privacy} className="transition-colors hover:text-primary">
+          {LEGAL_TITLES.privacy}
+        </Link>
+      </nav>
     </main>
   );
 }

@@ -30,7 +30,8 @@ function baseDeps(overrides: Partial<AppDeps> = {}): AppDeps {
   return {
     botToken: BOT_TOKEN,
     allowedOrigin: 'https://shop.example.com',
-    links: { channelUrl: 'https://t.me/test_channel', supportUrl: 'https://t.me/support', termsUrl: null },
+    links: { channelUrl: 'https://t.me/test_channel', supportUrl: 'https://t.me/support' },
+    seller: null,
     channel: ctx.channel,
     repos: ctx.repos,
     catalog: ctx.catalog,
@@ -144,18 +145,15 @@ describe('catalog', () => {
 });
 
 describe('profile and gate data', () => {
-  it('returns channel info and the terms link with /me', async () => {
+  it('returns channel info and the seller details with /me', async () => {
+    const seller = { name: 'ИП Иванов Иван Иванович', inn: '500100732259', ogrnip: '304500116000157', email: 'shop@example.com' };
     await app.close();
-    app = await buildApp(
-      baseDeps({ links: { channelUrl: 'https://t.me/test_channel', supportUrl: 'https://t.me/support', termsUrl: 'https://telegra.ph/terms' } }),
-    );
+    app = await buildApp(baseDeps({ seller }));
 
     const me = await app.inject({ method: 'GET', url: '/api/me', headers: authHeader() });
 
-    expect(me.json().data).toMatchObject({
-      termsUrl: 'https://telegra.ph/terms',
-      channel: { title: 'iStockApps', subscriberCount: 42_800 },
-    });
+    expect(me.json().data).toMatchObject({ seller, channel: { title: 'iStockApps', subscriberCount: 42_800 } });
+    expect(me.json().data).not.toHaveProperty('termsUrl');
   });
 });
 

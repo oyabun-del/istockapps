@@ -10,6 +10,7 @@ import { CatalogPage } from './pages/catalog/CatalogPage';
 import { DownloadsPage } from './pages/downloads/DownloadsPage';
 import { SubscriptionGate } from './pages/gate/SubscriptionGate';
 import { GuidePage } from './pages/guide/GuidePage';
+import { LegalPage } from './pages/legal/LegalPage';
 import { OrderPage } from './pages/order/OrderPage';
 import { ProfilePage } from './pages/profile/ProfilePage';
 
@@ -43,6 +44,7 @@ export function AppRoutes() {
         <Route path="/orders/:orderId" element={<OrderPage />} />
         <Route path="/guide" element={<GuidePage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/legal/:doc" element={<LegalPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>
@@ -60,6 +62,14 @@ export function App() {
       </main>
     );
   }
-  if (!me.data.isSubscribed) return <SubscriptionGate me={me.data} />;
+  if (!me.data.isSubscribed) {
+    // The documents stay readable before subscribing: they describe what the shop does with the data.
+    return (
+      <Routes>
+        <Route path="/legal/:doc" element={<LegalPage />} />
+        <Route path="*" element={<SubscriptionGate me={me.data} />} />
+      </Routes>
+    );
+  }
   return <AppRoutes />;
 }

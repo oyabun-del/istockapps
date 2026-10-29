@@ -20,6 +20,13 @@ describe('SubscriptionGate', () => {
     expect(screen.getByRole('button', { name: /Наш канал/ })).not.toHaveTextContent(/подписчик/);
   });
 
+  it('lets a guest read the terms and the privacy policy', () => {
+    renderWithProviders(<SubscriptionGate me={GUEST} />);
+
+    expect(screen.getByRole('link', { name: 'Пользовательское соглашение' })).toHaveAttribute('href', '/legal/terms');
+    expect(screen.getByRole('link', { name: 'Политика конфиденциальности' })).toHaveAttribute('href', '/legal/privacy');
+  });
+
   it('opens the channel and support inside Telegram', async () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     renderWithProviders(<SubscriptionGate me={GUEST} />);

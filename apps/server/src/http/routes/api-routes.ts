@@ -1,4 +1,4 @@
-import type { MeDto, PaymentMethodDto } from '@istock/shared';
+import type { MeDto, PaymentMethodDto, SellerDto } from '@istock/shared';
 import {
   appIdParamSchema,
   catalogQuerySchema,
@@ -48,7 +48,8 @@ export interface ApiRoutesDeps {
   orders: OrderService;
   delivery: DeliveryService;
   subscription: SubscriptionService;
-  links: { channelUrl: string; supportUrl: string; termsUrl: string | null };
+  links: { channelUrl: string; supportUrl: string };
+  seller: SellerDto | null;
   channel: ChannelInfoService;
 }
 
@@ -75,6 +76,7 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiRoutesDeps): vo
       user: { id: user.id, firstName: user.firstName, username: user.username, photoUrl: user.photoUrl },
       isSubscribed,
       ...deps.links,
+      seller: deps.seller,
       channel,
     };
     return ok(me);

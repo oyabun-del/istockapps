@@ -3,18 +3,21 @@ import type { ChannelFetcher } from '../services/channel-info-service.js';
 import type { ChatMemberFetcher, SubscriptionService } from '../services/subscription-service.js';
 import type { MessageSender } from '../services/notification-service.js';
 import type { UserRepository } from '../repositories/repositories.js';
-import { AppError, getErrorMessage } from '../lib/app-error.js';
+import { getErrorMessage } from '../lib/app-error.js';
 import type { Logger } from '../lib/logger.js';
 import type { BroadcastTelegram } from '../services/broadcast-port.js';
 import type { BroadcastService } from '../services/broadcast-service.js';
 import type { PartnerAdminService } from '../services/partner-admin-service.js';
 import { createBroadcastTelegram } from './broadcast-adapter.js';
 import { registerBroadcastHandlers } from './broadcast-handlers.js';
+import {
+  CHECK_SUBSCRIPTION_PATTERN,
+  handleSubscriptionGate,
+  replySubscribeFirst,
+  safeIsSubscribed,
+} from './subscription-gate.js';
 import { BOT_TEXT } from './texts.js';
 
-const CHECK_SUBSCRIPTION = 'check_subscription';
-/** Callback data: check_subscription[:<orderId>], so a deep link survives the subscribe step. */
-const CHECK_SUBSCRIPTION_PATTERN = /^check_subscription(?::(\d+))?$/;
 const ORDER_PAYLOAD = /^\d+$/;
 const MENU_BUTTON_TEXT = 'Магазин';
 const PUBLIC_COMMANDS = [
@@ -101,27 +104,11 @@ function shopKeyboard(deps: BotDeps, startParam?: string): InlineKeyboard {
   return new InlineKeyboard().webApp('🛍 Открыть магазин', url).row().url('💬 Поддержка', deps.supportUrl);
 }
 
-function subscribeKeyboard(deps: BotDeps, orderId?: string): InlineKeyboard {
-  return new InlineKeyboard()
-    .url('📢 Подписаться на канал', deps.channelUrl)
-    .row()
-    .text('✅ Я подписался', orderId ? `${CHECK_SUBSCRIPTION}:${orderId}` : CHECK_SUBSCRIPTION);
-}
-
 /** Order id from `/start <id>` or from the callback data; anything else is ignored. */
 function orderPayload(match: Context['match']): string | undefined {
   if (typeof match === 'string') return ORDER_PAYLOAD.test(match) ? match : undefined;
   const captured = match?.[1];
   return captured && ORDER_PAYLOAD.test(captured) ? captured : undefined;
-}
-
-async function safeIsSubscribed(deps: BotDeps, userId: number, force: boolean): Promise<boolean | null> {
-  try {
-    return await deps.subscription.isSubscribed(userId, { force });
-  } catch (error: unknown) {
-    if (error instanceof AppError) return null;
-    throw error;
-  }
 }
 
 export async function handleStart(ctx: Context, deps: BotDeps): Promise<void> {
@@ -145,7 +132,7 @@ export async function handleStart(ctx: Context, deps: BotDeps): Promise<void> {
     return;
   }
   if (!isSubscribed) {
-    await ctx.reply(BOT_TEXT.subscribeFirst, { parse_mode: 'HTML', reply_markup: subscribeKeyboard(deps, payload) });
+    await replySubscribeFirst(ctx, deps, payload);
     return;
   }
   await ctx.reply(BOT_TEXT.welcome(from.first_name), { parse_mode: 'HTML', reply_markup: shopKeyboard(deps, payload) });
@@ -191,6 +178,8 @@ export async function handleAdminCommand(
 }
 
 export function registerBotHandlers(bot: Bot, deps: BotDeps): void {
+  // First, so every handler below runs only for subscribers (with the exceptions listed in the gate).
+  bot.use((ctx, next) => handleSubscriptionGate(ctx, deps, next));
   bot.command('start', (ctx) => handleStart(ctx, deps));
   bot.command('support', (ctx) =>
     ctx.reply(BOT_TEXT.support, { reply_markup: new InlineKeyboard().url('💬 Написать в поддержку', deps.supportUrl) }),

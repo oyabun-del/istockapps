@@ -6,7 +6,7 @@ export interface DiscountTier {
 
 /** Sorted from the largest tier down. */
 export const BULK_DISCOUNT_TIERS: readonly DiscountTier[] = [
-  { minItems: 5, perItemKopecks: 15000 },
+  { minItems: 5, perItemKopecks: 25000 },
   { minItems: 3, perItemKopecks: 10000 },
 ];
 

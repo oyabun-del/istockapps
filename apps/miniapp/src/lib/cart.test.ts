@@ -71,16 +71,16 @@ describe('discount copy', () => {
     expect(discountHint(0)).toBe('Добавьте 3 приложения для скидки 300 ₽');
     expect(discountHint(1)).toBe('Добавьте ещё 2 приложения для скидки 300 ₽');
     expect(discountHint(2)).toBe('Добавьте ещё 1 приложение для скидки 300 ₽');
-    expect(discountHint(3)).toBe('Добавьте ещё 2 приложения для скидки 750 ₽');
-    expect(discountHint(4)).toBe('Добавьте ещё 1 приложение для скидки 750 ₽');
+    expect(discountHint(3)).toBe('Добавьте ещё 2 приложения для скидки 1 250 ₽');
+    expect(discountHint(4)).toBe('Добавьте ещё 1 приложение для скидки 1 250 ₽');
     expect(discountHint(5)).toBeNull();
   });
 
   it('keeps pointing to the next discount, marking a just reached tier', () => {
     expect(discountNotice(1)).toEqual({ isReached: false, text: 'Добавьте ещё 2 приложения для скидки 300 ₽' });
-    expect(discountNotice(3)).toEqual({ isReached: true, text: 'Добавьте ещё 2 приложения для скидки 750 ₽' });
-    expect(discountNotice(4)).toEqual({ isReached: false, text: 'Добавьте ещё 1 приложение для скидки 750 ₽' });
-    expect(discountNotice(5)).toEqual({ isReached: true, text: 'Скидка 150 ₽ на каждое приложение' });
-    expect(discountNotice(7)).toEqual({ isReached: true, text: 'Скидка 150 ₽ на каждое приложение' });
+    expect(discountNotice(3)).toEqual({ isReached: true, text: 'Добавьте ещё 2 приложения для скидки 1 250 ₽' });
+    expect(discountNotice(4)).toEqual({ isReached: false, text: 'Добавьте ещё 1 приложение для скидки 1 250 ₽' });
+    expect(discountNotice(5)).toEqual({ isReached: true, text: 'Скидка 250 ₽ на каждое приложение' });
+    expect(discountNotice(7)).toEqual({ isReached: true, text: 'Скидка 250 ₽ на каждое приложение' });
   });
 });

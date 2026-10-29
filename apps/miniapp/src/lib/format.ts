@@ -7,16 +7,9 @@ const DAY_MONTH = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'lon
 const DAY_MONTH_YEAR = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
 const COMPACT = new Intl.NumberFormat('ru-RU', { notation: 'compact', maximumFractionDigits: 1 });
 
-export type PluralForms = readonly [one: string, few: string, many: string];
+import { pluralRu } from '@istock/shared';
 
-/** 1 заказ, 2 заказа, 5 заказов. */
-export function pluralRu(count: number, [one, few, many]: PluralForms): string {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return one;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
-  return many;
-}
+export { pluralRu, type PluralForms } from '@istock/shared';
 
 function startOfDay(date: Date): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();

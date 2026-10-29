@@ -1,5 +1,12 @@
 import { z } from 'zod';
-import { ACTIVE_PAYMENT_METHOD, type CatalogQuery, type CreateOrderInput, type StartCodeInput } from './api.js';
+import {
+  ACTIVE_PAYMENT_METHOD,
+  normalizePromoCode,
+  type CatalogQuery,
+  type CreateOrderInput,
+  type PromoCheckInput,
+  type StartCodeInput,
+} from './api.js';
 import { MAX_ORDER_ITEMS } from './pricing.js';
 
 /** Server-side request validation. Kept out of the main entry so zod is not bundled into the Mini App. */
@@ -12,6 +19,10 @@ const appIdSchema = z.string().min(1).max(APP_ID_MAX).regex(APP_ID_PATTERN).refi
 
 export const appIdParamSchema = z.object({ appId: appIdSchema });
 
+const PROMO_INPUT_MAX = 64;
+/** Only bounded and normalized here: a malformed code is answered with PROMO_INVALID, not a validation error. */
+const promoInputSchema = z.string().max(PROMO_INPUT_MAX).transform(normalizePromoCode);
+
 export const createOrderSchema: z.ZodType<CreateOrderInput> = z.object({
   appIds: z
     .array(appIdSchema)
@@ -20,7 +31,10 @@ export const createOrderSchema: z.ZodType<CreateOrderInput> = z.object({
     .refine((ids) => new Set(ids).size === ids.length, 'Duplicate app ids'),
   paymentMethod: z.literal(ACTIVE_PAYMENT_METHOD),
   expectedTotalKopecks: z.number().int().nonnegative().optional(),
+  promoCode: promoInputSchema.optional(),
 });
+
+export const promoCheckSchema: z.ZodType<PromoCheckInput> = z.object({ code: promoInputSchema });
 
 export const catalogQuerySchema: z.ZodType<CatalogQuery> = z.object({
   q: z.string().trim().max(100).optional(),

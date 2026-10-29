@@ -10,6 +10,7 @@ import type { BroadcastService } from '../services/broadcast-service.js';
 import type { PartnerAdminService } from '../services/partner-admin-service.js';
 import { createBroadcastTelegram } from './broadcast-adapter.js';
 import { registerBroadcastHandlers } from './broadcast-handlers.js';
+import { registerShopAdminHandlers, type ShopAdminHandlerDeps } from './shop-admin-handlers.js';
 import {
   CHECK_SUBSCRIPTION_PATTERN,
   handleSubscriptionGate,
@@ -27,6 +28,9 @@ const PUBLIC_COMMANDS = [
 /** Shown only in the admins' own chats. */
 const ADMIN_COMMANDS = [
   ...PUBLIC_COMMANDS,
+  { command: 'stats', description: 'Статистика продаж' },
+  { command: 'payments', description: 'Приём оплат' },
+  { command: 'promo', description: 'Промокоды' },
   { command: 'broadcast', description: 'Рассылка пользователям' },
   { command: 'balance', description: 'Баланс Install-IOS' },
   { command: 'sync', description: 'Обновить каталог' },
@@ -45,6 +49,10 @@ export interface BotDeps {
   partnerAdmin?: Pick<PartnerAdminService, 'balanceText' | 'syncText'> | null;
   /** Admin broadcasts; absent in tests that do not need them. */
   broadcasts?: BroadcastService | null;
+  /** Payments mode and promo codes (/payments, /promo). */
+  shopAdmin?: ShopAdminHandlerDeps['shopAdmin'];
+  /** Sales reports (/stats). */
+  salesStats?: ShopAdminHandlerDeps['salesStats'];
 }
 
 export function createBot(token: string): Bot {
@@ -187,6 +195,7 @@ export function registerBotHandlers(bot: Bot, deps: BotDeps): void {
   bot.callbackQuery(CHECK_SUBSCRIPTION_PATTERN, (ctx) => handleCheckSubscription(ctx, deps));
   bot.command('balance', (ctx) => handleAdminCommand(ctx, deps, (admin) => admin.balanceText()));
   bot.command('sync', (ctx) => handleAdminCommand(ctx, deps, (admin) => admin.syncText()));
+  registerShopAdminHandlers(bot, deps);
   registerBroadcastHandlers(bot, deps);
 
   bot.catch((error) => {

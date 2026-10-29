@@ -52,6 +52,29 @@ const pricesSchema = z
     }
   })
   .pipe(z.record(z.string().min(1), z.number().positive().max(MAX_PRICE_RUB).multipleOf(0.01)));
+/** IANA zone such as Europe/Moscow; checked against the runtime's time zone data. */
+const timeZoneSchema = z
+  .string()
+  .trim()
+  .refine((zone) => {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: zone });
+      return true;
+    } catch {
+      return false;
+    }
+  }, 'STATS_TIME_ZONE must be an IANA time zone, e.g. Europe/Moscow');
+
+/** "23:55" → { hour: 23, minute: 55 }. */
+const timeOfDaySchema = z
+  .string()
+  .trim()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'DAILY_REPORT_TIME must be HH:MM, e.g. 23:55')
+  .transform((value) => {
+    const [hour = 0, minute = 0] = value.split(':').map(Number);
+    return { hour, minute };
+  });
+
 const MAX_BROADCAST_RATE = 30;
 const DEFAULT_BROADCAST_RATE = 25;
 
@@ -86,6 +109,10 @@ const envSchema = z
     SELLER_EMAIL: z.email().optional(),
     /** Broadcast copies per second; Telegram allows about 30 for bulk messages. */
     BROADCAST_RATE_PER_SEC: z.coerce.number().int().min(1).max(MAX_BROADCAST_RATE).default(DEFAULT_BROADCAST_RATE),
+    /** Days of the sales stats and of the daily report are counted in this zone. */
+    STATS_TIME_ZONE: timeZoneSchema.default('Europe/Moscow'),
+    /** When the admins get the day's sales, in STATS_TIME_ZONE. */
+    DAILY_REPORT_TIME: z.string().default('23:55').pipe(timeOfDaySchema),
 
     DATABASE_URL: z.string().min(1),
 

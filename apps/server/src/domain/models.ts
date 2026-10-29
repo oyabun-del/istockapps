@@ -33,6 +33,10 @@ export interface Order {
   paymentId: string | null;
   paymentUrl: string | null;
   paymentSyncedAt: Date | null;
+  /** Paid with a CISPAY test payment; kept out of revenue. */
+  isSandbox: boolean;
+  /** The promo code the order was let through with (payments open by promo code only). */
+  promoCodeId: number | null;
   /** Order id in the delivery API; null until the delivery is created after payment. */
   deliveryRef: string | null;
   /** Last known delivery deadline from the delivery API. */
@@ -54,7 +58,8 @@ export type NewOrder = Pick<
   | 'amountKopecks'
   | 'paymentMethod'
   | 'status'
->;
+> &
+  Partial<Pick<Order, 'promoCodeId'>>;
 
 export type OrderPatch = Partial<
   Pick<
@@ -63,6 +68,7 @@ export type OrderPatch = Partial<
     | 'paymentId'
     | 'paymentUrl'
     | 'paymentSyncedAt'
+    | 'isSandbox'
     | 'deliveryRef'
     | 'deliveryExpiresAt'
     | 'codeReceivedAt'
@@ -70,6 +76,43 @@ export type OrderPatch = Partial<
     | 'completedAt'
   >
 >;
+
+/** Lets a buyer pay while payments are open by promo code only. */
+export interface PromoCode {
+  id: number;
+  /** Upper case, matches PROMO_CODE_PATTERN. */
+  code: string;
+  /** Apps the code covers in total, across all buyers and orders. */
+  maxApps: number;
+  /** Admin who created the code. */
+  createdBy: number;
+  disabledAt: Date | null;
+  createdAt: Date;
+}
+
+export type NewPromoCode = Pick<PromoCode, 'code' | 'maxApps' | 'createdBy'>;
+
+/** Sales of a period; revenue figures leave out test payments, which are counted on their own. */
+export interface SalesSummary {
+  /** Orders paid in the period and not refunded. */
+  paidOrders: number;
+  appsSold: number;
+  revenueKopecks: number;
+  discountKopecks: number;
+  buyers: number;
+  /** Of paidOrders: let through by a promo code. */
+  promoOrders: number;
+  sandboxOrders: number;
+  sandboxKopecks: number;
+  /** Orders opened in the period, whatever happened to them. */
+  createdOrders: number;
+  /** Refunds made in the period (the order may have been paid earlier). */
+  refunds: number;
+  refundedKopecks: number;
+  newUsers: number;
+  /** Best sellers, most sold first. */
+  topApps: Array<{ name: string; count: number }>;
+}
 
 /** One explicit attempt to receive a login code. Holds no code, only ids to resume the attempt. */
 export interface CodeWaitAttempt {

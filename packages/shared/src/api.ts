@@ -28,6 +28,9 @@ export const ERROR_CODES = [
   'DELIVERY_PROVIDER_ERROR',
   'CATALOG_PROVIDER_ERROR',
   'PRICE_CHANGED',
+  'PAYMENTS_CLOSED',
+  'PROMO_INVALID',
+  'PROMO_LIMIT_REACHED',
   'TOO_MANY_REQUESTS',
   'INTERNAL_ERROR',
 ] as const;
@@ -46,6 +49,35 @@ export type ActivePaymentMethod = typeof ACTIVE_PAYMENT_METHOD;
 
 export interface PaymentMethodDto {
   method: ActivePaymentMethod;
+}
+
+/**
+ * Who may open new invoices: everyone, only buyers with a promo code, or nobody.
+ * Invoices opened earlier are honoured in every mode.
+ */
+export const PAYMENTS_MODES = ['open', 'promo', 'closed'] as const;
+export type PaymentsMode = (typeof PAYMENTS_MODES)[number];
+
+export interface CheckoutDto {
+  paymentsMode: PaymentsMode;
+}
+
+/** Promo codes: 6–32 latin letters, digits, "_" or "-" (short ones are easy to guess); stored upper case. */
+export const PROMO_CODE_PATTERN = /^[A-Z0-9_-]{6,32}$/;
+
+export function normalizePromoCode(raw: string): string {
+  return raw.trim().toUpperCase();
+}
+
+export interface PromoCheckInput {
+  code: string;
+}
+
+export interface PromoCheckDto {
+  /** Normalized code, as the buyer should send it with the order. */
+  code: string;
+  /** Apps the code still covers; an order with more apps is refused. */
+  appsLeft: number;
 }
 
 // ---------- Catalog ----------
@@ -201,4 +233,6 @@ export interface CreateOrderInput {
   paymentMethod: ActivePaymentMethod;
   /** Total the buyer saw; the order is refused with PRICE_CHANGED if the server's total differs. */
   expectedTotalKopecks?: number;
+  /** Required while payments are open only by promo code; ignored when they are open to everyone. */
+  promoCode?: string;
 }

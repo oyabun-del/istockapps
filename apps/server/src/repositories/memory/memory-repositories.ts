@@ -1,5 +1,6 @@
 import type { OrderStatus } from '@istock/shared';
 import { DRAFT_STATUSES } from '../../domain/broadcast-status.js';
+import { holdsPromoApps } from '../../domain/promo.js';
 import type {
   Broadcast,
   BroadcastPatch,
@@ -19,15 +20,27 @@ import type {
   Repositories,
   UserRepository,
 } from '../repositories.js';
+import { MemoryPromoCodeRepository, MemorySettingRepository, MemoryStatsRepository } from './settings-repositories.js';
+
+type Now = () => Date;
 
 /** In-memory repositories for tests and quick local experiments. */
 class MemoryUserRepository implements UserRepository {
   private readonly users = new Map<number, User>();
   private readonly blockedAt = new Map<number, Date>();
+  private readonly createdAt = new Map<number, Date>();
+
+  constructor(private readonly now: Now) {}
 
   async upsert(user: User): Promise<User> {
     this.users.set(user.id, { ...user });
+    if (!this.createdAt.has(user.id)) this.createdAt.set(user.id, this.now());
     return { ...user };
+  }
+
+  /** When each user first appeared, for the stats. */
+  creationDates(): Date[] {
+    return [...this.createdAt.values()];
   }
 
   async findById(id: number): Promise<User | null> {
@@ -55,8 +68,6 @@ class MemoryUserRepository implements UserRepository {
   }
 }
 
-type Now = () => Date;
-
 /** Callers get their own copy, items included, like rows read from the database. */
 function copyOrder(order: Order): Order {
   return { ...order, items: order.items.map((item) => ({ ...item })) };
@@ -70,7 +81,7 @@ function definedFields<T extends object>(patch: T): Partial<T> {
 /** Same unique columns as the Order table. */
 const UNIQUE_ORDER_FIELDS = ['paymentOrderId', 'paymentId', 'deliveryRef'] as const;
 
-class MemoryOrderRepository implements OrderRepository {
+export class MemoryOrderRepository implements OrderRepository {
   private readonly orders = new Map<number, Order>();
   private nextId = 1;
 
@@ -84,6 +95,8 @@ class MemoryOrderRepository implements OrderRepository {
       paymentId: null,
       paymentUrl: null,
       paymentSyncedAt: null,
+      isSandbox: false,
+      promoCodeId: input.promoCodeId ?? null,
       deliveryRef: null,
       deliveryExpiresAt: null,
       codeReceivedAt: null,
@@ -165,6 +178,31 @@ class MemoryOrderRepository implements OrderRepository {
     return copyOrder(updated);
   }
 
+  async countPromoApps(promoCodeId: number, holdSince: Date): Promise<number> {
+    return this.promoAppsUsed(promoCodeId, holdSince);
+  }
+
+  async createWithinPromo(
+    order: NewOrder & { promoCodeId: number },
+    maxApps: number,
+    holdSince: Date,
+  ): Promise<Order | null> {
+    // The check and the insert run with no await in between, like under the row lock in Prisma.
+    if (this.promoAppsUsed(order.promoCodeId, holdSince) + order.items.length > maxApps) return null;
+    return this.create(order);
+  }
+
+  private promoAppsUsed(promoCodeId: number, holdSince: Date): number {
+    return [...this.orders.values()]
+      .filter((order) => order.promoCodeId === promoCodeId && holdsPromoApps(order, holdSince))
+      .reduce((total, order) => total + order.items.length, 0);
+  }
+
+  /** Every order, for the stats. */
+  snapshot(): Order[] {
+    return [...this.orders.values()].map(copyOrder);
+  }
+
   private save(order: Order): void {
     for (const field of UNIQUE_ORDER_FIELDS) {
       const value = order[field];
@@ -205,11 +243,20 @@ class MemoryCodeWaitAttemptRepository implements CodeWaitAttemptRepository {
   }
 }
 
-class MemoryOrderEventRepository implements OrderEventRepository {
-  readonly events: Array<{ orderId: number; type: string; data?: Record<string, unknown> }> = [];
+export interface MemoryOrderEvent {
+  orderId: number;
+  type: string;
+  data?: Record<string, unknown>;
+  createdAt: Date;
+}
+
+export class MemoryOrderEventRepository implements OrderEventRepository {
+  readonly events: MemoryOrderEvent[] = [];
+
+  constructor(private readonly now: Now) {}
 
   async add(orderId: number, type: string, data?: Record<string, unknown>): Promise<void> {
-    this.events.push({ orderId, type, data });
+    this.events.push({ orderId, type, data, createdAt: this.now() });
   }
 
   async has(orderId: number, type: string): Promise<boolean> {
@@ -282,15 +329,26 @@ class MemoryBroadcastRepository implements BroadcastRepository {
 }
 
 export interface MemoryRepositories extends Repositories {
+  orders: MemoryOrderRepository;
   orderEvents: MemoryOrderEventRepository;
 }
 
 export function createMemoryRepositories(now: Now = () => new Date()): MemoryRepositories {
+  const users = new MemoryUserRepository(now);
+  const orders = new MemoryOrderRepository(now);
+  const orderEvents = new MemoryOrderEventRepository(now);
   return {
-    users: new MemoryUserRepository(),
-    orders: new MemoryOrderRepository(now),
-    orderEvents: new MemoryOrderEventRepository(),
+    users,
+    orders,
+    orderEvents,
     codeWaits: new MemoryCodeWaitAttemptRepository(now),
     broadcasts: new MemoryBroadcastRepository(now),
+    settings: new MemorySettingRepository(),
+    promoCodes: new MemoryPromoCodeRepository(now),
+    stats: new MemoryStatsRepository({
+      orders: () => orders.snapshot(),
+      events: () => orderEvents.events,
+      userCreationDates: () => users.creationDates(),
+    }),
   };
 }

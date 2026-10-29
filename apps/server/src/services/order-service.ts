@@ -7,15 +7,17 @@ import {
   type CartPricing,
   type CreateOrderInput,
 } from '@istock/shared';
-import type { NewOrder, Order, User } from '../domain/models.js';
+import type { NewOrder, Order, PromoCode, User } from '../domain/models.js';
 import { describeApps } from '../domain/order-items.js';
 import { allowedSourcesFor, INVOICE_TTL_MS } from '../domain/order-transitions.js';
+import { promoHoldSince } from '../domain/promo.js';
 import { AppError, getErrorMessage } from '../lib/app-error.js';
 import { KeyedLock } from '../lib/keyed-lock.js';
 import type { Logger } from '../lib/logger.js';
 import type { CatalogProvider } from '../providers/catalog/catalog-provider.js';
 import type { PaymentProvider, PaymentStatus } from '../providers/payment/payment-provider.js';
 import type { Repositories } from '../repositories/repositories.js';
+import { promoLimitError, type CheckoutGate } from './checkout-gate.js';
 import type { NotificationService } from './notification-service.js';
 import { getOwnedOrder } from './order-access.js';
 import { recordOrderEvent } from './order-events.js';
@@ -50,6 +52,8 @@ export interface OrderServiceDeps {
   catalog: CatalogProvider;
   payments: PaymentProvider;
   notifications: NotificationService;
+  /** Payments mode and promo codes: who may open a new invoice. */
+  checkout: Pick<CheckoutGate, 'authorize'>;
   logger: Logger;
   /** Where CISPAY sends the buyer after paying (deep link back into the Mini App). */
   returnUrl: (order: Order) => string | null;
@@ -118,6 +122,8 @@ export class OrderService {
   /** One order and one payment for all apps of the cart; the bulk discount is applied here. */
   async createOrder(user: User, input: CreateOrderInput): Promise<Order> {
     const { repos } = this.deps;
+    // First: with payments closed even a reusable invoice is not handed out again.
+    const promo = await this.deps.checkout.authorize(input.promoCode);
     const apps = await this.loadApps(input.appIds);
     const pricing = calculateCartPricing(apps.map((app) => app.priceKopecks));
     if (input.expectedTotalKopecks !== undefined && input.expectedTotalKopecks !== pricing.totalKopecks) {
@@ -134,13 +140,32 @@ export class OrderService {
     return this.checkoutLocks.run(user.id, async () => {
       const reuseAfter = new Date(this.now().getTime() - PENDING_REUSE_WINDOW_MS);
       const pending = await repos.orders.findPendingForApps(user.id, input.appIds, reuseAfter);
-      const reusable = await this.reusablePendingOrder(pending, input.paymentMethod, pricing.totalKopecks);
+      const isSamePromo = pending?.promoCodeId === (promo?.id ?? null);
+      const reusable = isSamePromo
+        ? await this.reusablePendingOrder(pending, input.paymentMethod, pricing.totalKopecks)
+        : null;
       if (reusable) return reusable;
 
-      const order = await repos.orders.create(buildNewOrder(user, apps, pricing, input.paymentMethod));
-      await repos.orderEvents.add(order.id, 'created', { method: input.paymentMethod, apps: order.items.length });
+      const order = await this.insertOrder(buildNewOrder(user, apps, pricing, input.paymentMethod), promo);
+      await repos.orderEvents.add(order.id, 'created', {
+        method: input.paymentMethod,
+        apps: order.items.length,
+        ...(promo ? { promo: promo.code } : {}),
+      });
       return this.openPayment(order, user);
     });
+  }
+
+  /** An order through a promo code is created only while the code still covers its apps. */
+  private async insertOrder(order: NewOrder, promo: PromoCode | null): Promise<Order> {
+    const { orders } = this.deps.repos;
+    if (!promo) return orders.create(order);
+    const holdSince = promoHoldSince(this.now());
+    const created = await orders.createWithinPromo({ ...order, promoCodeId: promo.id }, promo.maxApps, holdSince);
+    if (created) return created;
+    // The limit is checked here, under the lock, so concurrent checkouts with one code never overrun it.
+    const used = await orders.countPromoApps(promo.id, holdSince);
+    throw promoLimitError(Math.max(0, promo.maxApps - used));
   }
 
   private async openPayment(order: Order, user: User): Promise<Order> {
@@ -325,6 +350,7 @@ export class OrderService {
         const paid = await repos.orders.transition(order.id, allowedSourcesFor('paid'), {
           status: 'paid',
           paidAt: this.now(),
+          isSandbox: update.isSandbox,
         });
         if (!paid) return; // already processed
         // The transition is committed and a retry would skip it, so nothing below may throw.

@@ -5,6 +5,7 @@ import { MockDeliveryProvider } from '../providers/delivery/mock-delivery-provid
 import { MockPaymentProvider } from '../providers/payment/mock-payment-provider.js';
 import { createMemoryRepositories, type MemoryRepositories } from '../repositories/memory/memory-repositories.js';
 import { ChannelInfoService } from '../services/channel-info-service.js';
+import { CheckoutGate } from '../services/checkout-gate.js';
 import { DeliveryService } from '../services/delivery-service.js';
 import { NotificationService, type MessageButton, type MessageSender } from '../services/notification-service.js';
 import { OrderService } from '../services/order-service.js';
@@ -52,6 +53,7 @@ export interface TestContext {
   subscription: SubscriptionService;
   channel: ChannelInfoService;
   notifications: NotificationService;
+  checkout: CheckoutGate;
   orders: OrderService;
   deliveryService: DeliveryService;
 }
@@ -78,11 +80,13 @@ export function createTestContext(): TestContext {
     logger: silentLogger,
     now: () => clock.current.getTime(),
   });
+  const checkout = new CheckoutGate({ repos, now: clock.now });
   const orders = new OrderService({
     repos,
     catalog,
     payments,
     notifications,
+    checkout,
     logger: silentLogger,
     returnUrl: (order) => `https://t.me/test_bot?start=${order.id}`,
     acceptSandboxPayments: true,
@@ -101,6 +105,7 @@ export function createTestContext(): TestContext {
     subscription,
     channel,
     notifications,
+    checkout,
     orders,
     deliveryService,
   };

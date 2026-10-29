@@ -80,16 +80,21 @@ export class NotificationService {
     }
   }
 
-  /** Sends to every admin; one failing admin never blocks the others. */
-  private async notifyAdmins(html: string): Promise<void> {
-    const results = await Promise.allSettled(this.deps.adminIds.map((id) => this.deps.sender.send(id, html)));
+  /**
+   * Sends to every admin (but `exceptId`); one failing admin never blocks the others.
+   * Returns how many admins got the message.
+   */
+  async notifyAdmins(html: string, exceptId?: number): Promise<number> {
+    const adminIds = this.deps.adminIds.filter((id) => id !== exceptId);
+    const results = await Promise.allSettled(adminIds.map((id) => this.deps.sender.send(id, html)));
     results.forEach((result, index) => {
       if (result.status === 'rejected') {
         this.deps.logger.error(
-          { adminId: this.deps.adminIds[index], err: getErrorMessage(result.reason) },
+          { adminId: adminIds[index], err: getErrorMessage(result.reason) },
           'Failed to notify admin (has the admin pressed /start in the bot?)',
         );
       }
     });
+    return results.filter((result) => result.status === 'fulfilled').length;
   }
 }

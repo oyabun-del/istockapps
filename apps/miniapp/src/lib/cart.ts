@@ -1,6 +1,7 @@
-import { discountTierFor, formatRub, MAX_ORDER_ITEMS, nextDiscountTier } from '@istock/shared';
+import { discountTierFor, formatAppCount, formatRub, MAX_ORDER_ITEMS, nextDiscountTier } from '@istock/shared';
 import { useSyncExternalStore } from 'react';
-import { pluralRu } from './format';
+
+export { formatAppCount };
 
 /** Only app ids are kept: names and prices are always read fresh from the catalog. */
 export const CART_STORAGE_KEY = 'istock.cart.v1';
@@ -69,11 +70,6 @@ export function useCartIds(): CartIds {
   return useSyncExternalStore(cartStore.subscribe, cartStore.getSnapshot);
 }
 
-/** 1 приложение, 2 приложения, 5 приложений. */
-export function formatAppCount(count: number): string {
-  // Non-breaking: a line must not end with a bare number.
-  return `${count}\u00a0${pluralRu(count, ['приложение', 'приложения', 'приложений'])}`;
-}
 
 /**
  * "Добавьте ещё 2 приложения для скидки 300 ₽": the whole-order discount at the next tier;

@@ -41,23 +41,34 @@ export function promoLimitError(appsLeft: number): AppError {
 
 export interface CheckoutGateDeps {
   repos: Pick<Repositories, 'settings' | 'promoCodes' | 'orders'>;
+  /**
+   * False when payments are fake (PAYMENT_PROVIDER=mock) but real apps are handed out:
+   * then a free order must never be open to everyone, and "open" works as "promo".
+   */
+  isOpenModeAllowed?: boolean;
   now?: () => Date;
 }
 
 /** Decides who may open a new invoice: the payments mode switched from the bot, and promo codes. */
 export class CheckoutGate {
   private readonly now: () => Date;
+  readonly isOpenModeAllowed: boolean;
 
   constructor(private readonly deps: CheckoutGateDeps) {
     this.now = deps.now ?? (() => new Date());
+    this.isOpenModeAllowed = deps.isOpenModeAllowed ?? true;
   }
 
   async getMode(): Promise<PaymentsMode> {
     const saved = await this.deps.repos.settings.get(PAYMENTS_MODE_KEY);
-    return isPaymentsMode(saved) ? saved : DEFAULT_PAYMENTS_MODE;
+    const mode = isPaymentsMode(saved) ? saved : DEFAULT_PAYMENTS_MODE;
+    return mode === 'open' && !this.isOpenModeAllowed ? 'promo' : mode;
   }
 
   async setMode(mode: PaymentsMode): Promise<void> {
+    if (mode === 'open' && !this.isOpenModeAllowed) {
+      throw new AppError('INVALID_STATE', 'Оплаты тестовые: открыть приём для всех нельзя');
+    }
     await this.deps.repos.settings.set(PAYMENTS_MODE_KEY, mode);
   }
 

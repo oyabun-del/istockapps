@@ -40,7 +40,7 @@ export interface AdminActor {
 }
 
 export interface ShopAdminDeps {
-  checkout: Pick<CheckoutGate, 'getMode' | 'setMode'>;
+  checkout: Pick<CheckoutGate, 'getMode' | 'setMode' | 'isOpenModeAllowed'>;
   repos: Pick<Repositories, 'promoCodes' | 'orders'>;
   /** Tells the other admins about a change; failures are handled by the notifier. */
   notifyAdmins: (html: string, exceptId: number) => Promise<unknown>;
@@ -68,7 +68,9 @@ export class ShopAdminService {
 
   async paymentsView(): Promise<AdminView> {
     const mode = await this.deps.checkout.getMode();
-    const keyboard = MODE_ORDER.map((option): InlineButton[] => [
+    const { isOpenModeAllowed } = this.deps.checkout;
+    const options = MODE_ORDER.filter((option) => option !== 'open' || isOpenModeAllowed);
+    const keyboard = options.map((option): InlineButton[] => [
       {
         kind: 'callback',
         text: option === mode ? `✅ ${MODE_BUTTONS[option]}` : MODE_BUTTONS[option],
@@ -80,15 +82,20 @@ export class ShopAdminService {
       `Сейчас: <b>${PAYMENTS_MODE_LABELS[mode]}</b>`,
       '',
       'Режим влияет только на новые заказы: уже выставленные счета принимаются всегда.',
+      isOpenModeAllowed ? null : '🧪 Оплаты тестовые (PAYMENT_PROVIDER=mock): приложения выдаются только по промокоду.',
       'Промокоды: /promo',
-    ].join('\n');
+    ]
+      .filter((line): line is string => line !== null)
+      .join('\n');
     return { html, keyboard };
   }
 
   /** Switches the mode and tells the other admins; returns the refreshed view. */
   async setPaymentsMode(mode: PaymentsMode, actor: AdminActor): Promise<AdminView> {
     const previous = await this.deps.checkout.getMode();
-    if (previous !== mode) {
+    // A button from an older message may still offer "open" while payments are fake.
+    const isAllowed = mode !== 'open' || this.deps.checkout.isOpenModeAllowed;
+    if (isAllowed && previous !== mode) {
       await this.deps.checkout.setMode(mode);
       await this.deps.notifyAdmins(
         `💳 ${escapeHtml(actor.name)} (id <code>${actor.id}</code>) переключил приём оплат: <b>${PAYMENTS_MODE_LABELS[mode]}</b>`,

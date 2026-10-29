@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BUYER, createTestContext, type TestContext } from '../test/fixtures.js';
+import { CheckoutGate } from './checkout-gate.js';
 import { ShopAdminService } from './shop-admin-service.js';
 
 const ADMIN = { id: 111, name: 'Анна <Admin>' };
@@ -36,6 +37,23 @@ describe('payments mode', () => {
       '💳 Анна &lt;Admin&gt; (id <code>111</code>) переключил приём оплат: <b>🟡 только по промокоду</b>',
       ADMIN.id,
     );
+  });
+
+  it('offers no "open to everyone" while payments are fake', async () => {
+    const checkout = new CheckoutGate({ repos: ctx.repos, isOpenModeAllowed: false });
+    const fake = new ShopAdminService({ checkout, repos: ctx.repos, notifyAdmins });
+
+    const view = await fake.paymentsView();
+    const afterOldButton = await fake.setPaymentsMode('open', ADMIN);
+
+    expect(view.html).toContain('Сейчас: <b>🟡 только по промокоду</b>');
+    expect(view.html).toContain('приложения выдаются только по промокоду');
+    expect(view.keyboard).toEqual([
+      [expect.objectContaining({ data: 'payments:promo' })],
+      [expect.objectContaining({ data: 'payments:closed' })],
+    ]);
+    expect(afterOldButton.html).toContain('🟡 только по промокоду');
+    expect(notifyAdmins).not.toHaveBeenCalled();
   });
 
   it('does not notify anyone when the mode stays the same', async () => {

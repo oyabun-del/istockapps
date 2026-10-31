@@ -1,6 +1,7 @@
 import { InlineKeyboard, type Context, type NextFunction } from 'grammy';
 import { AppError } from '../lib/app-error.js';
 import type { BotDeps } from './bot.js';
+import { withLegalButtons } from './legal-buttons.js';
 import { BOT_TEXT } from './texts.js';
 
 export const CHECK_SUBSCRIPTION = 'check_subscription';
@@ -9,16 +10,18 @@ export const CHECK_SUBSCRIPTION_PATTERN = /^check_subscription(?::(\d+))?$/;
 /** /start has its own subscription step (it keeps the order deep link); /support must reach buyers who left the channel. */
 const OPEN_COMMAND = /^\/(start|support)(@\w+)?(\s|$)/;
 
-type GateDeps = Pick<BotDeps, 'channelUrl' | 'subscription' | 'adminIds'>;
+type GateDeps = Pick<BotDeps, 'webAppUrl' | 'channelUrl' | 'subscription' | 'adminIds'>;
+type SubscribeDeps = Pick<BotDeps, 'webAppUrl' | 'channelUrl'>;
 
-function subscribeKeyboard(deps: Pick<BotDeps, 'channelUrl'>, orderId?: string): InlineKeyboard {
-  return new InlineKeyboard()
+function subscribeKeyboard(deps: SubscribeDeps, orderId?: string): InlineKeyboard {
+  const keyboard = new InlineKeyboard()
     .url('📢 Подписаться на канал', deps.channelUrl)
     .row()
     .text('✅ Проверить подписку', orderId ? `${CHECK_SUBSCRIPTION}:${orderId}` : CHECK_SUBSCRIPTION);
+  return withLegalButtons(keyboard, deps.webAppUrl);
 }
 
-export async function replySubscribeFirst(ctx: Context, deps: Pick<BotDeps, 'channelUrl'>, orderId?: string): Promise<void> {
+export async function replySubscribeFirst(ctx: Context, deps: SubscribeDeps, orderId?: string): Promise<void> {
   await ctx.reply(BOT_TEXT.subscribeFirst(deps.channelUrl), {
     parse_mode: 'HTML',
     reply_markup: subscribeKeyboard(deps, orderId),

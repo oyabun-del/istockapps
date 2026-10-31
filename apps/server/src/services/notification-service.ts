@@ -58,6 +58,14 @@ export class NotificationService {
     );
   }
 
+  async paymentNeedsReview(order: Order): Promise<void> {
+    await this.notifyAdmins(
+      `⚠️ <b>Платёж на проверке</b>\nЗаказ <b>#${order.id}</b>: ${escapeHtml(describeApps(order))}, ` +
+        `${formatRub(order.amountKopecks)}. Платёжный сервис удержал деньги или вернул их часть. ` +
+        'Статус заказа не изменился, проверьте платёж в кабинете.',
+    );
+  }
+
   async notifyBuyerPaid(order: Order): Promise<void> {
     try {
       await this.deps.sender.send(

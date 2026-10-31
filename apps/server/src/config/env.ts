@@ -31,10 +31,7 @@ const usernameSchema = z
 
 const httpsUrl = z.url({ protocol: /^https$/ });
 
-/** Individual entrepreneur: 12-digit INN, 15-digit OGRNIP. */
-const innSchema = z.string().trim().regex(/^\d{12}$/, 'SELLER_INN must be 12 digits (INN of an individual entrepreneur)');
-const ogrnipSchema = z.string().trim().regex(/^\d{15}$/, 'SELLER_OGRNIP must be 15 digits');
-const SELLER_KEYS = ['SELLER_NAME', 'SELLER_INN', 'SELLER_OGRNIP', 'SELLER_EMAIL'] as const;
+const SELLER_KEYS = ['SELLER_NAME', 'SELLER_EMAIL'] as const;
 
 const MAX_PRICE_RUB = 1_000_000;
 const rublesSchema = z.coerce.number().positive().max(MAX_PRICE_RUB).multipleOf(0.01);
@@ -99,12 +96,15 @@ const envSchema = z
 
     REQUIRED_CHANNEL: channelSchema,
     REQUIRED_CHANNEL_URL: httpsUrl.optional(),
+    /** False: anyone may use the shop; REQUIRED_CHANNEL is then only the channel link in the profile. */
+    REQUIRE_CHANNEL_SUBSCRIPTION: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((value) => value === 'true'),
     ADMIN_IDS: adminIdsSchema,
     SUPPORT_USERNAME: usernameSchema,
-    /** Seller details for the terms and privacy policy; required in production (checked in superRefine). */
+    /** How the terms and privacy policy name the seller; required in production (checked in superRefine). */
     SELLER_NAME: z.string().trim().min(1).optional(),
-    SELLER_INN: innSchema.optional(),
-    SELLER_OGRNIP: ogrnipSchema.optional(),
     /** Where buyers send personal data requests. */
     SELLER_EMAIL: z.email().optional(),
     /** Broadcast copies per second; Telegram allows about 30 for bulk messages. */
@@ -116,17 +116,13 @@ const envSchema = z
 
     DATABASE_URL: z.string().min(1),
 
-    PAYMENT_PROVIDER: z.enum(['cispay', 'mock']),
-    CISPAY_SHOP_ID: z.uuid().optional(),
-    CISPAY_API_KEY: z.string().startsWith('cis_sec_').optional(),
-    CISPAY_API_URL: httpsUrl.default('https://api.cispay.app'),
-    /** Accept CISPAY sandbox payments as real ones. Always true outside production. */
-    ALLOW_SANDBOX_PAYMENTS: z
-      .enum(['true', 'false'])
-      .default('false')
-      .transform((value) => value === 'true'),
+    PAYMENT_PROVIDER: z.enum(['platega', 'mock']),
+    PLATEGA_MERCHANT_ID: z.uuid().optional(),
+    /** API key; server-to-server only, never sent to the Mini App. */
+    PLATEGA_SECRET: z.string().trim().min(1).optional(),
+    PLATEGA_API_URL: httpsUrl.default('https://app.platega.io'),
     /**
-     * Production without CISPAY: PAYMENT_PROVIDER=mock is refused unless this is true. Real apps are
+     * Production without Platega: PAYMENT_PROVIDER=mock is refused unless this is true. Real apps are
      * then handed out by promo code only (see CheckoutGate.isOpenModeAllowed).
      */
     ALLOW_MOCK_PAYMENTS: z
@@ -174,11 +170,11 @@ const envSchema = z
         message: 'TELEGRAM_OFFLINE requires DEV_USER_ID: without a bot nobody can sign in through Telegram',
       });
     }
-    if (env.PAYMENT_PROVIDER === 'cispay' && (!env.CISPAY_SHOP_ID || !env.CISPAY_API_KEY)) {
+    if (env.PAYMENT_PROVIDER === 'platega' && (!env.PLATEGA_MERCHANT_ID || !env.PLATEGA_SECRET)) {
       ctx.addIssue({
         code: 'custom',
         path: ['PAYMENT_PROVIDER'],
-        message: 'CISPAY_SHOP_ID and CISPAY_API_KEY are required when PAYMENT_PROVIDER=cispay',
+        message: 'PLATEGA_MERCHANT_ID and PLATEGA_SECRET are required when PAYMENT_PROVIDER=platega',
       });
     }
     if (env.NODE_ENV === 'production' && env.PAYMENT_PROVIDER === 'mock' && !env.ALLOW_MOCK_PAYMENTS) {
@@ -195,7 +191,7 @@ const envSchema = z
         }
       }
     }
-    if (env.DEV_USER_ID !== undefined && (env.NODE_ENV === 'production' || env.PAYMENT_PROVIDER === 'cispay')) {
+    if (env.DEV_USER_ID !== undefined && (env.NODE_ENV === 'production' || env.PAYMENT_PROVIDER === 'platega')) {
       ctx.addIssue({
         code: 'custom',
         path: ['DEV_USER_ID'],
@@ -278,16 +274,14 @@ export function installiosPriceOf(
 
 export interface Seller {
   name: string;
-  inn: string;
-  ogrnip: string;
   email: string;
 }
 
-/** Seller details, or null when none are configured (development only, see superRefine). */
+/** How the documents name the seller, or null when not configured (development only, see superRefine). */
 export function sellerOf(env: Pick<Env, (typeof SELLER_KEYS)[number]>): Seller | null {
-  const { SELLER_NAME: name, SELLER_INN: inn, SELLER_OGRNIP: ogrnip, SELLER_EMAIL: email } = env;
-  if (!name || !inn || !ogrnip || !email) return null;
-  return { name, inn, ogrnip, email };
+  const { SELLER_NAME: name, SELLER_EMAIL: email } = env;
+  if (!name || !email) return null;
+  return { name, email };
 }
 
 export function supportUrl(env: Pick<Env, 'SUPPORT_USERNAME'>): string {

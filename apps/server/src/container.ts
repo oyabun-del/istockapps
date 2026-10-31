@@ -12,9 +12,9 @@ import type { DeliveryProvider } from './providers/delivery/delivery-provider.js
 import { MockDeliveryProvider } from './providers/delivery/mock-delivery-provider.js';
 import { InstalliosClient } from './providers/installios/installios-client.js';
 import { InstalliosDeliveryProvider } from './providers/installios/installios-delivery-provider.js';
-import { CisPayProvider } from './providers/payment/cispay-provider.js';
 import { MockPaymentProvider } from './providers/payment/mock-payment-provider.js';
 import type { PaymentProvider } from './providers/payment/payment-provider.js';
+import { PlategaProvider } from './providers/payment/platega-provider.js';
 import { createPrismaRepositories } from './repositories/prisma/prisma-repositories.js';
 import type { Repositories } from './repositories/repositories.js';
 import { BroadcastRunner } from './services/broadcast-runner.js';
@@ -77,9 +77,13 @@ function createSupply(env: Env, logger: Logger): Supply {
 }
 
 function createPayments(env: Env): { payments: PaymentProvider; mockPayments?: MockPaymentProvider } {
-  if (env.PAYMENT_PROVIDER === 'cispay' && env.CISPAY_SHOP_ID && env.CISPAY_API_KEY) {
+  if (env.PAYMENT_PROVIDER === 'platega' && env.PLATEGA_MERCHANT_ID && env.PLATEGA_SECRET) {
     return {
-      payments: new CisPayProvider({ apiUrl: env.CISPAY_API_URL, shopId: env.CISPAY_SHOP_ID, apiKey: env.CISPAY_API_KEY }),
+      payments: new PlategaProvider({
+        apiUrl: env.PLATEGA_API_URL,
+        merchantId: env.PLATEGA_MERCHANT_ID,
+        secret: env.PLATEGA_SECRET,
+      }),
     };
   }
   const mockPayments = new MockPaymentProvider(env.PUBLIC_URL);
@@ -100,6 +104,7 @@ export function createContainer(env: Env, telegram: TelegramAdapters, logger: Lo
   });
   const subscription = new SubscriptionService({
     channel: env.REQUIRED_CHANNEL,
+    isRequired: env.REQUIRE_CHANNEL_SUBSCRIPTION,
     fetchMember: telegram.fetchMember,
     logger,
   });
@@ -113,9 +118,11 @@ export function createContainer(env: Env, telegram: TelegramAdapters, logger: Lo
     notifications,
     checkout,
     logger,
-    returnUrl: (order) => (env.BOT_USERNAME ? `https://t.me/${env.BOT_USERNAME}?start=${order.id}` : null),
-    // Mock payments are all "sandbox": with the mock provider chosen, they are the only payments there are.
-    acceptSandboxPayments: env.NODE_ENV !== 'production' || env.ALLOW_SANDBOX_PAYMENTS || env.PAYMENT_PROVIDER === 'mock',
+    // Platega requires both redirect urls, so without a bot username the Mini App itself is the way back.
+    returnUrl: (order) =>
+      env.BOT_USERNAME ? `https://t.me/${env.BOT_USERNAME}?start=${order.id}` : `${env.WEBAPP_URL}#/orders/${order.id}`,
+    // Mock payments are all test ones: with the mock provider chosen, they are the only payments there are.
+    acceptSandboxPayments: env.PAYMENT_PROVIDER === 'mock',
   });
 
   const appDeps: AppDeps = {

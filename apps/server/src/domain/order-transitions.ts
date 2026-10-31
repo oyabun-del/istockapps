@@ -1,7 +1,7 @@
 import type { OrderStatus } from '@istock/shared';
 
-/** CISPAY expires an unpaid invoice 30 minutes after it is created. */
-export const INVOICE_TTL_MS = 30 * 60 * 1000;
+/** Platega expires an unpaid invoice 15 minutes after it is created (expiresIn in its response). */
+export const INVOICE_TTL_MS = 15 * 60 * 1000;
 
 /** Allowed source statuses for each target status. */
 const ALLOWED_FROM: Record<OrderStatus, readonly OrderStatus[]> = {

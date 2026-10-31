@@ -9,7 +9,7 @@ export interface PaymentReconcilerDeps {
   intervalMs?: number;
 }
 
-/** Polls CISPAY for recent orders in the background, so a lost webhook never leaves a paid order unpaid. */
+/** Polls the payment provider for recent orders in the background, so a lost webhook never leaves a paid order unpaid. */
 export class PaymentReconciler {
   private timer: ReturnType<typeof setInterval> | null = null;
   private running: Promise<void> | null = null;

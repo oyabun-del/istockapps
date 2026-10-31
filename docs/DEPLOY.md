@@ -17,7 +17,7 @@
 
 - VPS с Ubuntu 24.04: от 1 vCPU и 2 ГБ RAM. На 1 ГБ сборка образа может не уместиться в память, тогда добавьте swap (шаг 2).
 - Домен (или поддомен), A-запись которого вы можете менять.
-- Токен бота, ключи CISPAY и Install-IOS.
+- Токен бота, ключи Platega и Install-IOS.
 
 > Пока домена нет, можно пройти шаги 2 и 4. Запускать (шаг 5) — после того как DNS начнёт указывать на сервер: Telegram открывает Mini App только по HTTPS, а сертификат без домена не выпустить.
 
@@ -98,13 +98,14 @@ nano .env
 | `POSTGRES_PASSWORD` | результат `openssl rand -hex 24` (только буквы и цифры: пароль входит в URL подключения) |
 | `BOT_TOKEN`, `BOT_USERNAME` | из @BotFather. **Отдельный бот для прода**: один токен не может работать в двух местах |
 | `REQUIRED_CHANNEL`, `ADMIN_IDS`, `SUPPORT_USERNAME` | как в разработке |
-| `SELLER_NAME`, `SELLER_INN`, `SELLER_OGRNIP`, `SELLER_EMAIL` | реквизиты ИП для соглашения и политики конфиденциальности, без них сервер не стартует |
-| `CISPAY_SHOP_ID`, `CISPAY_API_KEY` | кабинет CISPAY → «Настройки магазина» |
+| `REQUIRE_CHANNEL_SUBSCRIPTION` | необязательно: `false` отключает обязательную подписку на канал |
+| `SELLER_NAME`, `SELLER_EMAIL` | название магазина и почта для соглашения и политики конфиденциальности, без них сервер не стартует. Значение `SELLER_NAME` видно покупателям как есть |
+| `PLATEGA_MERCHANT_ID`, `PLATEGA_SECRET` | кабинет Platega → «Настройки» |
 | `INSTALLIOS_API_KEY`, `INSTALLIOS_DEFAULT_PRICE_RUB`, `INSTALLIOS_PRICES` | ключ партнёра и цены |
 
-`NODE_ENV`, `PORT`, `TRUST_PROXY_HOPS`, `WEBAPP_URL`, `PUBLIC_URL` и `DATABASE_URL` задаёт `compose.yaml` — в `.env` их не нужно (и они бы не применились). Адреса Mini App и webhook получаются из `DOMAIN`.
+`NODE_ENV`, `PORT`, `TRUST_PROXY_HOPS`, `WEBAPP_URL`, `PUBLIC_URL` и `DATABASE_URL` задаёт `compose.yaml` — в `.env` их не нужно (и они бы не применились). Адреса Mini App и callback получаются из `DOMAIN`.
 
-При старте сервер проверяет все настройки: в production запрещены mock-оплата, mock-каталог, `DEV_USER_ID` и HTTP-адреса, а реквизиты ИП обязательны. Ошибка в `.env` видна в `docker compose logs app` строкой `Invalid environment configuration`.
+При старте сервер проверяет все настройки: в production запрещены mock-оплата, mock-каталог, `DEV_USER_ID` и HTTP-адреса, а название магазина и почта обязательны. Ошибка в `.env` видна в `docker compose logs app` строкой `Invalid environment configuration`.
 
 ## 5. Первый запуск
 
@@ -125,29 +126,28 @@ curl https://shop.example.com/health # {"success":true,"data":{"status":"ok"},..
 ## 6. Telegram
 
 1. Кнопку меню с Mini App бот настраивает сам при старте (адрес берётся из `DOMAIN`). Ничего вручную в @BotFather указывать не нужно.
-2. Добавьте бота **администратором** канала из `REQUIRED_CHANNEL`.
+2. Добавьте бота **администратором** канала из `REQUIRED_CHANNEL` (при `REQUIRE_CHANNEL_SUBSCRIPTION=false` не обязательно).
 3. Каждый админ из `ADMIN_IDS` и аккаунт поддержки нажимают `/start` в боте, иначе бот не сможет им писать.
 4. Откройте бота, нажмите кнопку магазина — Mini App должен открыться.
 
-## 7. CISPAY
+## 7. Platega
 
-1. В кабинете CISPAY укажите webhook: `https://shop.example.com/webhooks/cispay`.
-2. Тестовый платёж из «Песочницы»: временно поставьте `ALLOW_SANDBOX_PAYMENTS=true`, примените (`docker compose up -d`), оплатите заказ, убедитесь, что пришло уведомление админам и открылась выдача.
-3. **Верните `ALLOW_SANDBOX_PAYMENTS=false`** и снова `docker compose up -d`. Иначе тестовые платежи засчитываются как настоящие.
+1. В кабинете Platega → «Настройки» → Callback URLs укажите `https://shop.example.com/webhooks/platega`.
+2. Уточните у менеджера, что СБП подключён, и нужен ли для вашего магазина `metadata.userId` (сервер его передаёт).
+3. Проверьте настоящим платежом на небольшую сумму: заказ должен стать оплаченным, а админам должно прийти уведомление. Сверьте таймер счёта в Mini App со сроком в платёжной форме: магазин рассчитан на 15 минут (`INVOICE_TTL_MS`).
 
-Поступление webhook видно в логе: `docker compose logs app | grep "CISPAY webhook"`. Если webhook не дошёл, статус всё равно подтянется опросом CISPAY, только медленнее.
+Поступление callback видно в логе: `docker compose logs app | grep "Platega callback"`. Platega делает всего несколько попыток доставки; если callback не дошёл, статус всё равно подтянется опросом, только медленнее, а отправить его повторно можно из кабинета.
 
-### Проверка магазина в CISPAY
+### Проверка магазина платёжным сервисом
 
 На время проверки оплату открывают только по промокоду:
 
 1. В боте: `/promo add` создаст случайный код на 5 приложений (или `/promo add IOS-REVIEW 5`).
 2. `/payments` → «🟡 Только по промокоду». Остальные покупатели видят в корзине поле промокода, без него оплатить нельзя.
-3. Передайте код проверяющему. Ему тоже нужно подписаться на `REQUIRED_CHANNEL`, иначе Mini App не откроется.
-4. Если проверяющий платит из «Песочницы», временно включите `ALLOW_SANDBOX_PAYMENTS=true`: иначе тестовый платёж не засчитается и заказ останется неоплаченным. Выдача через Install-IOS при этом настоящая, лимит кода ограничивает расход. Тестовые оплаты в `/stats` не входят в выручку.
-5. После проверки: `/payments` → «🟢 Открыть для всех», `/promo off КОД`, `ALLOW_SANDBOX_PAYMENTS=false`.
+3. Передайте код проверяющему. Если подписка включена, ему тоже нужно подписаться на `REQUIRED_CHANNEL`, иначе Mini App не откроется.
+4. После проверки: `/payments` → «🟢 Открыть для всех», `/promo off КОД`.
 
-**Без реквизитов CISPAY.** `PAYMENT_PROVIDER=mock` и `ALLOW_MOCK_PAYMENTS=true` в `.env`: вместо CISPAY открывается тестовая страница оплаты, а приложения (настоящие, из Install-IOS) выдаются только по промокоду — режим «открыт для всех» в `/payments` недоступен. `DEV_USER_ID` в production запрещён.
+**Без ключей Platega.** `PAYMENT_PROVIDER=mock` и `ALLOW_MOCK_PAYMENTS=true` в `.env`: вместо Platega открывается тестовая страница оплаты, а приложения (настоящие, из Install-IOS) выдаются только по промокоду — режим «открыт для всех» в `/payments` недоступен. `DEV_USER_ID` в production запрещён.
 
 `/payments` → «🔴 Закрыть» останавливает приём оплат для всех, например на время работ у поставщика.
 
@@ -249,7 +249,7 @@ docker compose start app
 | Сертификат не выпускается, браузер ругается на HTTPS | `docker compose logs caddy`. Проверьте `dig +short <домен>`, AAAA-запись, открыты ли 80/443 у провайдера. После нескольких неудач Let's Encrypt временно блокирует выпуск — исправьте причину и подождите час |
 | Mini App не открывается в Telegram | Откройте `https://<домен>` в браузере. Если домен меняли — `docker compose up -d`, затем перезапустите Telegram |
 | Бот молчит, в логе `409 Conflict` | Этот же токен запущен где-то ещё (локально или вторая копия). Для разработки нужен отдельный бот |
-| Платёж прошёл, заказ не оплачен | `docker compose logs app \| grep -i cispay`. Проверьте webhook в кабинете CISPAY и `ALLOW_SANDBOX_PAYMENTS` для тестовых платежей |
+| Платёж прошёл, заказ не оплачен | `docker compose logs app \| grep -i platega`. Проверьте Callback URLs в кабинете Platega и повторите отправку callback оттуда |
 | Сборка падает с `Killed` / `exit code 137` | Не хватило памяти — добавьте swap (шаг 2) |
 
 Сервис `app` нельзя масштабировать (`--scale app=2`): бот работает через long polling, и две копии с одним токеном мешают друг другу.

@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { calculateCartPricing, MAX_ORDER_ITEMS } from './pricing.js';
+import { calculateCartPricing, exceedsOrderLimit, MAX_ORDER_ITEMS, MAX_ORDER_TOTAL_KOPECKS } from './pricing.js';
 
 const PRICE = 34900;
 
 function pricesOf(count: number, price = PRICE): number[] {
   return Array.from({ length: count }, () => price);
 }
+
+describe('exceedsOrderLimit', () => {
+  it('allows 10 000 ₽ and refuses anything above', () => {
+    expect(MAX_ORDER_TOTAL_KOPECKS).toBe(1_000_000);
+    expect(exceedsOrderLimit(1_000_000)).toBe(false);
+    expect(exceedsOrderLimit(1_000_001)).toBe(true);
+  });
+});
 
 describe('calculateCartPricing', () => {
   it('returns zeros for an empty cart and points to the first tier', () => {

@@ -2,6 +2,7 @@ import type { Bot, Context } from 'grammy';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppError } from '../lib/app-error.js';
 import { silentLogger } from '../lib/logger.js';
+import { SubscriptionService } from '../services/subscription-service.js';
 import { BUYER, createTestContext, type TestContext } from '../test/fixtures.js';
 import {
   configureBot,
@@ -66,6 +67,43 @@ describe('/start', () => {
 
     expect(reply.mock.calls[0]?.[0]).toContain('Привет');
     expect(keyboardJson(reply.mock.calls[0])).toContain('https://shop.example.com#/orders/15');
+  });
+
+  it('offers the user documents next to the shop', async () => {
+    ctx.members.set(BUYER.id, { status: 'member' });
+    const { context, reply } = fakeContext();
+
+    await handleStart(context, deps);
+
+    const keyboard = keyboardJson(reply.mock.calls[0]);
+    expect(keyboard).toContain('Пользовательское соглашение');
+    expect(keyboard).toContain('https://shop.example.com#/legal/terms');
+    expect(keyboard).toContain('Политика конфиденциальности');
+    expect(keyboard).toContain('https://shop.example.com#/legal/privacy');
+  });
+
+  it('offers the user documents before subscribing too', async () => {
+    const { context, reply } = fakeContext();
+
+    await handleStart(context, deps);
+
+    const keyboard = keyboardJson(reply.mock.calls[0]);
+    expect(keyboard).toContain('#/legal/terms');
+    expect(keyboard).toContain('#/legal/privacy');
+  });
+
+  it('opens the shop for everyone when the subscription is not required', async () => {
+    const subscription = new SubscriptionService({
+      channel: '@c',
+      isRequired: false,
+      fetchMember: vi.fn(),
+      logger: silentLogger,
+    });
+    const { context, reply } = fakeContext();
+
+    await handleStart(context, { ...deps, subscription });
+
+    expect(reply.mock.calls[0]?.[0]).toContain('Привет');
   });
 
   it('makes a user who blocked the bot a broadcast recipient again', async () => {

@@ -33,7 +33,7 @@ export interface Order {
   paymentId: string | null;
   paymentUrl: string | null;
   paymentSyncedAt: Date | null;
-  /** Paid with a CISPAY test payment; kept out of revenue. */
+  /** Paid with a test payment; kept out of revenue. */
   isSandbox: boolean;
   /** The promo code the order was let through with (payments open by promo code only). */
   promoCodeId: number | null;

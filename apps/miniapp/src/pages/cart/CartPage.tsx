@@ -1,7 +1,9 @@
 import {
   ACTIVE_PAYMENT_METHOD,
   BULK_DISCOUNT_TIERS,
+  exceedsOrderLimit,
   formatRub,
+  MAX_ORDER_TOTAL_KOPECKS,
   type CartPricing,
   type ErrorCode,
   type PromoCheckDto,
@@ -88,6 +90,15 @@ function PaymentsClosedNotice() {
   );
 }
 
+function OrderLimitNotice() {
+  return (
+    <p role="status" className="flex items-start gap-2 rounded-xl bg-warning/10 p-3.5 text-body-sm text-warning">
+      <Icon name="warning" className="mt-0.5 shrink-0 text-[18px]" />
+      Максимальная сумма заказа — {formatRub(MAX_ORDER_TOTAL_KOPECKS)}. Уберите часть приложений из корзины.
+    </p>
+  );
+}
+
 type CheckoutVariables = { appIds: string[]; totalKopecks: number; promoCode?: string };
 
 function useCheckout() {
@@ -144,7 +155,8 @@ export function CartPage() {
   const isPromoOnly = paymentsMode === 'promo';
   // Too many apps for the code only warns: the buyer's own open invoice for this cart is handed out again.
   const isPromoMissing = isPromoOnly && !promo;
-  const canPay = isSbpAvailable && paymentsMode !== 'closed' && !isPromoMissing;
+  const isOverLimit = pricing !== null && exceedsOrderLimit(pricing.totalKopecks);
+  const canPay = isSbpAvailable && paymentsMode !== 'closed' && !isPromoMissing && !isOverLimit;
 
   const pay = () => {
     if (!pricing) return;
@@ -199,6 +211,7 @@ export function CartPage() {
 
           <DiscountProgress itemCount={pricing.itemCount} />
           <CartSummary pricing={pricing} />
+          {isOverLimit && <OrderLimitNotice />}
 
           {paymentsMode === 'closed' ? (
             <PaymentsClosedNotice />
@@ -236,7 +249,7 @@ export function CartPage() {
             )}
             <p className="mt-2.5 flex items-center justify-center gap-1 text-label-sm text-on-surface-variant">
               <Icon name="verified_user" className="text-[13px] text-secondary" />
-              Безопасный платёж через CISPAY
+              Безопасный платёж через Platega
             </p>
             <p className="mt-1.5 text-balance text-center text-label-sm text-outline">
               Нажимая «Оплатить», вы принимаете{' '}

@@ -34,7 +34,7 @@ const COPY: Record<ClosedStatus, Copy> = {
   expired: {
     icon: 'timer_off',
     title: 'Счёт истёк',
-    text: 'Оплата не поступила за 30 минут, и счёт закрылся. Можно оформить заказ заново.',
+    text: 'Оплата не поступила за 15 минут, и счёт закрылся. Можно оформить заказ заново.',
     canReorder: true,
     severity: 'neutral',
   },

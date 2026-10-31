@@ -24,9 +24,7 @@ export function renderWithProviders(
 }
 
 export const SELLER: SellerDto = {
-  name: 'ИП Иванов Иван Иванович',
-  inn: '500100732259',
-  ogrnip: '304500116000157',
+  name: 'iStockApps',
   email: 'shop@example.com',
 };
 

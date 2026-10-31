@@ -1,7 +1,12 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { silentLogger } from '../lib/logger.js';
 import { ADMIN_IDS, BUYER, createTestContext, type TestContext } from '../test/fixtures.js';
-import { SUBSCRIPTION_CACHE_TTL_MS, SubscriptionService, isSubscribedMember } from './subscription-service.js';
+import {
+  SUBSCRIPTION_CACHE_TTL_MS,
+  SubscriptionService,
+  isSubscribedMember,
+  type ChatMemberFetcher,
+} from './subscription-service.js';
 
 let ctx: TestContext;
 
@@ -96,6 +101,15 @@ describe('SubscriptionService', () => {
 
     expect(results).toEqual([true, true, true]);
     expect(calls).toBe(1);
+  });
+
+  it('counts everyone as subscribed without asking Telegram when the subscription is not required', async () => {
+    const fetchMember = vi.fn<ChatMemberFetcher>();
+    const service = new SubscriptionService({ channel: '@c', isRequired: false, fetchMember, logger: silentLogger });
+
+    expect(await service.isSubscribed(1)).toBe(true);
+    expect(await service.isSubscribed(1, { force: true })).toBe(true);
+    expect(fetchMember).not.toHaveBeenCalled();
   });
 
   it('fails closed with SUBSCRIPTION_CHECK_FAILED when Telegram errors', async () => {

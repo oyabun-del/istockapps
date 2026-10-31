@@ -13,6 +13,13 @@ export const BULK_DISCOUNT_TIERS: readonly DiscountTier[] = [
 /** Upper bound of apps in one order (and in the cart). */
 export const MAX_ORDER_ITEMS = 10;
 
+/** The largest amount of one order, and so of one payment: 10 000 ₽. */
+export const MAX_ORDER_TOTAL_KOPECKS = 1_000_000;
+
+export function exceedsOrderLimit(totalKopecks: number): boolean {
+  return totalKopecks > MAX_ORDER_TOTAL_KOPECKS;
+}
+
 /** A discount never makes an app cheaper than this. */
 const MIN_ITEM_PRICE_KOPECKS = 100;
 

@@ -10,6 +10,7 @@ import type { BroadcastService } from '../services/broadcast-service.js';
 import type { PartnerAdminService } from '../services/partner-admin-service.js';
 import { createBroadcastTelegram } from './broadcast-adapter.js';
 import { registerBroadcastHandlers } from './broadcast-handlers.js';
+import { withLegalButtons } from './legal-buttons.js';
 import { registerShopAdminHandlers, type ShopAdminHandlerDeps } from './shop-admin-handlers.js';
 import {
   CHECK_SUBSCRIPTION_PATTERN,
@@ -109,7 +110,8 @@ export function createMessageSender(bot: Bot): MessageSender {
 
 function shopKeyboard(deps: BotDeps, startParam?: string): InlineKeyboard {
   const url = startParam ? `${deps.webAppUrl}#/orders/${encodeURIComponent(startParam)}` : deps.webAppUrl;
-  return new InlineKeyboard().webApp('🛍 Открыть магазин', url).row().url('💬 Поддержка', deps.supportUrl);
+  const keyboard = new InlineKeyboard().webApp('🛍 Открыть магазин', url).row().url('💬 Поддержка', deps.supportUrl);
+  return withLegalButtons(keyboard, deps.webAppUrl);
 }
 
 /** Order id from `/start <id>` or from the callback data; anything else is ignored. */

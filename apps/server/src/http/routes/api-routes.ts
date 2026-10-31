@@ -28,7 +28,7 @@ const CODE_POLL_RATE_LIMIT = { max: 90, timeWindow: '1 minute' };
 const NO_STORE = 'no-store';
 
 /**
- * Keyed by buyer, not by IP: each of these calls opens a CISPAY invoice or reads the Install-IOS API,
+ * Keyed by buyer, not by IP: each of these calls opens a payment invoice or reads the Install-IOS API,
  * so one buyer must not exhaust the partner limits for everyone (or a shared NAT for its neighbours).
  * Runs after auth (preHandler), when the buyer is known.
  */

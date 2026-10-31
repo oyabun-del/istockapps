@@ -28,7 +28,7 @@ function InvoiceTimer({ expiresAt, onExpire }: { expiresAt: string; onExpire: ()
   const isExpired = secondsLeft === 0;
 
   useEffect(() => {
-    // The server learns about the expiry from CISPAY; ask for the fresh status once.
+    // The server learns about the expiry from the provider; ask for the fresh status once.
     if (isExpired) onExpire();
   }, [isExpired, onExpire]);
 
@@ -133,7 +133,7 @@ export function AwaitingPayment({ order, isRefreshing, onRefresh }: Props) {
           </div>
         )}
         <p className="relative max-w-[34ch] text-body-sm text-on-surface-variant">
-          Оплатите счёт на странице CISPAY. Статус обновится сам, как только платёж подтвердится, эту страницу можно не закрывать.
+          Оплатите счёт на странице Platega. Статус обновится сам, как только платёж подтвердится, эту страницу можно не закрывать.
         </p>
         <p className="relative flex items-center gap-1.5 text-label-md text-on-surface-variant">
           <Icon name="autorenew" className="text-[18px] text-secondary" />

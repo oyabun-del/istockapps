@@ -1,4 +1,6 @@
+import { MAX_ORDER_TOTAL_KOPECKS } from '@istock/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { INVOICE_TTL_MS } from '../domain/order-transitions.js';
 import { AppError } from '../lib/app-error.js';
 import { ADMIN_IDS, BUYER, OTHER_USER, createPaidOrder, createTestContext, type TestContext } from '../test/fixtures.js';
 import { silentLogger } from '../lib/logger.js';
@@ -60,7 +62,43 @@ describe('OrderService.createOrder', () => {
     );
   });
 
-  it('keeps the payment description within the CISPAY limit for long app names', async () => {
+  describe('order amount limit', () => {
+    async function pricedAt(priceKopecks: number): Promise<void> {
+      const app = await ctx.catalog.getApp('sberbank');
+      if (!app) throw new Error('app missing');
+      vi.spyOn(ctx.catalog, 'getApp').mockResolvedValue({ ...app, priceKopecks });
+    }
+
+    it('accepts an order of exactly the maximum amount', async () => {
+      await pricedAt(MAX_ORDER_TOTAL_KOPECKS);
+
+      const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
+
+      expect(order.amountKopecks).toBe(MAX_ORDER_TOTAL_KOPECKS);
+    });
+
+    it('refuses a larger order before it opens an invoice', async () => {
+      await pricedAt(MAX_ORDER_TOTAL_KOPECKS + 1);
+      const createPayment = vi.spyOn(ctx.payments, 'createPayment');
+
+      await expect(ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' })).rejects.toMatchObject({
+        code: 'ORDER_AMOUNT_TOO_LARGE',
+      });
+
+      expect(createPayment).not.toHaveBeenCalled();
+    });
+
+    it('checks the amount after the bulk discount', async () => {
+      // 3 × 3 400 ₽ = 10 200 ₽ before the 300 ₽ discount.
+      await pricedAt(340_000);
+
+      const order = await ctx.orders.createOrder(BUYER, { appIds: THREE_APPS, paymentMethod: 'SBP' });
+
+      expect(order.amountKopecks).toBeLessThanOrEqual(MAX_ORDER_TOTAL_KOPECKS);
+    });
+  });
+
+  it('keeps the payment description within the provider limit for long app names', async () => {
     const original = ctx.catalog.getApp.bind(ctx.catalog);
     vi.spyOn(ctx.catalog, 'getApp').mockImplementation(async (id) => {
       const app = await original('sberbank');
@@ -103,14 +141,14 @@ describe('OrderService.createOrder', () => {
     });
   });
 
-  it('rejects orders when CISPAY has SBP disabled', async () => {
+  it('rejects orders when the provider has SBP disabled', async () => {
     vi.spyOn(ctx.payments, 'listMethods').mockResolvedValue(['CARD', 'CRYPTO']);
     await expect(ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' })).rejects.toMatchObject({
       code: 'PAYMENT_METHOD_UNAVAILABLE',
     });
   });
 
-  it('offers SBP only, even when CISPAY enables other methods', async () => {
+  it('offers SBP only, even when the provider enables other methods', async () => {
     vi.spyOn(ctx.payments, 'listMethods').mockResolvedValue(['CARD', 'SBP', 'CRYPTO']);
     expect(await ctx.orders.listPaymentMethods()).toEqual(['SBP']);
   });
@@ -137,7 +175,7 @@ describe('OrderService.createOrder', () => {
     expect(second.id).toBe(first.id);
   });
 
-  it('does not reuse an invoice that CISPAY already expired', async () => {
+  it('does not reuse an invoice that the provider already expired', async () => {
     const first = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
     ctx.payments.setStatus(first.paymentId as string, 'EXPIRED');
 
@@ -199,7 +237,7 @@ describe('OrderService payment webhooks', () => {
       notifications: ctx.notifications,
       checkout: ctx.checkout,
       logger: silentLogger,
-      returnUrl: () => null,
+      returnUrl: () => 'https://t.me/test_bot',
       acceptSandboxPayments: false,
       now: ctx.clock.now,
     });
@@ -318,6 +356,39 @@ describe('OrderService payment webhooks', () => {
     expect((await ctx.repos.orders.findById(order.id))?.status).toBe(expected);
   });
 
+  it('calls a rejected payment expired once the invoice lifetime has passed', async () => {
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
+    ctx.clock.advance(INVOICE_TTL_MS);
+
+    await ctx.orders.handlePaymentWebhook(order.paymentOrderId, {
+      paymentId: order.paymentId as string,
+      status: 'FAILED',
+      amountKopecks: order.amountKopecks,
+      isSandbox: false,
+    });
+
+    expect((await ctx.repos.orders.findById(order.id))?.status).toBe('expired');
+  });
+
+  it('keeps a paid order under review and alerts the admins once', async () => {
+    const paid = await createPaidOrder(ctx);
+    const notice = {
+      paymentId: paid.paymentId as string,
+      status: 'NEEDS_REVIEW' as const,
+      amountKopecks: paid.amountKopecks,
+      isSandbox: false,
+    };
+    const sentBefore = ctx.sender.sent.length;
+
+    await ctx.orders.handlePaymentWebhook(paid.paymentOrderId, notice);
+    await ctx.orders.handlePaymentWebhook(paid.paymentOrderId, notice);
+
+    expect((await ctx.repos.orders.findById(paid.id))?.status).toBe('paid');
+    const alerts = ctx.sender.sent.slice(sentBefore);
+    expect(alerts).toHaveLength(ADMIN_IDS.length);
+    expect(alerts[0]?.html).toContain('Платёж на проверке');
+  });
+
   it('handles refunds of paid orders and notifies admins', async () => {
     const paid = await createPaidOrder(ctx);
     await ctx.orders.handlePaymentWebhook(paid.paymentOrderId, {
@@ -411,7 +482,7 @@ describe('OrderService.getOrder', () => {
       notifications: ctx.notifications,
       checkout: ctx.checkout,
       logger: silentLogger,
-      returnUrl: () => null,
+      returnUrl: () => 'https://t.me/test_bot',
       acceptSandboxPayments: false,
       now: ctx.clock.now,
     });

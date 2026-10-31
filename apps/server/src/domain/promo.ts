@@ -7,7 +7,7 @@ export const DEFAULT_PROMO_MAX_APPS = 5;
 export const PROMO_MAX_APPS_LIMIT = 100;
 
 /**
- * Unpaid orders whose invoice CISPAY may still accept. A cancelled order keeps its place too:
+ * Unpaid orders whose invoice the provider may still accept. A cancelled order keeps its place too:
  * the buyer can still pay the invoice until it expires, and that late payment is honoured.
  */
 export const PROMO_PENDING_STATUSES: readonly OrderStatus[] = ['awaiting_payment', 'cancelled'];

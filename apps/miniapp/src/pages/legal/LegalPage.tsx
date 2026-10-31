@@ -32,19 +32,17 @@ function SellerDetails({ seller }: { seller: SellerDto | null }) {
   return (
     <section aria-labelledby="seller-heading" className="flex flex-col gap-1 rounded-xl bg-surface-container-high p-space-lg">
       <h2 id="seller-heading" className="mb-1 text-headline-sm text-on-surface">
-        Реквизиты продавца
+        Контакты
       </h2>
       {seller ? (
         <>
           <p className="text-label-lg text-on-surface">{seller.name}</p>
-          <p className="tabular text-body-sm text-on-surface-variant">ИНН {seller.inn}</p>
-          <p className="tabular text-body-sm text-on-surface-variant">ОГРНИП {seller.ogrnip}</p>
           <a href={`mailto:${seller.email}`} className="text-body-sm text-primary">
             {seller.email}
           </a>
         </>
       ) : (
-        <p className="text-body-sm text-on-surface-variant">Реквизиты продавца пока не указаны</p>
+        <p className="text-body-sm text-on-surface-variant">Контакты пока не указаны</p>
       )}
     </section>
   );

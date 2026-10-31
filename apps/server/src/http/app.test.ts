@@ -3,14 +3,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { silentLogger } from '../lib/logger.js';
 import { initDataSecret, signInitData } from '../lib/telegram-init-data.js';
 import { MOCK_CODE_AFTER_POLLS } from '../providers/delivery/mock-delivery-provider.js';
-import { CisPayProvider, signCisPayBody } from '../providers/payment/cispay-provider.js';
+import { PlategaProvider } from '../providers/payment/platega-provider.js';
 import { CODE_POLL_MIN_INTERVAL_MS } from '../services/delivery-service.js';
+import { OrderService } from '../services/order-service.js';
+import { SubscriptionService } from '../services/subscription-service.js';
 import { BOT_TOKEN, BUYER, OTHER_USER, createPaidOrder, createTestContext, type TestContext } from '../test/fixtures.js';
 import { buildApp, type AppDeps } from './app.js';
 
-const CISPAY_KEY = 'cis_sec_test';
+const PLATEGA_MERCHANT_ID = '0192a4b8-0000-7000-8000-000000000001';
+const PLATEGA_SECRET = 'platega-secret';
+const PLATEGA_TRANSACTION_ID = '3fa85f64-5717-4562-b3fc-2c963f66afa6';
 
 let ctx: TestContext;
 let app: FastifyInstance;
@@ -147,7 +152,7 @@ describe('catalog', () => {
 
 describe('profile and gate data', () => {
   it('returns channel info and the seller details with /me', async () => {
-    const seller = { name: 'ИП Иванов Иван Иванович', inn: '500100732259', ogrnip: '304500116000157', email: 'shop@example.com' };
+    const seller = { name: 'iStockApps', email: 'shop@example.com' };
     await app.close();
     app = await buildApp(baseDeps({ seller }));
 
@@ -168,7 +173,7 @@ describe('order lifecycle through HTTP', () => {
     });
     const order = created.json().data;
     const lifetimeMs = Date.parse(order.expiresAt) - Date.parse(order.createdAt);
-    expect(lifetimeMs).toBe(30 * 60 * 1000);
+    expect(lifetimeMs).toBe(15 * 60 * 1000);
 
     const cancelled = await app.inject({ method: 'POST', url: `/api/orders/${order.id}/cancel`, headers: authHeader() });
 
@@ -427,64 +432,159 @@ describe('payments mode and promo codes through HTTP', () => {
   });
 });
 
-describe('CISPAY webhook', () => {
-  async function appWithCisPay(): Promise<{ order: Awaited<ReturnType<typeof ctx.orders.createOrder>> }> {
-    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
-    const cispay = new CisPayProvider({
-      apiUrl: 'https://api.cispay.app',
-      shopId: '0192a4b8-0000-7000-8000-000000000001',
-      apiKey: CISPAY_KEY,
-      fetchFn: vi.fn<typeof fetch>(),
+describe('Platega callback', () => {
+  const AUTH = { 'x-merchantid': PLATEGA_MERCHANT_ID, 'x-secret': PLATEGA_SECRET };
+  // Exactly what Platega sends.
+  const CONTENT_TYPE = 'application/json; charset=utf-8';
+
+  /** `apiResponse` is what Platega's status API answers while a callback is checked. */
+  async function appWithPlatega(
+    apiResponse: () => Response = () => statusResponse('CONFIRMED'),
+  ): Promise<{ order: Awaited<ReturnType<typeof ctx.orders.createOrder>> }> {
+    const platega = new PlategaProvider({
+      apiUrl: 'https://app.platega.io',
+      merchantId: PLATEGA_MERCHANT_ID,
+      secret: PLATEGA_SECRET,
+      fetchFn: vi.fn<typeof fetch>().mockImplementation(async (_url, init) =>
+        init?.method === 'POST'
+          ? new Response(JSON.stringify({ transactionId: PLATEGA_TRANSACTION_ID, redirect: 'https://pay.platega.io/1' }))
+          : apiResponse(),
+      ),
     });
+    // As in production: the same provider takes callbacks and checks them, and test payments do not count.
+    const orders = new OrderService({
+      repos: ctx.repos,
+      catalog: ctx.catalog,
+      payments: platega,
+      notifications: ctx.notifications,
+      checkout: ctx.checkout,
+      logger: silentLogger,
+      returnUrl: (created) => `https://t.me/test_bot?start=${created.id}`,
+      acceptSandboxPayments: false,
+      now: ctx.clock.now,
+    });
+    const order = await orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
     await app.close();
-    app = await buildApp(baseDeps({ payments: cispay, mockPayments: undefined }));
+    app = await buildApp(baseDeps({ payments: platega, mockPayments: undefined, orders }));
     return { order };
   }
 
-  function webhookBody(paymentOrderId: string, paymentId: string): string {
-    return JSON.stringify({
-      id: paymentId,
-      order_id: paymentOrderId,
-      payment_method: 'SBP',
-      status: 'PAID',
-      amount: 34900,
-      currency: 'RUB',
-      is_sandbox: false,
-    });
+  function statusResponse(status: string): Response {
+    const paymentDetails = { amount: 349, currency: 'RUB' };
+    return new Response(JSON.stringify({ id: PLATEGA_TRANSACTION_ID, status, paymentDetails }), { status: 200 });
   }
 
-  it('accepts a correctly signed webhook and marks the order paid', async () => {
-    const { order } = await appWithCisPay();
-    const body = webhookBody(order.paymentOrderId, order.paymentId as string);
+  function callbackBody(paymentOrderId: string, paymentId: string, status = 'CONFIRMED'): string {
+    return JSON.stringify({ id: paymentId, amount: 349, currency: 'RUB', status, paymentMethod: 2, payload: paymentOrderId });
+  }
+
+  it('accepts an authenticated callback and marks the order paid', async () => {
+    const { order } = await appWithPlatega();
 
     const response = await app.inject({
       method: 'POST',
-      url: '/webhooks/cispay',
-      headers: { 'content-type': 'application/json', 'x-signature': signCisPayBody(CISPAY_KEY, body) },
-      payload: body,
+      url: '/webhooks/platega',
+      headers: { ...AUTH, 'content-type': CONTENT_TYPE },
+      payload: callbackBody(order.paymentOrderId, order.paymentId as string),
     });
 
     expect(response.statusCode).toBe(200);
     expect((await ctx.repos.orders.findById(order.id))?.status).toBe('paid');
   });
 
-  it('rejects webhooks with a bad signature', async () => {
-    const { order } = await appWithCisPay();
+  it('does not pay an order when the API says the money was already returned', async () => {
+    const { order } = await appWithPlatega(() => statusResponse('CHARGEBACKED'));
+
     const response = await app.inject({
       method: 'POST',
-      url: '/webhooks/cispay',
-      headers: { 'content-type': 'application/json', 'x-signature': 'f'.repeat(64) },
-      payload: webhookBody(order.paymentOrderId, order.paymentId as string),
+      url: '/webhooks/platega',
+      headers: { ...AUTH, 'content-type': CONTENT_TYPE },
+      payload: callbackBody(order.paymentOrderId, order.paymentId as string),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect((await ctx.repos.orders.findById(order.id))?.status).toBe('awaiting_payment');
+  });
+
+  it('asks Platega to retry when the API cannot confirm the payment', async () => {
+    const { order } = await appWithPlatega(() => new Response('down', { status: 503 }));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/webhooks/platega',
+      headers: { ...AUTH, 'content-type': CONTENT_TYPE },
+      payload: callbackBody(order.paymentOrderId, order.paymentId as string),
+    });
+
+    expect(response.statusCode).toBeGreaterThanOrEqual(500);
+    expect((await ctx.repos.orders.findById(order.id))?.status).toBe('awaiting_payment');
+  });
+
+  it('rejects callbacks with a wrong secret', async () => {
+    const { order } = await appWithPlatega();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/webhooks/platega',
+      headers: { ...AUTH, 'x-secret': 'wrong', 'content-type': CONTENT_TYPE },
+      payload: callbackBody(order.paymentOrderId, order.paymentId as string),
     });
 
     expect(response.statusCode).toBe(401);
     expect((await ctx.repos.orders.findById(order.id))?.status).toBe('awaiting_payment');
   });
 
+  it('acknowledges events it has no use for, so Platega stops retrying them', async () => {
+    const { order } = await appWithPlatega();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/webhooks/platega',
+      headers: { ...AUTH, 'content-type': CONTENT_TYPE },
+      payload: callbackBody('', 'subscription-id', 'SUBSCRIPTION_ACTIVATED'),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect((await ctx.repos.orders.findById(order.id))?.status).toBe('awaiting_payment');
+  });
+
+  it('has no CISPAY route any more', async () => {
+    await appWithPlatega();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/webhooks/cispay',
+      headers: { 'content-type': 'application/json' },
+      payload: '{}',
+    });
+    expect(response.statusCode).toBe(404);
+  });
+
   it('does not expose the mock payment page with a real provider', async () => {
-    await appWithCisPay();
+    await appWithPlatega();
     const response = await app.inject({ method: 'GET', url: '/dev/mock-pay/x' });
     expect(response.statusCode).toBe(404);
+  });
+});
+
+describe('channel subscription turned off', () => {
+  beforeEach(async () => {
+    await app.close();
+    const fetchMember = vi.fn().mockRejectedValue(new Error('the bot is not in the channel'));
+    const subscription = new SubscriptionService({
+      channel: '@test_channel',
+      isRequired: false,
+      fetchMember,
+      logger: silentLogger,
+    });
+    app = await buildApp(baseDeps({ subscription }));
+  });
+
+  it('opens the shop to a user who is not subscribed', async () => {
+    const headers = authHeader({ ...BUYER, id: 999 });
+
+    const me = await app.inject({ method: 'GET', url: '/api/me', headers });
+    const catalog = await app.inject({ method: 'GET', url: '/api/catalog/categories', headers });
+
+    expect(me.json().data.isSubscribed).toBe(true);
+    expect(catalog.statusCode).toBe(200);
   });
 });
 

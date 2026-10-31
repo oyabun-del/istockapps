@@ -11,7 +11,7 @@ import {
 } from './payment-provider.js';
 
 /**
- * Development stand-in for CISPAY. The payment page is served by our own
+ * Development stand-in for a payment service. The payment page is served by our own
  * `/dev/mock-pay/:paymentId` route, which marks the payment as PAID.
  */
 export class MockPaymentProvider implements PaymentProvider {
@@ -30,7 +30,7 @@ export class MockPaymentProvider implements PaymentProvider {
       orderId: input.orderId,
       status: 'PENDING',
       amountKopecks: input.amountKopecks,
-      // No real money moves, so these behave like CISPAY sandbox payments.
+      // No real money moves, so these count as test payments.
       isSandbox: true,
     });
     return { paymentId, paymentUrl: `${this.publicUrl}/dev/mock-pay/${paymentId}` };

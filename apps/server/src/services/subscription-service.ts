@@ -22,6 +22,8 @@ const MAX_CACHE_ENTRIES = 10_000;
 
 export interface SubscriptionServiceDeps {
   channel: string;
+  /** False: everyone counts as subscribed and Telegram is not asked. Default true. */
+  isRequired?: boolean;
   fetchMember: ChatMemberFetcher;
   logger: Logger;
   now?: () => number;
@@ -39,6 +41,8 @@ export class SubscriptionService {
 
   /** `force` skips the cache (used by the "Проверить подписку" button). */
   async isSubscribed(userId: number, options: { force?: boolean } = {}): Promise<boolean> {
+    if (this.deps.isRequired === false) return true;
+
     const cached = this.cache.get(userId);
     if (!options.force && cached && cached.expiresAt > this.now()) return cached.isSubscribed;
 

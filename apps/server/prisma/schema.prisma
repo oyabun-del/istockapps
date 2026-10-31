@@ -24,7 +24,7 @@ model User {
 
 model Order {
   id              Int          @id @default(autoincrement())
-  // Sent to CISPAY as order_id; random so it never collides after DB resets.
+  // Sent to the payment provider as payload; random so it never collides after DB resets.
   paymentOrderId  String       @unique
   userId          BigInt
   user            User         @relation(fields: [userId], references: [id])
@@ -37,7 +37,7 @@ model Order {
   paymentId       String?      @unique
   paymentUrl      String?
   paymentSyncedAt DateTime?
-  // CISPAY test payment; never counted as revenue.
+  // Test payment; never counted as revenue.
   isSandbox       Boolean      @default(false)
   // Set when payments were open by promo code only; the code's app limit counts this order.
   promoCodeId     Int?

@@ -14,9 +14,7 @@ const BASE = {
 };
 
 const SELLER = {
-  SELLER_NAME: 'ИП Иванов Иван Иванович',
-  SELLER_INN: '500100732259',
-  SELLER_OGRNIP: '304500116000157',
+  SELLER_NAME: 'iStockApps',
   SELLER_EMAIL: 'shop@example.com',
 };
 
@@ -27,7 +25,7 @@ describe('parseEnv', () => {
     expect(env.ADMIN_IDS).toEqual([111, 222]);
     expect(env.SUPPORT_USERNAME).toBe('support_acc');
     expect(env.TRUST_PROXY_HOPS).toBe(0);
-    expect(env.ALLOW_SANDBOX_PAYMENTS).toBe(false);
+    expect(env.REQUIRE_CHANNEL_SUBSCRIPTION).toBe(true);
     expect(env.PORT).toBe(3000);
     expect(env.SERVE_MINIAPP).toBe(true);
     expect(env.BROADCAST_RATE_PER_SEC).toBe(25);
@@ -80,9 +78,9 @@ describe('parseEnv', () => {
       expect(() =>
         parseEnv({
           ...OFFLINE,
-          PAYMENT_PROVIDER: 'cispay',
-          CISPAY_SHOP_ID: '0192a4b8-0000-7000-8000-000000000001',
-          CISPAY_API_KEY: 'cis_sec_x',
+          PAYMENT_PROVIDER: 'platega',
+          PLATEGA_MERCHANT_ID: '0192a4b8-0000-7000-8000-000000000001',
+          PLATEGA_SECRET: 'secret',
         }),
       ).toThrow(/TELEGRAM_OFFLINE/);
     });
@@ -92,8 +90,28 @@ describe('parseEnv', () => {
     expect(() => parseEnv({ ...BASE, ADMIN_IDS: '111,abc' })).toThrow(/ADMIN_IDS: Invalid admin ids: abc/);
   });
 
-  it('requires CISPAY credentials when the real provider is selected', () => {
-    expect(() => parseEnv({ ...BASE, PAYMENT_PROVIDER: 'cispay' })).toThrow(/CISPAY_SHOP_ID and CISPAY_API_KEY/);
+  it('requires Platega credentials when the real provider is selected', () => {
+    expect(() => parseEnv({ ...BASE, PAYMENT_PROVIDER: 'platega' })).toThrow(/PLATEGA_MERCHANT_ID and PLATEGA_SECRET/);
+  });
+
+  it('points at the Platega API by default', () => {
+    const env = parseEnv({
+      ...BASE,
+      PAYMENT_PROVIDER: 'platega',
+      PLATEGA_MERCHANT_ID: '0192a4b8-0000-7000-8000-000000000001',
+      PLATEGA_SECRET: 'secret',
+    });
+    expect(env.PLATEGA_API_URL).toBe('https://app.platega.io');
+  });
+
+  it('no longer accepts CISPAY as a provider', () => {
+    expect(() => parseEnv({ ...BASE, PAYMENT_PROVIDER: 'cispay' })).toThrow(/PAYMENT_PROVIDER/);
+  });
+
+  it('turns the channel subscription off only when asked explicitly', () => {
+    expect(parseEnv({ ...BASE, REQUIRE_CHANNEL_SUBSCRIPTION: 'false' }).REQUIRE_CHANNEL_SUBSCRIPTION).toBe(false);
+    expect(parseEnv({ ...BASE, REQUIRE_CHANNEL_SUBSCRIPTION: 'true' }).REQUIRE_CHANNEL_SUBSCRIPTION).toBe(true);
+    expect(() => parseEnv({ ...BASE, REQUIRE_CHANNEL_SUBSCRIPTION: 'off' })).toThrow(/REQUIRE_CHANNEL_SUBSCRIPTION/);
   });
 
   it('forbids mock payments, mock delivery, dev user and plain http in production', () => {
@@ -133,9 +151,9 @@ describe('parseEnv', () => {
     expect(() =>
       parseEnv({
         ...BASE,
-        PAYMENT_PROVIDER: 'cispay',
-        CISPAY_SHOP_ID: '0192a4b8-0000-7000-8000-000000000001',
-        CISPAY_API_KEY: 'cis_sec_x',
+        PAYMENT_PROVIDER: 'platega',
+        PLATEGA_MERCHANT_ID: '0192a4b8-0000-7000-8000-000000000001',
+        PLATEGA_SECRET: 'secret',
         DEV_USER_ID: '1',
       }),
     ).toThrow(/DEV_USER_ID is allowed only/);
@@ -148,26 +166,19 @@ describe('parseEnv', () => {
 
 describe('seller details', () => {
   it('parses the details shown in the legal documents', () => {
-    expect(sellerOf(parseEnv({ ...BASE, ...SELLER }))).toEqual({
-      name: 'ИП Иванов Иван Иванович',
-      inn: '500100732259',
-      ogrnip: '304500116000157',
-      email: 'shop@example.com',
-    });
+    expect(sellerOf(parseEnv({ ...BASE, ...SELLER }))).toEqual({ name: 'iStockApps', email: 'shop@example.com' });
   });
 
   it('is null in development when nothing is set', () => {
     expect(sellerOf(parseEnv(BASE))).toBeNull();
   });
 
-  it('rejects malformed INN, OGRNIP and email', () => {
-    expect(() => parseEnv({ ...BASE, ...SELLER, SELLER_INN: '7701234567' })).toThrow(/SELLER_INN/);
-    expect(() => parseEnv({ ...BASE, ...SELLER, SELLER_OGRNIP: '1027700132195' })).toThrow(/SELLER_OGRNIP/);
+  it('rejects a malformed email', () => {
     expect(() => parseEnv({ ...BASE, ...SELLER, SELLER_EMAIL: 'not-an-email' })).toThrow(/SELLER_EMAIL/);
   });
 
   it('refuses partly filled details', () => {
-    expect(() => parseEnv({ ...BASE, SELLER_NAME: SELLER.SELLER_NAME })).toThrow(/SELLER_INN/);
+    expect(() => parseEnv({ ...BASE, SELLER_NAME: SELLER.SELLER_NAME })).toThrow(/SELLER_EMAIL/);
   });
 
   it('requires the details in production', () => {
@@ -222,9 +233,9 @@ describe('Install-IOS settings', () => {
       ...INSTALLIOS,
       ...SELLER,
       NODE_ENV: 'production',
-      PAYMENT_PROVIDER: 'cispay',
-      CISPAY_SHOP_ID: '0192a4b8-0000-7000-8000-000000000001',
-      CISPAY_API_KEY: 'cis_sec_x',
+      PAYMENT_PROVIDER: 'platega',
+      PLATEGA_MERCHANT_ID: '0192a4b8-0000-7000-8000-000000000001',
+      PLATEGA_SECRET: 'secret',
     });
     expect(env.DELIVERY_PROVIDER).toBe('installios');
   });

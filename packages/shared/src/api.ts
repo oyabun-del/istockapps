@@ -28,6 +28,7 @@ export const ERROR_CODES = [
   'DELIVERY_PROVIDER_ERROR',
   'CATALOG_PROVIDER_ERROR',
   'PRICE_CHANGED',
+  'ORDER_AMOUNT_TOO_LARGE',
   'PAYMENTS_CLOSED',
   'PROMO_INVALID',
   'PROMO_LIMIT_REACHED',
@@ -39,7 +40,7 @@ export type ErrorCode = (typeof ERROR_CODES)[number];
 
 // ---------- Payment ----------
 
-/** Methods supported by CISPAY (see docs/cispay-openapi.json); older orders may carry any of them. */
+/** Older orders may carry any of these, so they stay even though only SBP is accepted now. */
 export const PAYMENT_METHODS = ['SBP', 'CARD', 'CRYPTO'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
@@ -196,11 +197,9 @@ export interface StartCodeInput {
 
 // ---------- User ----------
 
-/** Individual entrepreneur running the shop. */
+/** Who runs the shop, as the documents name it. */
 export interface SellerDto {
   name: string;
-  inn: string;
-  ogrnip: string;
   /** Address for personal data requests. */
   email: string;
 }

@@ -2,6 +2,9 @@ import { randomUUID } from 'node:crypto';
 import {
   ACTIVE_PAYMENT_METHOD,
   calculateCartPricing,
+  exceedsOrderLimit,
+  formatRub,
+  MAX_ORDER_TOTAL_KOPECKS,
   type ActivePaymentMethod,
   type AppDto,
   type CartPricing,
@@ -24,11 +27,11 @@ import { recordOrderEvent } from './order-events.js';
 
 /** A fresh unpaid order for the same app is reused instead of creating a new invoice. */
 const PENDING_REUSE_WINDOW_MS = INVOICE_TTL_MS;
-/** Fallback polling of CISPAY when the webhook is late. */
+/** Fallback polling of the payment provider when the webhook is late. */
 export const PAYMENT_SYNC_INTERVAL_MS = 15_000;
 /**
  * A cancelled or expired order is still polled this long after creation: the buyer may pay the
- * invoice until CISPAY closes it, and that payment must not depend on the webhook alone.
+ * invoice until the provider closes it, and that payment must not depend on the webhook alone.
  */
 export const LATE_PAYMENT_WINDOW_MS = INVOICE_TTL_MS + 30 * 60 * 1000;
 /** Orders checked by one background reconciliation pass. */
@@ -44,7 +47,7 @@ export interface PaymentUpdate {
   isSandbox: boolean;
 }
 
-/** Verified webhook payload; a null amount (non-ruble currency) is confirmed via the payment API. */
+/** Verified webhook payload; with a null amount both the amount and the status come from the payment API. */
 export type PaymentNotice = Omit<PaymentUpdate, 'amountKopecks'> & { amountKopecks: number | null };
 
 export interface OrderServiceDeps {
@@ -55,14 +58,14 @@ export interface OrderServiceDeps {
   /** Payments mode and promo codes: who may open a new invoice. */
   checkout: Pick<CheckoutGate, 'authorize'>;
   logger: Logger;
-  /** Where CISPAY sends the buyer after paying (deep link back into the Mini App). */
-  returnUrl: (order: Order) => string | null;
-  /** CISPAY sandbox payments unlock delivery only when this is true (never in production by default). */
+  /** Where the provider sends the buyer after paying (deep link back into the Mini App). */
+  returnUrl: (order: Order) => string;
+  /** Test payments unlock delivery only when this is true (only with the mock provider). */
   acceptSandboxPayments: boolean;
   now?: () => Date;
 }
 
-/** CISPAY rejects longer descriptions (PaymentCreateRequest.description maxLength). */
+/** Platega documents no limit for the description; this one keeps it sane. */
 const PAYMENT_DESCRIPTION_MAX = 512;
 
 /** "СберБанк Онлайн, Т-Банк, заказ #12"; long app lists are cut so the order number always fits. */
@@ -108,7 +111,7 @@ export class OrderService {
     this.now = deps.now ?? (() => new Date());
   }
 
-  /** SBP when CISPAY has it enabled for the shop, otherwise nothing: other methods are not offered. */
+  /** SBP when the provider has it enabled for the shop, otherwise nothing: other methods are not offered. */
   async listPaymentMethods(): Promise<ActivePaymentMethod[]> {
     try {
       const methods = await this.deps.payments.listMethods();
@@ -128,6 +131,12 @@ export class OrderService {
     const pricing = calculateCartPricing(apps.map((app) => app.priceKopecks));
     if (input.expectedTotalKopecks !== undefined && input.expectedTotalKopecks !== pricing.totalKopecks) {
       throw new AppError('PRICE_CHANGED', 'Цены обновились. Проверьте корзину и оплатите ещё раз.');
+    }
+    if (exceedsOrderLimit(pricing.totalKopecks)) {
+      throw new AppError(
+        'ORDER_AMOUNT_TOO_LARGE',
+        `Максимальная сумма заказа — ${formatRub(MAX_ORDER_TOTAL_KOPECKS)}. Уберите часть приложений из корзины.`,
+      );
     }
 
     const methods = await this.listPaymentMethods();
@@ -208,7 +217,7 @@ export class OrderService {
     return found;
   }
 
-  /** Reuses a fresh unpaid invoice only if CISPAY still considers it payable. */
+  /** Reuses a fresh unpaid invoice only if the provider still considers it payable. */
   private async reusablePendingOrder(
     pending: Order | null,
     method: ActivePaymentMethod,
@@ -242,7 +251,7 @@ export class OrderService {
     }
   }
 
-  /** Returns the order; for unpaid orders also polls CISPAY in case the webhook was missed. */
+  /** Returns the order; for unpaid orders also polls the provider in case the webhook was missed. */
   async getOrder(userId: number, orderId: number): Promise<Order> {
     const order = await getOwnedOrder(this.deps.repos.orders, userId, orderId);
     if (!this.shouldSyncPayment(order)) return order;
@@ -255,7 +264,7 @@ export class OrderService {
     }
   }
 
-  /** Buyer gives up on an unpaid order. CISPAY has no cancel call: the invoice just expires on its side. */
+  /** Buyer gives up on an unpaid order. The invoice is not cancelled at the provider: it just expires there. */
   async cancelOrder(userId: number, orderId: number): Promise<Order> {
     const order = await getOwnedOrder(this.deps.repos.orders, userId, orderId);
     if (order.status === 'cancelled') return order;
@@ -280,14 +289,14 @@ export class OrderService {
       return;
     }
     const update = await this.resolveAmount(notice);
-    // Payment creation may have timed out on our side while CISPAY created it: bind it now.
+    // Payment creation may have timed out on our side while the provider created it: bind it now.
     const bound = order.paymentId
       ? order
       : await this.deps.repos.orders.update(order.id, { paymentId: update.paymentId });
     await this.paymentLocks.run(order.id, () => this.applyPaymentUpdate(bound, update));
   }
 
-  /** CISPAY reports CRYPTO webhooks in USD cents; its status API also returns the ruble amount. */
+  /** A webhook without an amount only says that something changed: the status API has the final word. */
   private async resolveAmount(notice: PaymentNotice): Promise<PaymentUpdate> {
     if (notice.amountKopecks !== null) return { ...notice, amountKopecks: notice.amountKopecks };
     const state = await this.deps.payments.getPayment(notice.paymentId);
@@ -302,7 +311,7 @@ export class OrderService {
   private shouldSyncPayment(order: Order): boolean {
     if (!order.paymentId || !PAYABLE_STATUSES.includes(order.status)) return false;
     const nowMs = this.now().getTime();
-    // A closed invoice is polled only while CISPAY may still accept a payment for it.
+    // A closed invoice is polled only while the provider may still accept a payment for it.
     if (order.status !== 'awaiting_payment' && nowMs - order.createdAt.getTime() > LATE_PAYMENT_WINDOW_MS) return false;
     if (!order.paymentSyncedAt) return true;
     return nowMs - order.paymentSyncedAt.getTime() >= PAYMENT_SYNC_INTERVAL_MS;
@@ -362,7 +371,7 @@ export class OrderService {
       }
       case 'FAILED':
       case 'EXPIRED': {
-        const status = update.status === 'FAILED' ? 'failed' : 'expired';
+        const status = this.closedStatus(order, update.status);
         const changed = await repos.orders.transition(order.id, allowedSourcesFor(status), { status });
         if (changed) await this.recordEvent(order.id, status);
         return;
@@ -376,7 +385,25 @@ export class OrderService {
         await notifications.orderRefunded(refunded);
         return;
       }
+      case 'NEEDS_REVIEW': {
+        this.deps.logger.warn({ orderId: order.id }, 'Payment needs review');
+        // Polling and repeated callbacks bring this again; alert the admins once.
+        if (await repos.orderEvents.has(order.id, 'payment_review')) return;
+        await repos.orderEvents.add(order.id, 'payment_review');
+        await notifications.paymentNeedsReview(order);
+        return;
+      }
     }
+  }
+
+  /**
+   * The provider reports a rejected and an expired payment the same way. An invoice past its
+   * lifetime just was not paid, and the buyer should not read that the bank rejected it.
+   */
+  private closedStatus(order: Order, status: 'FAILED' | 'EXPIRED'): 'failed' | 'expired' {
+    if (status === 'EXPIRED') return 'expired';
+    const isPastLifetime = this.now().getTime() - order.createdAt.getTime() >= INVOICE_TTL_MS;
+    return isPastLifetime ? 'expired' : 'failed';
   }
 
   private recordEvent(orderId: number, type: string, data?: Record<string, unknown>): Promise<void> {

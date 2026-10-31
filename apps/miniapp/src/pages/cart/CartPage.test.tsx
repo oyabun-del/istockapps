@@ -181,6 +181,31 @@ describe('CartPage', () => {
     expect(screen.getByRole('button', { name: /Оплатить/ })).toBeDisabled();
   });
 
+  describe('order amount limit', () => {
+    function renderPricedAt(priceKopecks: number) {
+      vi.spyOn(api, 'app').mockResolvedValue(makeApp('big', 'Большое приложение', priceKopecks));
+      vi.spyOn(api, 'paymentMethods').mockResolvedValue([{ method: 'SBP' }]);
+      cartStore.addMany(['big']);
+      renderCart();
+    }
+
+    it('blocks payment above the limit and explains what to do', async () => {
+      renderPricedAt(1_000_001);
+
+      expect(await screen.findByText(/Максимальная сумма заказа/)).toHaveAttribute('role', 'status');
+      await screen.findByText('СБП');
+      expect(screen.getByRole('button', { name: /Оплатить/ })).toBeDisabled();
+    });
+
+    it('lets an order of exactly the maximum amount through', async () => {
+      renderPricedAt(1_000_000);
+
+      await screen.findByText('СБП');
+      await waitFor(() => expect(screen.getByRole('button', { name: /Оплатить/ })).toBeEnabled());
+      expect(screen.queryByText(/Максимальная сумма заказа/)).not.toBeInTheDocument();
+    });
+  });
+
   it('drops apps that are no longer sold', async () => {
     mockCatalog();
     vi.spyOn(api, 'paymentMethods').mockResolvedValue([{ method: 'SBP' }]);

@@ -1,6 +1,7 @@
 import type { PaymentMethod } from '@istock/shared';
 
-export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'EXPIRED' | 'REFUNDED';
+/** NEEDS_REVIEW: the money is held or partly returned; a person decides what happens to the order. */
+export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'EXPIRED' | 'REFUNDED' | 'NEEDS_REVIEW';
 
 export interface CreatePaymentInput {
   /** Our unique order reference (Order.paymentOrderId). */
@@ -9,8 +10,8 @@ export interface CreatePaymentInput {
   method: PaymentMethod;
   customerId: string;
   description: string;
-  successUrl: string | null;
-  failUrl: string | null;
+  successUrl: string;
+  failUrl: string;
 }
 
 export interface CreatedPayment {
@@ -29,7 +30,7 @@ export interface PaymentState {
 }
 
 export interface PaymentWebhook extends Omit<PaymentState, 'amountKopecks'> {
-  /** null when the webhook does not carry a ruble amount (CISPAY reports CRYPTO in USD cents). */
+  /** null: status and amount are confirmed via getPayment instead of being taken from the webhook. */
   amountKopecks: number | null;
 }
 

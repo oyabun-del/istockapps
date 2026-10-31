@@ -189,7 +189,7 @@ describe('CheckoutGate promo codes', () => {
 });
 
 describe('sandbox payments', () => {
-  it('marks an order paid with a CISPAY test payment', async () => {
+  it('marks an order paid with a test payment', async () => {
     expect((await pay(await order(['sberbank']), true)).isSandbox).toBe(true);
     expect((await pay(await order(['tbank']), false)).isSandbox).toBe(false);
   });

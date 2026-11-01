@@ -39,9 +39,13 @@ export class SubscriptionService {
     this.now = deps.now ?? Date.now;
   }
 
+  get isRequired(): boolean {
+    return this.deps.isRequired !== false;
+  }
+
   /** `force` skips the cache (used by the "Проверить подписку" button). */
   async isSubscribed(userId: number, options: { force?: boolean } = {}): Promise<boolean> {
-    if (this.deps.isRequired === false) return true;
+    if (!this.isRequired) return true;
 
     const cached = this.cache.get(userId);
     if (!options.force && cached && cached.expiresAt > this.now()) return cached.isSubscribed;

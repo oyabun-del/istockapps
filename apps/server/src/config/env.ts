@@ -96,7 +96,7 @@ const envSchema = z
 
     REQUIRED_CHANNEL: channelSchema,
     REQUIRED_CHANNEL_URL: httpsUrl.optional(),
-    /** False: anyone may use the shop; REQUIRED_CHANNEL is then only the channel link in the profile. */
+    /** False: anyone may use the shop and the profile does not show the channel. */
     REQUIRE_CHANNEL_SUBSCRIPTION: z
       .enum(['true', 'false'])
       .default('true')

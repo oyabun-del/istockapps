@@ -51,6 +51,25 @@ describe('ProfilePage', () => {
     expect(screen.queryByText(/Создать обращение/)).not.toBeInTheDocument();
   });
 
+  it('shows the channel link and the subscription badge when the subscription is required', async () => {
+    vi.spyOn(api, 'orders').mockResolvedValue([]);
+
+    renderProfile();
+
+    expect(await screen.findByRole('button', { name: /Наш канал/ })).toBeInTheDocument();
+    expect(screen.getByText('Подписка на канал активна')).toBeInTheDocument();
+  });
+
+  it('hides the channel link and the subscription badge when the subscription is turned off', async () => {
+    vi.spyOn(api, 'orders').mockResolvedValue([]);
+
+    renderProfile({ ...ME, isSubscriptionRequired: false });
+
+    await screen.findByRole('button', { name: /Служба поддержки/ });
+    expect(screen.queryByRole('button', { name: /Наш канал/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Подписка на канал активна')).not.toBeInTheDocument();
+  });
+
   it('links to the terms and the privacy policy inside the app', async () => {
     vi.spyOn(api, 'orders').mockResolvedValue([]);
 

@@ -207,6 +207,8 @@ export interface SellerDto {
 export interface MeDto {
   user: { id: number; firstName: string; username: string | null; photoUrl: string | null };
   isSubscribed: boolean;
+  /** False: the shop is open to everyone, so the channel is not shown at all. */
+  isSubscriptionRequired: boolean;
   channelUrl: string;
   supportUrl: string;
   /** Seller named in the terms and privacy policy; null only in development. */

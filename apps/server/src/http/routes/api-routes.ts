@@ -80,6 +80,7 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiRoutesDeps): vo
     const me: MeDto = {
       user: { id: user.id, firstName: user.firstName, username: user.username, photoUrl: user.photoUrl },
       isSubscribed,
+      isSubscriptionRequired: deps.subscription.isRequired,
       ...deps.links,
       seller: deps.seller,
       channel,

@@ -87,7 +87,12 @@ describe('auth and subscription gate', () => {
     const me = await app.inject({ method: 'GET', url: '/api/me', headers: authHeader() });
     expect(me.json()).toMatchObject({
       success: true,
-      data: { isSubscribed: false, channelUrl: 'https://t.me/test_channel', user: { id: BUYER.id } },
+      data: {
+        isSubscribed: false,
+        isSubscriptionRequired: true,
+        channelUrl: 'https://t.me/test_channel',
+        user: { id: BUYER.id },
+      },
     });
   });
 
@@ -584,6 +589,7 @@ describe('channel subscription turned off', () => {
     const catalog = await app.inject({ method: 'GET', url: '/api/catalog/categories', headers });
 
     expect(me.json().data.isSubscribed).toBe(true);
+    expect(me.json().data.isSubscriptionRequired).toBe(false);
     expect(catalog.statusCode).toBe(200);
   });
 });

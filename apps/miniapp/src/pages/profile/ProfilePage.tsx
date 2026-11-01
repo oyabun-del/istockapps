@@ -101,7 +101,7 @@ export function ProfilePage() {
               {username && <span>@{username}</span>}
               {me && <span className="tabular">ID {me.user.id}</span>}
             </span>
-            {me?.isSubscribed && (
+            {me?.isSubscriptionRequired && me.isSubscribed && (
               <span className="mt-0.5">
                 <Badge label="Подписка на канал активна" tone="success" icon="check_circle" />
               </span>
@@ -124,7 +124,7 @@ export function ProfilePage() {
             />
           )}
           <ActionRow icon="help" title="Частые вопросы" hint="Активация, коды и оплата" to="/guide" />
-          {me && (
+          {me?.isSubscriptionRequired && (
             <ActionRow
               icon="campaign"
               title="Наш канал"

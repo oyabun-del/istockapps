@@ -31,6 +31,7 @@ export const SELLER: SellerDto = {
 export const ME: MeDto = {
   user: { id: 42, firstName: 'Иван', username: 'ivan', photoUrl: null },
   isSubscribed: true,
+  isSubscriptionRequired: true,
   channelUrl: 'https://t.me/test_channel',
   supportUrl: 'https://t.me/support',
   seller: SELLER,

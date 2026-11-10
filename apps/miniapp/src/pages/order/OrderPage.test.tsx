@@ -206,6 +206,18 @@ describe('OrderPage steps', () => {
     expect(credentials).not.toHaveBeenCalled();
   });
 
+  it('offers no new code wait once the buyer confirmed that the app works', async () => {
+    vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'completed', isCodeReceived: true }));
+    vi.spyOn(api, 'delivery').mockResolvedValue(delivery());
+    const start = vi.spyOn(api, 'startCode');
+
+    renderOrder();
+
+    expect(await screen.findByText(/код больше не нужен/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Включить ожидание кода/ })).not.toBeInTheDocument();
+    expect(start).not.toHaveBeenCalled();
+  });
+
   it('opens the last step when Apple did not ask for a code', async () => {
     issuedOrder();
     const skip = vi

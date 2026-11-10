@@ -65,6 +65,18 @@ describe('DeliveryService happy path (mock provider)', () => {
     expect(completed.status).toBe('completed');
   });
 
+  it('closes the code step once the buyer confirmed that the app works', async () => {
+    const paid = await orderWithCredentials();
+    const groupId = (await ctx.deliveryService.getDelivery(BUYER.id, paid.id)).groups[0]?.id ?? '';
+    const wait = await ctx.deliveryService.startCode(BUYER.id, paid.id, groupId);
+    await ctx.deliveryService.skipCode(BUYER.id, paid.id);
+    await ctx.deliveryService.complete(BUYER.id, paid.id);
+
+    const closed = { code: 'INVALID_STATE', message: expect.stringMatching(/код больше не нужен/) };
+    await expect(ctx.deliveryService.startCode(BUYER.id, paid.id, groupId)).rejects.toMatchObject(closed);
+    await expect(ctx.deliveryService.getCodeWait(BUYER.id, paid.id, wait.id)).rejects.toMatchObject(closed);
+  });
+
   it('keeps confirm, credentials, code skip and complete idempotent', async () => {
     const paid = await orderWithCredentials();
 

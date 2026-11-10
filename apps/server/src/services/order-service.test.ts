@@ -376,6 +376,37 @@ describe('OrderService payment webhooks', () => {
     expect((await ctx.repos.orders.findById(order.id))?.status).toBe('paid');
   });
 
+  describe('the amount the provider reports as paid', () => {
+    async function payWith(amountKopecks: (orderAmount: number) => number) {
+      const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
+      vi.spyOn(ctx.payments, 'getPayment').mockResolvedValue({
+        paymentId: order.paymentId as string,
+        orderId: order.paymentOrderId,
+        status: 'PAID',
+        amountKopecks: amountKopecks(order.amountKopecks),
+        isSandbox: false,
+      });
+      await ctx.orders.handlePaymentWebhook(order.paymentOrderId, {
+        paymentId: order.paymentId as string,
+        status: 'PAID',
+        amountKopecks: null,
+        isSandbox: false,
+      });
+      return (await ctx.repos.orders.findById(order.id))?.status;
+    }
+
+    it('pays the order when the buyer also paid the provider fee on top', async () => {
+      // Platega with the fee on the buyer: 590 ₽ came back as 640,15 ₽ (8,5 % SBP fee).
+      expect(await payWith((amount) => Math.round(amount * 1.085))).toBe('paid');
+      expect(ctx.sender.sent.some((message) => message.html.includes('Сумма оплаты не совпала'))).toBe(false);
+    });
+
+    it('still holds the order when even one kopeck is missing', async () => {
+      expect(await payWith((amount) => amount - 1)).toBe('awaiting_payment');
+      expect(ctx.sender.sent[0]?.html).toContain('Сумма оплаты не совпала');
+    });
+  });
+
   it('alerts admins about an amount mismatch only once', async () => {
     const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
     const update = { paymentId: order.paymentId as string, status: 'PAID' as const, amountKopecks: 100, isSandbox: false };

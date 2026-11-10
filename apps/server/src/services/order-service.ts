@@ -367,7 +367,9 @@ export class OrderService {
       case 'PENDING':
         return;
       case 'PAID': {
-        if (update.amountKopecks !== order.amountKopecks) {
+        // The invoice is ours, so a buyer cannot pay less on purpose. More comes back when the provider
+        // charges its fee to the buyer (Platega reports the amount paid, fee included): that is still paid.
+        if (update.amountKopecks < order.amountKopecks) {
           this.deps.logger.error(
             { orderId: order.id, expected: order.amountKopecks, received: update.amountKopecks },
             'Paid amount mismatch',
@@ -377,6 +379,12 @@ export class OrderService {
           await repos.orderEvents.add(order.id, 'amount_mismatch', { received: update.amountKopecks });
           await notifications.paymentAmountMismatch(order, update.amountKopecks);
           return;
+        }
+        if (update.amountKopecks > order.amountKopecks) {
+          this.deps.logger.info(
+            { orderId: order.id, expected: order.amountKopecks, received: update.amountKopecks },
+            'Paid with the provider fee on top',
+          );
         }
         const paid = await repos.orders.transition(order.id, allowedSourcesFor('paid'), {
           status: 'paid',

@@ -18,7 +18,7 @@ import { AppError, getErrorMessage } from '../lib/app-error.js';
 import { KeyedLock } from '../lib/keyed-lock.js';
 import type { Logger } from '../lib/logger.js';
 import type { CatalogProvider } from '../providers/catalog/catalog-provider.js';
-import type { PaymentProvider, PaymentStatus } from '../providers/payment/payment-provider.js';
+import type { PaymentProvider, PaymentState, PaymentStatus } from '../providers/payment/payment-provider.js';
 import type { Repositories } from '../repositories/repositories.js';
 import { promoLimitError, type CheckoutGate } from './checkout-gate.js';
 import type { NotificationService } from './notification-service.js';
@@ -288,7 +288,8 @@ export class OrderService {
       this.deps.logger.warn({ orderId: order.id }, 'Webhook payment id mismatch ignored');
       return;
     }
-    const update = await this.resolveAmount(notice);
+    const update = await this.resolveAmount(order, notice);
+    if (!update) return;
     // Payment creation may have timed out on our side while the provider created it: bind it now.
     const bound = order.paymentId
       ? order
@@ -296,16 +297,34 @@ export class OrderService {
     await this.paymentLocks.run(order.id, () => this.applyPaymentUpdate(bound, update));
   }
 
-  /** A webhook without an amount only says that something changed: the status API has the final word. */
-  private async resolveAmount(notice: PaymentNotice): Promise<PaymentUpdate> {
+  /**
+   * A webhook without an amount only says that something changed: the status API has the final word.
+   * null: the API reports the payment for another order, so it must not touch this one.
+   */
+  private async resolveAmount(order: Order, notice: PaymentNotice): Promise<PaymentUpdate | null> {
     if (notice.amountKopecks !== null) return { ...notice, amountKopecks: notice.amountKopecks };
     const state = await this.deps.payments.getPayment(notice.paymentId);
+    if (this.isOtherOrdersPayment(order, state)) return null;
     return {
       paymentId: notice.paymentId,
       status: state.status,
       amountKopecks: state.amountKopecks,
       isSandbox: state.isSandbox,
     };
+  }
+
+  /**
+   * The API names the order a payment was opened for. One payment must never settle two orders, which
+   * matters most when a callback binds a payment to an order that has none yet.
+   */
+  private isOtherOrdersPayment(order: Order, state: PaymentState): boolean {
+    // The status API may leave the payload out: then the payment id binding is all there is to check.
+    if (!state.orderId || state.orderId === order.paymentOrderId) return false;
+    this.deps.logger.error(
+      { orderId: order.id, paymentId: state.paymentId, reportedFor: state.orderId },
+      'Payment belongs to another order: ignored',
+    );
+    return true;
   }
 
   private shouldSyncPayment(order: Order): boolean {
@@ -320,6 +339,9 @@ export class OrderService {
   private async syncPayment(order: Order): Promise<Order> {
     const paymentId = order.paymentId as string;
     const state = await this.deps.payments.getPayment(paymentId);
+    if (this.isOtherOrdersPayment(order, state)) {
+      return this.deps.repos.orders.update(order.id, { paymentSyncedAt: this.now() });
+    }
     await this.paymentLocks.run(order.id, () =>
       this.applyPaymentUpdate(order, {
         paymentId,

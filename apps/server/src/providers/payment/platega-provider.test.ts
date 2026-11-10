@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { PaymentProviderError, type CreatePaymentInput } from './payment-provider.js';
+import {
+  PaymentProviderError,
+  type CreatePaymentInput,
+  type PaymentWebhook,
+  type WebhookParseResult,
+} from './payment-provider.js';
 import { PlategaProvider } from './platega-provider.js';
 
 const MERCHANT_ID = '0192a4b8-0000-7000-8000-000000000001';
@@ -146,20 +151,36 @@ describe('PlategaProvider.listMethods', () => {
   });
 });
 
+/** The webhook of an accepted callback; fails the test for any other result. */
+function accepted(result: WebhookParseResult): PaymentWebhook {
+  if (result.kind !== 'accepted') throw new Error(`expected an accepted callback, got ${result.kind}`);
+  return result.webhook;
+}
+
 describe('Platega callbacks', () => {
-  it('parses an authenticated callback and converts the amount without float errors', () => {
+  it('parses an authenticated callback', () => {
     expect(createProvider().parseWebhook(callback({ status: 'CANCELED' }), AUTH_HEADERS)).toEqual({
-      paymentId: TRANSACTION_ID,
-      orderId: 'ord-1',
-      status: 'FAILED',
-      amountKopecks: 150025,
-      isSandbox: false,
+      kind: 'accepted',
+      webhook: {
+        paymentId: TRANSACTION_ID,
+        orderId: 'ord-1',
+        status: 'FAILED',
+        amountKopecks: null,
+        isSandbox: false,
+      },
     });
   });
 
-  it('leaves a confirmed payment to be checked through the API', () => {
-    const parsed = createProvider().parseWebhook(callback(), AUTH_HEADERS);
-    expect(parsed).toMatchObject({ status: 'PAID', amountKopecks: null });
+  it.each(['CONFIRMED', 'CANCELED', 'CHARGEBACKED', 'DISPUTED'])(
+    'leaves a %s callback to be checked through the API: its body is never taken on its word',
+    (status) => {
+      expect(accepted(createProvider().parseWebhook(callback({ status }), AUTH_HEADERS)).amountKopecks).toBeNull();
+    },
+  );
+
+  it('needs no amount or currency, as both come from the API', () => {
+    const body = Buffer.from(JSON.stringify({ id: TRANSACTION_ID, status: 'CHARGEBACKED', payload: 'ord-1' }));
+    expect(accepted(createProvider().parseWebhook(body, AUTH_HEADERS))).toMatchObject({ orderId: 'ord-1' });
   });
 
   it('accepts empty optional fields sent as null', () => {
@@ -167,7 +188,7 @@ describe('Platega callbacks', () => {
       callback({ status: 'CANCELED', payload: null, refundStatus: null }),
       AUTH_HEADERS,
     );
-    expect(parsed).toMatchObject({ orderId: '', status: 'FAILED' });
+    expect(accepted(parsed)).toMatchObject({ orderId: '', status: 'FAILED' });
   });
 
   it.each([
@@ -180,31 +201,34 @@ describe('Platega callbacks', () => {
     ['PARTIALLY_REFUNDED', { refundStatus: 'Declined' }, 'PENDING'],
     ['SUBSCRIPTION_ACTIVATED', {}, 'PENDING'],
   ])('maps %s %j to %s', (status, fields, expected) => {
-    expect(createProvider().parseWebhook(callback({ status, ...fields }), AUTH_HEADERS)?.status).toBe(expected);
+    expect(accepted(createProvider().parseWebhook(callback({ status, ...fields }), AUTH_HEADERS)).status).toBe(expected);
   });
 
   it('accepts a callback without a payload, such as one about a subscription', () => {
     const { payload: _omit, ...withoutPayload } = JSON.parse(callback().toString()) as Record<string, unknown>;
     const parsed = createProvider().parseWebhook(Buffer.from(JSON.stringify(withoutPayload)), AUTH_HEADERS);
-    expect(parsed?.orderId).toBe('');
-  });
-
-  it('leaves the amount unknown when the callback is not in rubles', () => {
-    const parsed = createProvider().parseWebhook(callback({ status: 'CANCELED', currency: 'USD' }), AUTH_HEADERS);
-    expect(parsed?.amountKopecks).toBeNull();
+    expect(accepted(parsed).orderId).toBe('');
   });
 
   it('rejects callbacks with a wrong or missing secret or merchant id', () => {
     const provider = createProvider();
-    expect(provider.parseWebhook(callback(), {})).toBeNull();
-    expect(provider.parseWebhook(callback(), { ...AUTH_HEADERS, 'x-secret': 'wrong' })).toBeNull();
-    expect(provider.parseWebhook(callback(), { ...AUTH_HEADERS, 'x-secret': undefined })).toBeNull();
-    expect(provider.parseWebhook(callback(), { ...AUTH_HEADERS, 'x-merchantid': 'other' })).toBeNull();
+    const unauthorized = { kind: 'unauthorized' };
+    expect(provider.parseWebhook(callback(), {})).toEqual(unauthorized);
+    expect(provider.parseWebhook(callback(), { ...AUTH_HEADERS, 'x-secret': 'wrong' })).toEqual(unauthorized);
+    expect(provider.parseWebhook(callback(), { ...AUTH_HEADERS, 'x-secret': undefined })).toEqual(unauthorized);
+    expect(provider.parseWebhook(callback(), { ...AUTH_HEADERS, 'x-merchantid': 'other' })).toEqual(unauthorized);
   });
 
-  it('rejects malformed bodies', () => {
+  it('does not read the body of a callback that failed authentication', () => {
+    expect(createProvider().parseWebhook(Buffer.from('nope'), {})).toEqual({ kind: 'unauthorized' });
+  });
+
+  it('tells an authentic callback it cannot read apart from a forged one, naming what is wrong', () => {
     const provider = createProvider();
-    expect(provider.parseWebhook(Buffer.from('nope'), AUTH_HEADERS)).toBeNull();
-    expect(provider.parseWebhook(Buffer.from('{"id":1}'), AUTH_HEADERS)).toBeNull();
+    expect(provider.parseWebhook(Buffer.from('nope'), AUTH_HEADERS)).toEqual({ kind: 'malformed', reason: 'invalid JSON' });
+
+    const result = provider.parseWebhook(Buffer.from('{"id":1}'), AUTH_HEADERS);
+    expect(result.kind).toBe('malformed');
+    expect(result.kind === 'malformed' && result.reason).toMatch(/^id: .*; status: /);
   });
 });

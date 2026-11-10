@@ -318,6 +318,64 @@ describe('OrderService payment webhooks', () => {
     expect(await ctx.repos.orders.findById(order.id)).toMatchObject({ status: 'paid', paymentId: realPaymentId });
   });
 
+  describe('a payment the API reports for another order', () => {
+    async function orderWithForeignPayment(): Promise<Awaited<ReturnType<typeof ctx.orders.createOrder>>> {
+      const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
+      vi.spyOn(ctx.payments, 'getPayment').mockResolvedValue({
+        paymentId: 'paid-for-another-order',
+        orderId: 'another-payment-order-id',
+        status: 'PAID',
+        amountKopecks: order.amountKopecks,
+        isSandbox: false,
+      });
+      return order;
+    }
+
+    it('is not bound to an order whose payment creation timed out', async () => {
+      const order = await orderWithForeignPayment();
+      await ctx.repos.orders.update(order.id, { paymentId: null });
+
+      await ctx.orders.handlePaymentWebhook(order.paymentOrderId, {
+        paymentId: 'paid-for-another-order',
+        status: 'PAID',
+        amountKopecks: null,
+        isSandbox: false,
+      });
+
+      expect(await ctx.repos.orders.findById(order.id)).toMatchObject({ status: 'awaiting_payment', paymentId: null });
+      expect(ctx.sender.sent).toHaveLength(0);
+    });
+
+    it('does not pay the order when found by polling', async () => {
+      const order = await orderWithForeignPayment();
+
+      const synced = await ctx.orders.getOrder(BUYER.id, order.id);
+
+      expect(synced.status).toBe('awaiting_payment');
+      expect(ctx.sender.sent).toHaveLength(0);
+    });
+  });
+
+  it('accepts a payment when the API leaves out which order it was opened for', async () => {
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
+    vi.spyOn(ctx.payments, 'getPayment').mockResolvedValue({
+      paymentId: order.paymentId as string,
+      orderId: '',
+      status: 'PAID',
+      amountKopecks: order.amountKopecks,
+      isSandbox: false,
+    });
+
+    await ctx.orders.handlePaymentWebhook(order.paymentOrderId, {
+      paymentId: order.paymentId as string,
+      status: 'PAID',
+      amountKopecks: null,
+      isSandbox: false,
+    });
+
+    expect((await ctx.repos.orders.findById(order.id))?.status).toBe('paid');
+  });
+
   it('alerts admins about an amount mismatch only once', async () => {
     const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
     const update = { paymentId: order.paymentId as string, status: 'PAID' as const, amountKopecks: 100, isSandbox: false };

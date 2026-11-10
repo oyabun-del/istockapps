@@ -538,6 +538,35 @@ describe('Platega callback', () => {
     expect((await ctx.repos.orders.findById(order.id))?.status).toBe('awaiting_payment');
   });
 
+  it('keeps a paid order when a refund callback is not confirmed by the API', async () => {
+    const { order } = await appWithPlatega();
+    const post = (status: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/webhooks/platega',
+        headers: { ...AUTH, 'content-type': CONTENT_TYPE },
+        payload: callbackBody(order.paymentOrderId, order.paymentId as string, status),
+      });
+
+    await post('CONFIRMED');
+    const response = await post('CHARGEBACKED');
+
+    expect(response.statusCode).toBe(200);
+    expect((await ctx.repos.orders.findById(order.id))?.status).toBe('paid');
+  });
+
+  it('answers 400 to an authentic callback it cannot read', async () => {
+    await appWithPlatega();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/webhooks/platega',
+      headers: { ...AUTH, 'content-type': CONTENT_TYPE },
+      payload: '{"id":1}',
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
   it('acknowledges events it has no use for, so Platega stops retrying them', async () => {
     const { order } = await appWithPlatega();
     const response = await app.inject({

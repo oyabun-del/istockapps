@@ -6,7 +6,13 @@ import { createContainer } from './container.js';
 import { buildApp } from './http/app.js';
 import { getErrorMessage } from './lib/app-error.js';
 
-const SECRET_PATHS = ['req.headers.authorization', 'req.headers["x-api-key"]', 'req.headers["x-signature"]'];
+/** Headers are not logged today; this keeps the Platega API key out of the log if that ever changes. */
+const SECRET_PATHS = [
+  'req.headers.authorization',
+  'req.headers["x-api-key"]',
+  'req.headers["x-secret"]',
+  'req.headers["x-merchantid"]',
+];
 
 async function main(): Promise<void> {
   const env = parseEnv(process.env);

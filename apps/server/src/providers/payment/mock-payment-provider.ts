@@ -7,7 +7,7 @@ import {
   type PaymentProvider,
   type PaymentState,
   type PaymentStatus,
-  type PaymentWebhook,
+  type WebhookParseResult,
 } from './payment-provider.js';
 
 /**
@@ -43,8 +43,8 @@ export class MockPaymentProvider implements PaymentProvider {
   }
 
   /** Mock payments are settled through the dev route, not webhooks. */
-  parseWebhook(): PaymentWebhook | null {
-    return null;
+  parseWebhook(): WebhookParseResult {
+    return { kind: 'unauthorized' };
   }
 
   setStatus(paymentId: string, status: PaymentStatus): PaymentState | null {

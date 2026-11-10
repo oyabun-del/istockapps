@@ -16,12 +16,18 @@ export async function webhookRoutes(app: FastifyInstance, deps: WebhookRoutesDep
 
   app.post('/platega', async (request, reply) => {
     const raw = Buffer.isBuffer(request.body) ? request.body : Buffer.alloc(0);
-    const webhook = deps.payments.parseWebhook(raw, request.headers);
-    if (!webhook) {
-      request.log.warn('Rejected Platega callback (bad credentials or payload)');
+    const result = deps.payments.parseWebhook(raw, request.headers);
+    if (result.kind === 'unauthorized') {
+      request.log.warn('Rejected Platega callback: bad credentials');
       return reply.status(401).send(fail('UNAUTHORIZED', 'Invalid credentials'));
     }
+    if (result.kind === 'malformed') {
+      // Authentic, so possibly a refund we can no longer see: paid orders are not polled afterwards.
+      request.log.error({ reason: result.reason }, 'Unreadable Platega callback: check the callback format');
+      return reply.status(400).send(fail('VALIDATION_ERROR', 'Malformed callback'));
+    }
 
+    const { webhook } = result;
     request.log.info(
       { paymentId: webhook.paymentId, status: webhook.status, sandbox: webhook.isSandbox },
       'Platega callback received',

@@ -71,7 +71,7 @@ describe('CatalogPage cart', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Добавить Canva в корзину' }));
 
     await waitFor(() =>
-      expect(screen.getByRole('status')).toHaveTextContent('Добавьте ещё 2 приложения для скидки 1 250 ₽'),
+      expect(screen.getByRole('status')).toHaveTextContent('Добавьте ещё 2 приложения для скидки 750 ₽'),
     );
     const bar = screen.getByRole('link', { name: 'Корзина: 3\u00a0приложения, скидка 300\u00a0₽' });
     expect(within(bar).getByText('747 ₽')).toBeInTheDocument();

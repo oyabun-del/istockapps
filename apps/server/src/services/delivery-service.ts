@@ -27,7 +27,6 @@ const EXTERNAL_ID_PREFIX = 'istock-';
 const CREDENTIALS_ATTEMPTS = 2;
 
 const CREDENTIAL_STATUSES: readonly OrderStatus[] = ['download_confirmed', 'credentials_issued', 'completed'];
-const CODE_STATUSES: readonly OrderStatus[] = ['credentials_issued', 'completed'];
 
 const NO_ACCESS_MESSAGE = 'Доступ к аккаунту сейчас недоступен. Обновите страницу: если идёт подбор замены, он займёт немного времени.';
 
@@ -175,9 +174,13 @@ export class DeliveryService {
     return updated;
   }
 
+  /** Codes are for signing in during activation only: once the buyer confirmed the app works, they are closed. */
   private async codeOrder(userId: number, orderId: number): Promise<Order> {
     const order = await getOwnedOrder(this.deps.repos.orders, userId, orderId);
-    if (!CODE_STATUSES.includes(order.status)) {
+    if (order.status === 'completed') {
+      throw new AppError('INVALID_STATE', 'Активация уже завершена, код больше не нужен.');
+    }
+    if (order.status !== 'credentials_issued') {
       throw new AppError('INVALID_STATE', 'Код доступен после получения данных для входа');
     }
     return order;

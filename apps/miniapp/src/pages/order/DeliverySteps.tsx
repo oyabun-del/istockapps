@@ -200,6 +200,15 @@ function CodeStep({ order, delivery, card }: { order: OrderDto; delivery: Delive
     onSuccess: (updated) => queryClient.setQueryData(queryKeys.order(order.id), updated),
   });
 
+  // The buyer confirmed the app works and signs out of the account: no more codes for it.
+  if (order.status === 'completed') {
+    return (
+      <StepCard index={3} title="Введите код подтверждения" {...card}>
+        <p className="text-body-sm text-on-surface-variant">Приложение активировано, код больше не нужен.</p>
+      </StepCard>
+    );
+  }
+
   return (
     <StepCard index={3} title="Введите код подтверждения" {...card}>
       {groups.length === 0 && (

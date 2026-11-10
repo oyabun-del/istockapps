@@ -34,13 +34,22 @@ export interface PaymentWebhook extends Omit<PaymentState, 'amountKopecks'> {
   amountKopecks: number | null;
 }
 
+/**
+ * unauthorized: not from the provider. malformed: authentic, but its body could not be read; such a
+ * callback may carry a refund, so it must be noticed rather than dropped as a forgery.
+ */
+export type WebhookParseResult =
+  | { kind: 'accepted'; webhook: PaymentWebhook }
+  | { kind: 'unauthorized' }
+  | { kind: 'malformed'; reason: string };
+
 export interface PaymentProvider {
   /** Methods currently enabled for the shop. */
   listMethods(): Promise<PaymentMethod[]>;
   createPayment(input: CreatePaymentInput): Promise<CreatedPayment>;
   getPayment(paymentId: string): Promise<PaymentState>;
-  /** Verifies the signature and parses the body. Returns null when the webhook must be rejected. */
-  parseWebhook(rawBody: Buffer, headers: Record<string, string | string[] | undefined>): PaymentWebhook | null;
+  /** Authenticates the callback first, and only then reads its body. */
+  parseWebhook(rawBody: Buffer, headers: Record<string, string | string[] | undefined>): WebhookParseResult;
 }
 
 export class PaymentProviderError extends Error {

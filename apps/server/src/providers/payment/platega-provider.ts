@@ -8,7 +8,7 @@ import {
   type PaymentProvider,
   type PaymentState,
   type PaymentStatus,
-  type PaymentWebhook,
+  type WebhookParseResult,
 } from './payment-provider.js';
 
 /** Docs: https://docs.platega.io/ */
@@ -33,11 +33,12 @@ const paymentResponseSchema = z.object({
   payload: z.string().nullish(),
 });
 
-/** Fields without a value are not sent at all, and events about subscriptions carry no payload. */
+/**
+ * Fields without a value are not sent at all, and events about subscriptions carry no payload.
+ * The amount and currency are not read: every callback is checked through the API.
+ */
 const callbackSchema = z.object({
   id: z.string(),
-  amount: z.number(),
-  currency: z.string(),
   status: z.string(),
   payload: z.string().nullish(),
   refundStatus: z.string().nullish(),
@@ -71,6 +72,11 @@ function toPaymentStatus(status: string, refundStatus?: string | null): PaymentS
     default:
       return 'PENDING';
   }
+}
+
+/** "id: expected string; status: required": field names and messages only, never the values. */
+function describeIssues(error: z.ZodError): string {
+  return error.issues.map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`).join('; ');
 }
 
 function headerValue(value: string | string[] | undefined): string | null {
@@ -132,31 +138,36 @@ export class PlategaProvider implements PaymentProvider {
     };
   }
 
-  /** Callbacks are not signed: Platega proves itself by sending our own merchant id and secret. */
-  parseWebhook(rawBody: Buffer, headers: Record<string, string | string[] | undefined>): PaymentWebhook | null {
+  /**
+   * Callbacks are not signed: Platega proves itself by sending our own merchant id and secret.
+   * That secret is also the API key and travels in every callback, so a callback is never taken on its
+   * word: with no amount the status and amount are read from the API. A forged "refund" then changes
+   * nothing, and a callback delivered after a later chargeback cannot undo it either.
+   */
+  parseWebhook(rawBody: Buffer, headers: Record<string, string | string[] | undefined>): WebhookParseResult {
     const isAuthentic =
       isSameSecret(headerValue(headers[MERCHANT_HEADER]), this.config.merchantId) &&
       isSameSecret(headerValue(headers[SECRET_HEADER]), this.config.secret);
-    if (!isAuthentic) return null;
+    if (!isAuthentic) return { kind: 'unauthorized' };
 
     let json: unknown;
     try {
       json = JSON.parse(rawBody.toString('utf8'));
     } catch {
-      return null;
+      return { kind: 'malformed', reason: 'invalid JSON' };
     }
     const parsed = callbackSchema.safeParse(json);
-    if (!parsed.success) return null;
-    const status = toPaymentStatus(parsed.data.status, parsed.data.refundStatus);
-    // Goods go out on PAID, so it is never taken on the callback's word: with no amount here the
-    // API is asked. That also catches a callback delivered after a later chargeback, as the order is not guaranteed.
-    const isRubles = parsed.data.currency === RUB && status !== 'PAID';
+    if (!parsed.success) return { kind: 'malformed', reason: describeIssues(parsed.error) };
     return {
-      paymentId: parsed.data.id,
-      orderId: parsed.data.payload ?? '',
-      status,
-      amountKopecks: isRubles ? toKopecks(parsed.data.amount) : null,
-      isSandbox: false,
+      kind: 'accepted',
+      webhook: {
+        paymentId: parsed.data.id,
+        orderId: parsed.data.payload ?? '',
+        // For the log only: the API has the final word.
+        status: toPaymentStatus(parsed.data.status, parsed.data.refundStatus),
+        amountKopecks: null,
+        isSandbox: false,
+      },
     };
   }
 

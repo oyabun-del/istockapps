@@ -21,6 +21,7 @@ import type { CatalogProvider } from '../providers/catalog/catalog-provider.js';
 import type { PaymentProvider, PaymentState, PaymentStatus } from '../providers/payment/payment-provider.js';
 import type { Repositories } from '../repositories/repositories.js';
 import { promoLimitError, type CheckoutGate } from './checkout-gate.js';
+import { FreeOrderCheckout } from './free-order.js';
 import type { NotificationService } from './notification-service.js';
 import { findBuyer, getOwnedOrder } from './order-access.js';
 import { recordOrderEvent } from './order-events.js';
@@ -106,9 +107,16 @@ export class OrderService {
   private readonly checkoutLocks = new KeyedLock<number>();
   /** Webhooks and polling of one order are applied one at a time (one-shot alerts check, then write). */
   private readonly paymentLocks = new KeyedLock<number>();
+  private readonly freeOrders: FreeOrderCheckout;
 
   constructor(private readonly deps: OrderServiceDeps) {
     this.now = deps.now ?? (() => new Date());
+    this.freeOrders = new FreeOrderCheckout({
+      repos: deps.repos,
+      notifications: deps.notifications,
+      logger: deps.logger,
+      now: this.now,
+    });
   }
 
   /** SBP when the provider has it enabled for the shop, otherwise nothing: other methods are not offered. */
@@ -137,6 +145,13 @@ export class OrderService {
         'ORDER_AMOUNT_TOO_LARGE',
         `Максимальная сумма заказа — ${formatRub(MAX_ORDER_TOTAL_KOPECKS)}. Уберите часть приложений из корзины.`,
       );
+    }
+
+    if (promo?.kind === 'free') {
+      // Nothing to pay: the payment service is not asked, so its outage does not stop a free order.
+      await repos.users.upsert(user);
+      const order = buildNewOrder(user, apps, pricing, input.paymentMethod);
+      return this.checkoutLocks.run(user.id, () => this.freeOrders.handOut(user, order, promo));
     }
 
     const methods = await this.listPaymentMethods();

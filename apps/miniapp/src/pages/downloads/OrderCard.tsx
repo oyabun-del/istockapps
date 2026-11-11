@@ -8,7 +8,7 @@ import { useReorder } from '../../hooks/useReorder';
 import { useSecondsUntil } from '../../hooks/useSecondsUntil';
 import { formatCountdown, formatOrderDate, formatOrderTitle } from '../../lib/format';
 import type { IconName } from '../../lib/icons';
-import { ORDER_STATUS_META, type Tone } from '../../lib/order-status';
+import { ORDER_STATUS_META, isFreeOrder, type Tone } from '../../lib/order-status';
 import { openExternalLink } from '../../lib/telegram';
 
 const DOT_CLASSES: Record<Tone, string> = {
@@ -110,8 +110,10 @@ export function OrderCard({ order }: { order: OrderDto }) {
             </span>
           </span>
           <span className="tabular text-body-sm text-on-surface-variant">
-            Заказ #{order.id}, {formatRub(order.amountKopecks)}
-            {order.discountKopecks > 0 && <span className="text-success">, скидка {formatRub(order.discountKopecks)}</span>}
+            Заказ #{order.id}, {isFreeOrder(order) ? 'бесплатно по промокоду' : formatRub(order.amountKopecks)}
+            {!isFreeOrder(order) && order.discountKopecks > 0 && (
+              <span className="text-success">, скидка {formatRub(order.discountKopecks)}</span>
+            )}
           </span>
         </div>
       </Link>

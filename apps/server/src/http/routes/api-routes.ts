@@ -122,7 +122,7 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiRoutesDeps): vo
   app.post('/promo/check', { config: { rateLimit: PROMO_CHECK_RATE_LIMIT } }, async (request) => {
     const { code } = parseInput(promoCheckSchema, request.body);
     const { promo, appsLeft } = await deps.checkout.checkPromo(code);
-    const dto: PromoCheckDto = { code: promo.code, appsLeft };
+    const dto: PromoCheckDto = { code: promo.code, appsLeft, isFree: promo.kind === 'free' };
     return ok(dto);
   });
 

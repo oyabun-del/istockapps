@@ -40,8 +40,11 @@ export type ErrorCode = (typeof ERROR_CODES)[number];
 
 // ---------- Payment ----------
 
-/** Older orders may carry any of these, so they stay even though only SBP is accepted now. */
-export const PAYMENT_METHODS = ['SBP', 'CARD', 'CRYPTO'] as const;
+/**
+ * Older orders may carry CARD or CRYPTO, so they stay even though only SBP is accepted now.
+ * PROMO: the order was covered in full by a free promo code; no invoice was opened.
+ */
+export const PAYMENT_METHODS = ['SBP', 'CARD', 'CRYPTO', 'PROMO'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 /** The shop accepts new payments by SBP only. */
@@ -74,11 +77,20 @@ export interface PromoCheckInput {
   code: string;
 }
 
+/**
+ * access: lets the buyer pay while payments are open by promo code only; the buyer still pays.
+ * free: covers the whole order, no payment is taken; works while payments are open or promo only.
+ */
+export const PROMO_KINDS = ['access', 'free'] as const;
+export type PromoKind = (typeof PROMO_KINDS)[number];
+
 export interface PromoCheckDto {
   /** Normalized code, as the buyer should send it with the order. */
   code: string;
   /** Apps the code still covers; an order with more apps is refused. */
   appsLeft: number;
+  /** The code pays for the order itself: the cart is free. */
+  isFree: boolean;
 }
 
 // ---------- Catalog ----------
@@ -234,6 +246,9 @@ export interface CreateOrderInput {
   paymentMethod: ActivePaymentMethod;
   /** Total the buyer saw; the order is refused with PRICE_CHANGED if the server's total differs. */
   expectedTotalKopecks?: number;
-  /** Required while payments are open only by promo code; ignored when they are open to everyone. */
+  /**
+   * Required while payments are open only by promo code. While they are open to everyone only a free
+   * code changes anything; an unknown code is refused in every mode.
+   */
   promoCode?: string;
 }

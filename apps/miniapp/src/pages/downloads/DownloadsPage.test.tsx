@@ -70,6 +70,16 @@ describe('DownloadsPage', () => {
     expect(within(multi).getByText(/скидка 300 ₽/)).toBeInTheDocument();
   });
 
+  it('shows a free order as given by a promo code', async () => {
+    const free = makeOrder({ id: 9, status: 'paid', paymentMethod: 'PROMO', amountKopecks: 0, discountKopecks: 34900 });
+    vi.spyOn(api, 'orders').mockResolvedValue([free]);
+    renderWithProviders(<DownloadsPage />);
+
+    const card = await screen.findByRole('article', { name: 'Заказ #9' });
+    expect(within(card).getByText(/Заказ #9, бесплатно по промокоду/)).toBeInTheDocument();
+    expect(within(card).queryByText(/скидка/)).not.toBeInTheDocument();
+  });
+
   it('teaches what to do when there are no orders yet', async () => {
     vi.spyOn(api, 'orders').mockResolvedValue([]);
     renderWithProviders(<DownloadsPage />);

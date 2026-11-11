@@ -47,22 +47,48 @@ function SummaryRow({ label, children }: { label: string; children: ReactNode })
   );
 }
 
-function CartSummary({ pricing }: { pricing: CartPricing }) {
+function CartSummary({ pricing, isFree }: { pricing: CartPricing; isFree: boolean }) {
   return (
     <dl aria-label="Итог" className="flex flex-col gap-2 rounded-xl bg-surface-container p-4">
+      {(pricing.discountKopecks > 0 || isFree) && (
+        <SummaryRow label="Стоимость">{formatRub(pricing.subtotalKopecks)}</SummaryRow>
+      )}
       {pricing.discountKopecks > 0 && (
-        <>
-          <SummaryRow label="Стоимость">{formatRub(pricing.subtotalKopecks)}</SummaryRow>
-          <SummaryRow label="Скидка">
-            <span className="text-success">−{formatRub(pricing.discountKopecks)}</span>
-          </SummaryRow>
-        </>
+        <SummaryRow label="Скидка">
+          <span className="text-success">−{formatRub(pricing.discountKopecks)}</span>
+        </SummaryRow>
+      )}
+      {isFree && (
+        <SummaryRow label="По промокоду">
+          <span className="text-success">−{formatRub(pricing.totalKopecks)}</span>
+        </SummaryRow>
       )}
       <div className="mt-1 flex items-baseline justify-between gap-3 border-t border-white/5 pt-3">
         <dt className="text-label-lg text-on-surface">Итого</dt>
-        <dd className="tabular text-headline-md font-semibold text-on-surface">{formatRub(pricing.totalKopecks)}</dd>
+        <dd className="tabular text-headline-md font-semibold text-on-surface">
+          {isFree ? 'Бесплатно' : formatRub(pricing.totalKopecks)}
+        </dd>
       </div>
     </dl>
+  );
+}
+
+function FreePaymentRow() {
+  return (
+    <section aria-labelledby="payment-heading">
+      <h2 id="payment-heading" className="mb-2.5 px-1 text-label-lg text-on-surface">
+        Способ оплаты
+      </h2>
+      <div className="flex items-center gap-3 rounded-xl bg-surface-container p-3.5">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success/10">
+          <Icon name="sell" className="text-[22px] text-success" />
+        </span>
+        <div className="flex min-w-0 flex-col">
+          <span className="text-label-lg text-on-surface">Промокод</span>
+          <span className="text-body-sm text-on-surface-variant">Платить не нужно: заказ покрывает промокод</span>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -153,14 +179,21 @@ export function CartPage() {
   // Unknown mode (request failed): let the buyer try, the server has the final word.
   const paymentsMode = rules.data?.paymentsMode ?? 'open';
   const isPromoOnly = paymentsMode === 'promo';
-  // Too many apps for the code only warns: the buyer's own open invoice for this cart is handed out again.
+  // A free code pays for the cart itself: no invoice, so SBP does not have to be available.
+  const isFree = paymentsMode !== 'closed' && promo?.isFree === true;
+  // Too many apps for an access code only warns: the buyer's own open invoice for this cart is handed out again.
+  // A free order has no invoice to reuse, so a cart the code cannot cover is refused here.
+  const isFreeOverLimit = isFree && pricing !== null && pricing.itemCount > (promo?.appsLeft ?? 0);
   const isPromoMissing = isPromoOnly && !promo;
   const isOverLimit = pricing !== null && exceedsOrderLimit(pricing.totalKopecks);
-  const canPay = isSbpAvailable && paymentsMode !== 'closed' && !isPromoMissing && !isOverLimit;
+  const canPay = isFree
+    ? !isFreeOverLimit && !isOverLimit
+    : isSbpAvailable && paymentsMode !== 'closed' && !isPromoMissing && !isOverLimit;
+  const actionLabel = isFree ? 'Получить бесплатно' : 'Оплатить';
 
   const pay = () => {
     if (!pricing) return;
-    const promoCode = isPromoOnly ? promo?.code : undefined;
+    const promoCode = isPromoOnly || isFree ? promo?.code : undefined;
     checkout.mutate({ appIds: [...cart.ids], totalKopecks: pricing.totalKopecks, promoCode });
   };
 
@@ -210,20 +243,21 @@ export function CartPage() {
           </ul>
 
           <DiscountProgress itemCount={pricing.itemCount} />
-          <CartSummary pricing={pricing} />
+          <CartSummary pricing={pricing} isFree={isFree} />
           {isOverLimit && <OrderLimitNotice />}
 
-          {paymentsMode === 'closed' ? (
-            <PaymentsClosedNotice />
-          ) : (
+          {paymentsMode === 'closed' && <PaymentsClosedNotice />}
+          {paymentsMode !== 'closed' && isFree && <FreePaymentRow />}
+          {paymentsMode !== 'closed' && !isFree && (
             <SbpPaymentRow
               isAvailable={isSbpAvailable}
               isLoading={methods.isPending}
               error={methods.isError ? errorMessage(methods.error) : null}
             />
           )}
-          {isPromoOnly && (
+          {paymentsMode !== 'closed' && (
             <PromoCodeField
+              mode={paymentsMode}
               applied={promo}
               itemCount={pricing.itemCount}
               onApply={setPromo}
@@ -235,24 +269,26 @@ export function CartPage() {
             <Button
               size="lg"
               isFullWidth
-              icon="lock"
+              icon={isFree ? 'sell' : 'lock'}
               disabled={!canPay}
               isLoading={checkout.isPending}
               onClick={pay}
             >
-              Оплатить {formatRub(pricing.totalKopecks)}
+              {isFree ? actionLabel : `${actionLabel} ${formatRub(pricing.totalKopecks)}`}
             </Button>
             {checkout.isError && (
               <p role="alert" className="mt-2.5 text-center text-body-sm text-error">
                 {checkoutError}
               </p>
             )}
-            <p className="mt-2.5 flex items-center justify-center gap-1 text-label-sm text-on-surface-variant">
-              <Icon name="verified_user" className="text-[13px] text-secondary" />
-              Безопасный платёж через Platega
-            </p>
+            {!isFree && (
+              <p className="mt-2.5 flex items-center justify-center gap-1 text-label-sm text-on-surface-variant">
+                <Icon name="verified_user" className="text-[13px] text-secondary" />
+                Безопасный платёж через Platega
+              </p>
+            )}
             <p className="mt-1.5 text-balance text-center text-label-sm text-outline">
-              Нажимая «Оплатить», вы принимаете{' '}
+              Нажимая «{actionLabel}», вы принимаете{' '}
               <Link to={LEGAL_PATHS.terms} className="underline underline-offset-2 hover:text-primary">
                 условия соглашения
               </Link>{' '}

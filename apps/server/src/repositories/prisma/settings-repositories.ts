@@ -1,3 +1,4 @@
+import { PROMO_KINDS, type PromoKind } from '@istock/shared';
 import { Prisma, type PrismaClient, type PromoCode as PromoCodeRow } from '@prisma/client';
 import type { NewPromoCode, PromoCode } from '../../domain/models.js';
 import type { PromoCodeRepository, SettingRepository } from '../repositories.js';
@@ -27,10 +28,15 @@ export class PrismaSettingRepository implements SettingRepository {
   }
 }
 
+function isPromoKind(value: string): value is PromoKind {
+  return (PROMO_KINDS as readonly string[]).includes(value);
+}
+
 function toPromoCode(row: PromoCodeRow): PromoCode {
   return {
     id: row.id,
     code: row.code,
+    kind: isPromoKind(row.kind) ? row.kind : 'access',
     maxApps: row.maxApps,
     createdBy: Number(row.createdBy),
     disabledAt: row.disabledAt,

@@ -83,14 +83,16 @@ export class MemoryStatsRepository implements StatsRepository {
   async summary(range: DateRange): Promise<SalesSummary> {
     const orders = this.sources.orders();
     const paid = orders.filter((order) => isPaidStatus(order.status) && isWithin(order.paidAt, range));
-    const real = paid.filter((order) => !order.isSandbox);
-    const sandbox = paid.filter((order) => order.isSandbox);
+    const isFree = (order: Order): boolean => order.paymentMethod === 'PROMO';
+    const real = paid.filter((order) => !order.isSandbox && !isFree(order));
+    const sandbox = paid.filter((order) => order.isSandbox && !isFree(order));
+    const free = paid.filter(isFree);
     const byId = new Map(orders.map((order) => [order.id, order]));
     const refunded = this.sources
       .events()
       .filter((event) => event.type === 'refunded' && isWithin(event.createdAt, range))
       .map((event) => byId.get(event.orderId))
-      .filter((order): order is Order => order !== undefined && !order.isSandbox);
+      .filter((order): order is Order => order !== undefined && !order.isSandbox && !isFree(order));
 
     return {
       paidOrders: real.length,
@@ -99,9 +101,11 @@ export class MemoryStatsRepository implements StatsRepository {
       discountKopecks: sumOf(real, (order) => order.discountKopecks),
       buyers: new Set(real.map((order) => order.userId)).size,
       promoOrders: real.filter((order) => order.promoCodeId !== null).length,
+      freeOrders: free.length,
+      freeApps: sumOf(free, (order) => order.items.length),
       sandboxOrders: sandbox.length,
       sandboxKopecks: sumOf(sandbox, (order) => order.amountKopecks),
-      createdOrders: orders.filter((order) => isWithin(order.createdAt, range)).length,
+      createdOrders: orders.filter((order) => !isFree(order) && isWithin(order.createdAt, range)).length,
       refunds: refunded.length,
       refundedKopecks: sumOf(refunded, (order) => order.amountKopecks),
       newUsers: this.sources.userCreationDates().filter((date) => isWithin(date, range)).length,

@@ -21,4 +21,10 @@ export const PAYMENT_METHOD_META: Record<PaymentMethod, PaymentMethodMeta> = {
   SBP: { label: 'СБП', payLabel: 'Оплатить через СБП', icon: 'qr_code_2', iconClass: 'text-secondary' },
   CARD: { label: 'Карта РФ', payLabel: 'Оплатить картой', icon: 'credit_card', iconClass: 'text-primary' },
   CRYPTO: { label: 'USDT', payLabel: 'Оплатить в USDT', icon: 'currency_bitcoin', iconClass: 'text-success' },
+  PROMO: { label: 'Промокод', payLabel: 'Получить бесплатно', icon: 'sell', iconClass: 'text-success' },
 };
+
+/** Paid for by a free promo code: there is no amount worth showing. */
+export function isFreeOrder(order: { paymentMethod: PaymentMethod }): boolean {
+  return order.paymentMethod === 'PROMO';
+}

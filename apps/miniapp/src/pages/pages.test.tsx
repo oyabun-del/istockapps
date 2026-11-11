@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { MAX_ORDER_ITEMS } from '@istock/shared';
 import { ApiError, api } from '../lib/api';
 import { cartStore } from '../lib/cart';
+import { ACTIVATION_STEPS, CRITICAL_SAFETY_RULE } from '../content/guide';
 import { ME, SBER, makeApp, renderWithProviders } from '../test/render';
 import { AppPage } from './app/AppPage';
 import { CatalogPage } from './catalog/CatalogPage';
@@ -135,6 +136,12 @@ describe('AppPage', () => {
 });
 
 describe('GuidePage', () => {
+  const nth = (items: HTMLElement[], index: number): HTMLElement => {
+    const item = items[index];
+    if (!item) throw new Error(`No list item at ${index}`);
+    return item;
+  };
+
   it('explains the Apple ID activation from download to getting your own Apple ID back', () => {
     renderWithProviders(<GuidePage />);
 
@@ -150,12 +157,34 @@ describe('GuidePage', () => {
     renderWithProviders(<GuidePage />);
 
     const rules = screen.getByRole('region', { name: 'Важно до начала' });
-    expect(within(rules).getByText(/никогда не входите с ними в iCloud/i)).toBeInTheDocument();
+    expect(within(rules).getByText(/никогда не входите с данными из заказа в iCloud/i)).toBeInTheDocument();
     expect(within(rules).getByText(/Сгружать неиспользуемые/)).toBeInTheDocument();
     expect(within(rules).getByText(/Не удаляйте приложение/)).toBeInTheDocument();
     expect(screen.getByText('Код не приходит или не подходит')).toBeInTheDocument();
     expect(screen.getByText('Я удалил приложение')).toBeInTheDocument();
     expect(screen.getByText('Можно ли скачать приложение ещё раз после активации?')).toBeInTheDocument();
+  });
+
+  it('opens every step with its key action and shows the names to tap as chips', () => {
+    renderWithProviders(<GuidePage />);
+    const steps = within(screen.getByRole('list', { name: 'Шаги активации' })).getAllByRole('listitem');
+
+    ACTIVATION_STEPS.forEach((step, index) => {
+      expect(steps[index]).toHaveTextContent(step.action);
+    });
+    expect(within(nth(steps, 0)).getByText('Я скачал', { selector: 'strong' })).toBeInTheDocument();
+    expect(within(nth(steps, 2)).getByText('Включить ожидание кода', { selector: 'strong' })).toBeInTheDocument();
+    expect(within(nth(steps, 4)).getByText('Приложение работает', { selector: 'strong' })).toBeInTheDocument();
+  });
+
+  it('puts the iCloud ban first among the rules and highlights only it', () => {
+    renderWithProviders(<GuidePage />);
+    const region = within(screen.getByRole('region', { name: 'Важно до начала' }));
+
+    expect(CRITICAL_SAFETY_RULE).toMatch(/iCloud/);
+    expect(within(nth(region.getAllByRole('listitem'), 0)).getByText(CRITICAL_SAFETY_RULE, { selector: 'strong' })).toBeInTheDocument();
+    // A whole rule in bold is the highlight; chips inside the other rules are nested deeper.
+    expect(region.getAllByText(/.+/, { selector: 'li > strong' })).toHaveLength(1);
   });
 
   it('matches the buttons of the order screen and never promises a free re-download', () => {

@@ -1,22 +1,52 @@
 import { Page } from '../../components/layout/Page';
 import { SupportButton } from '../../components/SupportButton';
 import { Icon } from '../../components/ui/Icon';
+import { RichText } from '../../components/ui/RichText';
 import { SettingsPath } from '../../components/ui/SettingsPath';
-import { ACTIVATION_STEPS, FAQ, SAFETY_RULES, type GuideStep } from '../../content/guide';
+import { ACTIVATION_STEPS, CRITICAL_SAFETY_RULE, FAQ, SAFETY_RULES, type GuideStep } from '../../content/guide';
 import { StepCard } from '../order/StepCard';
 
 function GuideStepCard({ step, index, isLast }: { step: GuideStep; index: number; isLast: boolean }) {
   return (
     <StepCard index={index + 1} title={step.title} state="active" isLast={isLast}>
-      <p className="text-body-sm text-on-surface-variant">{step.text}</p>
+      <p className="flex items-start gap-1.5 text-body-md font-semibold leading-relaxed text-on-surface">
+        <Icon name="touch_app" className="mt-0.5 text-[18px] text-primary" />
+        <span>
+          <RichText text={step.action} />
+        </span>
+      </p>
+      <p className="text-body-sm text-on-surface-variant">
+        <RichText text={step.text} />
+      </p>
       {step.path && <SettingsPath path={step.path} />}
       {step.note && (
         <p className="flex items-start gap-1.5 rounded-lg bg-warning/10 p-space-sm text-body-sm text-warning">
           <Icon name="warning" className="mt-0.5 text-[16px]" />
-          {step.note}
+          <span>
+            <RichText text={step.note} />
+          </span>
         </p>
       )}
     </StepCard>
+  );
+}
+
+function SafetyRule({ rule }: { rule: string }) {
+  if (rule === CRITICAL_SAFETY_RULE) {
+    return (
+      <li className="flex items-start gap-space-xs rounded-lg bg-error-container/40 p-space-sm text-body-sm text-error">
+        <Icon name="block" className="mt-px text-[18px]" />
+        <strong className="font-semibold">{rule}</strong>
+      </li>
+    );
+  }
+  return (
+    <li className="flex items-start gap-space-xs text-body-sm text-on-surface">
+      <span aria-hidden="true" className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-warning" />
+      <span>
+        <RichText text={rule} />
+      </span>
+    </li>
   );
 }
 
@@ -29,10 +59,7 @@ function SafetyRules() {
       </h2>
       <ul className="flex flex-col gap-space-sm">
         {SAFETY_RULES.map((rule) => (
-          <li key={rule} className="flex items-start gap-space-xs text-body-sm text-on-surface">
-            <span aria-hidden="true" className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-warning" />
-            {rule}
-          </li>
+          <SafetyRule key={rule} rule={rule} />
         ))}
       </ul>
     </section>
@@ -68,7 +95,9 @@ export function GuidePage() {
                 {item.question}
                 <Icon name="expand_more" className="text-[20px] text-on-surface-variant transition-transform group-open:rotate-180" />
               </summary>
-              <p className="mt-2 text-body-sm text-on-surface-variant">{item.answer}</p>
+              <p className="mt-2 text-body-sm text-on-surface-variant">
+                <RichText text={item.answer} />
+              </p>
             </details>
           ))}
         </section>

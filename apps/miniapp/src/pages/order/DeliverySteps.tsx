@@ -167,7 +167,6 @@ function CredentialsStep({ order, delivery, card }: { order: OrderDto; delivery:
         <Icon name="warning" className="mt-0.5 text-[16px]" />
         Входите только в App Store. Не входите с этими данными в iCloud.
       </p>
-      {card.state === 'active' && <StepImage image={GUIDE_IMAGES.credentials} />}
 
       {isCompleted ? (
         <p className="text-body-sm text-on-surface-variant">Активация завершена, логин и пароль больше не показываются.</p>

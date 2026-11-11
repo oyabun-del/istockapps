@@ -178,18 +178,26 @@ describe('GuidePage', () => {
     expect(within(nth(steps, 4)).getByText('Приложение работает', { selector: 'strong' })).toBeInTheDocument();
   });
 
-  it('shows a described screen schematic in every step', () => {
+  it('shows a schematic only for steps done on the iPhone outside the Mini App', () => {
     renderWithProviders(<GuidePage />);
     const steps = within(screen.getByRole('list', { name: 'Шаги активации' })).getAllByRole('listitem');
 
-    const sources = steps.map((step, index) => {
+    const sources = steps.flatMap((step, index) => {
       const images = step.querySelectorAll('img');
+      const image = ACTIVATION_STEPS[index]?.image;
+      if (!image) {
+        expect(images).toHaveLength(0);
+        return [];
+      }
       expect(images).toHaveLength(1);
-      expect(images[0]?.getAttribute('alt')).toBe(ACTIVATION_STEPS[index]?.image.alt);
-      expect(images[0]?.getAttribute('alt')).toMatch(/^Схема: .{20,}/);
-      return images[0]?.getAttribute('src');
+      expect(images[0]?.getAttribute('alt')).toBe(image.alt);
+      expect(image.alt).toMatch(/^Схема: .{20,}/);
+      return [images[0]?.getAttribute('src')];
     });
-    expect(new Set(sources).size).toBe(ACTIVATION_STEPS.length);
+    // Getting the login and password happens entirely in the Mini App: no picture.
+    expect(ACTIVATION_STEPS[2]?.image).toBeUndefined();
+    expect(sources).toHaveLength(5);
+    expect(new Set(sources).size).toBe(5);
   });
 
   it('opens a schematic full screen and closes it', async () => {
@@ -199,7 +207,7 @@ describe('GuidePage', () => {
     if (!first) throw new Error('No schematic');
 
     await user.click(first);
-    const dialog = screen.getByRole('dialog', { name: ACTIVATION_STEPS[0]?.image.alt });
+    const dialog = screen.getByRole('dialog', { name: ACTIVATION_STEPS[0]?.image?.alt });
     await user.click(within(dialog).getByRole('button', { name: 'Закрыть' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 

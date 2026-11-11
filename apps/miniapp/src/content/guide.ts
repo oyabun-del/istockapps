@@ -6,7 +6,6 @@
  * Keep in sync with the order screen (pages/order/DeliverySteps.tsx).
  */
 
-import credentialsSrc from '../assets/guide/credentials.svg';
 import downloadSrc from '../assets/guide/download.svg';
 import enterCodeSrc from '../assets/guide/enter-code.svg';
 import openAppSrc from '../assets/guide/open-app.svg';
@@ -35,29 +34,26 @@ export interface GuideImage {
 }
 
 /**
- * One per screen, shared by the guide and the order screen. Schematics for now; swap the files
- * for screenshots or a video without touching the copy.
+ * Schematics show only what happens on the iPhone outside the Mini App: the buttons of the Mini
+ * App are already on screen, so a step done entirely inside it has no picture. Shared by the
+ * guide and the order screen; swap the files for screenshots or a video without touching the copy.
  */
 export const GUIDE_IMAGES = {
   download: {
     src: downloadSrc,
-    alt: 'Схема: в заказе нажмите «Скачать», дождитесь конца загрузки и нажмите «Я скачал».',
+    alt: 'Схема: на экране «Домой» значок приложения загружается; дождитесь, пока загрузка закончится.',
   },
   signOut: {
     src: signOutSrc,
     alt: 'Схема: в Настройках откройте «Медиаматериалы и покупки» и нажмите «Выйти». iCloud не трогайте.',
   },
-  credentials: {
-    src: credentialsSrc,
-    alt: 'Схема: в заказе нажмите «Получить логин и пароль» и скопируйте логин и пароль.',
-  },
   enterCode: {
     src: enterCodeSrc,
-    alt: 'Схема: нажмите «Включить ожидание кода», скопируйте код из заказа и введите 6 цифр на iPhone.',
+    alt: 'Схема: в «Медиаматериалы и покупки» войдите с логином и паролем из заказа и введите 6 цифр кода.',
   },
   openApp: {
     src: openAppSrc,
-    alt: 'Схема: откройте приложение на экране «Домой», затем нажмите в заказе «Приложение работает».',
+    alt: 'Схема: на экране «Домой» нажмите на значок приложения и убедитесь, что оно открылось.',
   },
   signBackIn: {
     src: signBackInSrc,
@@ -71,8 +67,8 @@ export interface GuideStep {
   action: string;
   /** Only what the buyer must know: a condition or a consequence. One or two short sentences. */
   text: string;
-  /** Every step has a picture of the screen. */
-  image: GuideImage;
+  /** The iPhone screen outside the Mini App; absent when the whole step is done inside it. */
+  image?: GuideImage;
   /** Settings path shown as a breadcrumb, if any. */
   path?: readonly string[];
   note?: string;
@@ -109,7 +105,6 @@ export const ACTIVATION_STEPS: readonly GuideStep[] = [
     title: 'Получите логин и пароль',
     action: 'Нажмите в заказе «Получить логин и пароль» и скопируйте их',
     text: 'Пока не входите: сначала включите ожидание кода.',
-    image: GUIDE_IMAGES.credentials,
   },
   {
     title: 'Включите ожидание и введите код',

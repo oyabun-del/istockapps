@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 360" width="320" height="360" font-family="-apple-system, 'SF Pro Text', Inter, 'Segoe UI', Roboto, sans-serif">
+  <rect x="10" y="10" width="300" height="340" rx="24" fill="#10131a" stroke="#32353d" stroke-width="2"/>
+  <text x="32" y="42" font-size="12" fill="#8d90a0">Заказ в iStockApps</text>
+
+  <rect x="24" y="56" width="272" height="276" rx="14" fill="#1d1f27"/>
+  <circle cx="48" cy="84" r="12" fill="#2563eb"/>
+  <text x="48" y="88.5" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">1</text>
+  <text x="70" y="89" font-size="15" font-weight="600" fill="#e1e2ec">Скачайте приложение</text>
+
+  <rect x="40" y="112" width="240" height="44" rx="22" fill="#2563eb"/>
+  <path d="M128 124v14m-6-6 6 6 6-6m-11 10h10" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="168" y="139" text-anchor="middle" font-size="15" font-weight="600" fill="#fff">Скачать</text>
+  <rect x="35" y="107" width="250" height="54" rx="27" fill="none" stroke="#4cd7f6" stroke-width="2.5"/>
+  <g transform="translate(284 108)"><circle r="11" fill="#2563eb" stroke="#fff" stroke-width="2"/><text y="4" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">1</text></g>
+
+  <text x="40" y="194" font-size="12" fill="#c3c6d7">Дождитесь конца загрузки на iPhone</text>
+  <rect x="40" y="204" width="240" height="8" rx="4" fill="#32353d"/>
+  <rect x="40" y="204" width="240" height="8" rx="4" fill="#10b981"/>
+  <path d="M262 186l4 4 8-8" stroke="#10b981" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="40" y="250" width="240" height="44" rx="22" fill="#32353d"/>
+  <path d="M117 272l5 5 10-10" stroke="#e1e2ec" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="172" y="277" text-anchor="middle" font-size="15" font-weight="600" fill="#e1e2ec">Я скачал</text>
+  <rect x="35" y="245" width="250" height="54" rx="27" fill="none" stroke="#4cd7f6" stroke-width="2.5"/>
+  <g transform="translate(284 246)"><circle r="11" fill="#2563eb" stroke="#fff" stroke-width="2"/><text y="4" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">2</text></g>
+  <g transform="translate(252 282)"><circle r="16" fill="#fff" fill-opacity=".22"/><circle r="8" fill="#fff" fill-opacity=".9"/></g>
+</svg>

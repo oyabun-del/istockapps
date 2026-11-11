@@ -173,8 +173,39 @@ describe('GuidePage', () => {
       expect(steps[index]).toHaveTextContent(step.action);
     });
     expect(within(nth(steps, 0)).getByText('Я скачал', { selector: 'strong' })).toBeInTheDocument();
-    expect(within(nth(steps, 2)).getByText('Включить ожидание кода', { selector: 'strong' })).toBeInTheDocument();
+    expect(within(nth(steps, 2)).getByText('Получить логин и пароль', { selector: 'strong' })).toBeInTheDocument();
+    expect(within(nth(steps, 3)).getByText('Включить ожидание кода', { selector: 'strong' })).toBeInTheDocument();
     expect(within(nth(steps, 4)).getByText('Приложение работает', { selector: 'strong' })).toBeInTheDocument();
+  });
+
+  it('shows a described screen schematic in every step', () => {
+    renderWithProviders(<GuidePage />);
+    const steps = within(screen.getByRole('list', { name: 'Шаги активации' })).getAllByRole('listitem');
+
+    const sources = steps.map((step, index) => {
+      const images = step.querySelectorAll('img');
+      expect(images).toHaveLength(1);
+      expect(images[0]?.getAttribute('alt')).toBe(ACTIVATION_STEPS[index]?.image.alt);
+      expect(images[0]?.getAttribute('alt')).toMatch(/^Схема: .{20,}/);
+      return images[0]?.getAttribute('src');
+    });
+    expect(new Set(sources).size).toBe(ACTIVATION_STEPS.length);
+  });
+
+  it('opens a schematic full screen and closes it', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<GuidePage />);
+    const [first] = screen.getAllByRole('button', { name: 'Увеличить схему' });
+    if (!first) throw new Error('No schematic');
+
+    await user.click(first);
+    const dialog = screen.getByRole('dialog', { name: ACTIVATION_STEPS[0]?.image.alt });
+    await user.click(within(dialog).getByRole('button', { name: 'Закрыть' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    await user.click(first);
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
   it('puts the iCloud ban first among the rules and highlights only it', () => {

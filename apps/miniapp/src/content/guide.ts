@@ -6,6 +6,13 @@
  * Keep in sync with the order screen (pages/order/DeliverySteps.tsx).
  */
 
+import credentialsSrc from '../assets/guide/credentials.svg';
+import downloadSrc from '../assets/guide/download.svg';
+import enterCodeSrc from '../assets/guide/enter-code.svg';
+import openAppSrc from '../assets/guide/open-app.svg';
+import signBackInSrc from '../assets/guide/sign-back-in.svg';
+import signOutSrc from '../assets/guide/sign-out.svg';
+
 /** Where App Store sign-in lives; iCloud is configured elsewhere and must not be touched. */
 export const MEDIA_PURCHASES_PATH = ['Настройки', 'Ваше имя', 'Медиаматериалы и покупки'] as const;
 
@@ -20,12 +27,52 @@ export const QUICK_STEPS = [
  * Copy convention: «Label» names a button or a Settings item the buyer taps; the guide shows it
  * as a chip (components/ui/RichText.tsx). Keep labels identical to the order screen.
  */
+/** Schematic of the screen for a step: what to tap, numbered in order. */
+export interface GuideImage {
+  src: string;
+  /** Describes the taps in order, for screen readers. */
+  alt: string;
+}
+
+/**
+ * One per screen, shared by the guide and the order screen. Schematics for now; swap the files
+ * for screenshots or a video without touching the copy.
+ */
+export const GUIDE_IMAGES = {
+  download: {
+    src: downloadSrc,
+    alt: 'Схема: в заказе нажмите «Скачать», дождитесь конца загрузки и нажмите «Я скачал».',
+  },
+  signOut: {
+    src: signOutSrc,
+    alt: 'Схема: в Настройках откройте «Медиаматериалы и покупки» и нажмите «Выйти». iCloud не трогайте.',
+  },
+  credentials: {
+    src: credentialsSrc,
+    alt: 'Схема: в заказе нажмите «Получить логин и пароль» и скопируйте логин и пароль.',
+  },
+  enterCode: {
+    src: enterCodeSrc,
+    alt: 'Схема: нажмите «Включить ожидание кода», скопируйте код из заказа и введите 6 цифр на iPhone.',
+  },
+  openApp: {
+    src: openAppSrc,
+    alt: 'Схема: откройте приложение на экране «Домой», затем нажмите в заказе «Приложение работает».',
+  },
+  signBackIn: {
+    src: signBackInSrc,
+    alt: 'Схема: в «Медиаматериалы и покупки» нажмите «Выйти» и войдите со своим Apple ID.',
+  },
+} as const satisfies Record<string, GuideImage>;
+
 export interface GuideStep {
   title: string;
   /** The one thing to do on this step, highlighted above the explanation. */
   action: string;
-  /** Why and what to watch for. */
+  /** Only what the buyer must know: a condition or a consequence. One or two short sentences. */
   text: string;
+  /** Every step has a picture of the screen. */
+  image: GuideImage;
   /** Settings path shown as a breadcrumb, if any. */
   path?: readonly string[];
   note?: string;
@@ -43,40 +90,47 @@ export const SAFETY_RULES: readonly string[] = [
   'Выключите автообновление приложений там же, в Настройки → App Store, и не обновляйте приложение вручную: для обновления нужен выданный аккаунт, а после активации он недоступен.',
 ];
 
+/** Same order as the order screen: download, credentials, code, open the app. */
 export const ACTIVATION_STEPS: readonly GuideStep[] = [
   {
     title: 'Скачайте приложение',
-    action: 'Нажмите в заказе «Скачать», затем «Я скачал»',
-    text: 'Кнопка «Скачать» появится в заказе сразу после оплаты. Подтверждайте загрузку, только когда она закончится на iPhone.',
+    action: 'Нажмите в заказе «Скачать», дождитесь загрузки и нажмите «Я скачал»',
+    text: 'Подтверждайте, только когда загрузка на iPhone закончилась.',
+    image: GUIDE_IMAGES.download,
   },
   {
     title: 'Выйдите из своего Apple ID в App Store',
-    action: 'Нажмите «Выйти» в «Медиаматериалы и покупки»',
-    text: 'Выход только из App Store: iCloud, фото и контакты остаются на месте.',
+    action: 'Откройте «Медиаматериалы и покупки» и нажмите «Выйти»',
+    text: 'iCloud, фото и контакты не затрагиваются.',
+    image: GUIDE_IMAGES.signOut,
     path: [...MEDIA_PURCHASES_PATH, 'Выйти'],
   },
   {
-    title: 'Получите данные и включите ожидание кода',
-    action: 'Нажмите «Получить логин и пароль», затем сразу «Включить ожидание кода»',
-    text: 'Скопируйте логин и пароль. Код придёт в заказ, только если ожидание включено до входа. Время ожидания ограничено, на экране идёт таймер.',
+    title: 'Получите логин и пароль',
+    action: 'Нажмите в заказе «Получить логин и пароль» и скопируйте их',
+    text: 'Пока не входите: сначала включите ожидание кода.',
+    image: GUIDE_IMAGES.credentials,
   },
   {
-    title: 'Войдите и введите код',
-    action: 'Войдите с выданными данными в «Медиаматериалы и покупки» и введите код из заказа',
-    text: 'Когда iPhone попросит код, он появится в заказе: нажмите на него, чтобы скопировать, и введите 6 цифр. Если Apple не спросил код, нажмите в заказе «Apple не запросил код».',
+    title: 'Включите ожидание и введите код',
+    action: 'Нажмите «Включить ожидание кода», войдите в App Store и введите код из заказа',
+    text: 'Код придёт в заказ, только если ожидание включено до входа. Нажмите на код, чтобы скопировать. Не спросили код? Нажмите «Apple не запросил код».',
+    image: GUIDE_IMAGES.enterCode,
     path: MEDIA_PURCHASES_PATH,
-    note: 'Входите только в «Медиаматериалы и покупки». Никогда не входите с этими данными в iCloud.',
+    note: 'Входите только в «Медиаматериалы и покупки». Не в iCloud!',
   },
   {
     title: 'Откройте приложение',
     action: 'Запустите приложение и нажмите в заказе «Приложение работает»',
-    text: 'Приложение лежит на экране «Домой».',
-    note: 'Нажимайте, только когда приложение действительно открылось: после этого логин и пароль больше не показываются, а скачать приложение повторно нельзя.',
+    text: 'Приложение на экране «Домой».',
+    image: GUIDE_IMAGES.openApp,
+    note: 'Нажимайте, только если приложение открылось: потом логин и пароль скроются, а скачать заново будет нельзя.',
   },
   {
     title: 'Верните свой Apple ID',
-    action: 'Выйдите в «Медиаматериалы и покупки» и войдите в свой Apple ID',
-    text: 'Приложение останется на iPhone и продолжит работать.',
+    action: 'Нажмите «Выйти» в «Медиаматериалы и покупки» и войдите со своим Apple ID',
+    text: 'Приложение останется и продолжит работать.',
+    image: GUIDE_IMAGES.signBackIn,
     path: [...MEDIA_PURCHASES_PATH, 'Выйти'],
   },
 ];
@@ -85,30 +139,28 @@ export const FAQ: readonly { question: string; answer: string }[] = [
   {
     question: 'Код не приходит или не подходит',
     answer:
-      'Код приходит в заказ, только если ожидание включено до входа в App Store. Код действует недолго, вводите его сразу. Если ожидание закончилось или код истёк, нажмите «Включить ожидание кода» ещё раз и снова запросите код на iPhone. Число кодов для аккаунта ограничено: если видите «Лимит кодов исчерпан», напишите в поддержку и укажите номер заказа.',
+      'Включите ожидание до входа в App Store и вводите код сразу: он действует недолго. Истёк — нажмите «Включить ожидание кода» ещё раз и снова запросите код на iPhone. Видите «Лимит кодов исчерпан» — напишите в поддержку с номером заказа.',
   },
   {
     question: 'Я удалил приложение',
     answer:
-      'Скачать его повторно по этому заказу нельзя: загрузка выдаётся один раз. Чтобы установить приложение снова, оформите новый заказ. Чтобы iPhone не удалил приложение сам, выключите «Сгружать неиспользуемые» в Настройки → App Store.',
+      'По этому заказу скачать его повторно нельзя, нужен новый заказ. Чтобы iPhone не удалил приложение сам, выключите «Сгружать неиспользуемые» в Настройки → App Store.',
   },
   {
     question: 'Можно ли скачать приложение ещё раз после активации?',
-    answer:
-      'Нет. После того как вы нажали «Приложение работает», логин и пароль больше не показываются, а скачать приложение повторно нельзя. Не удаляйте и не обновляйте его.',
+    answer: 'Нет. После «Приложение работает» логин и пароль скрываются, а повторная загрузка недоступна. Не удаляйте и не обновляйте приложение.',
   },
   {
     question: 'Приложение просит войти снова',
     answer:
-      'Если активация ещё не завершена, войдите с данными из того же заказа в разделе «Мои загрузки». Если завершена, данные аккаунта больше не показываются: напишите в поддержку и укажите номер заказа.',
+      'Активация не завершена — войдите с данными того же заказа из «Мои загрузки». Завершена — напишите в поддержку с номером заказа.',
   },
   {
     question: 'Безопасно ли выходить из своего Apple ID?',
-    answer:
-      'Да. Вы выходите только из App Store, а iCloud, фото, контакты и ваши покупки не затрагиваются. После активации вы входите обратно.',
+    answer: 'Да. Вы выходите только из App Store: iCloud, фото, контакты и покупки остаются. После активации войдёте обратно.',
   },
   {
     question: 'Оплатил, но заказ не обновился',
-    answer: 'Статус обновляется автоматически в течение минуты. Если этого не произошло, напишите в поддержку.',
+    answer: 'Статус обновится сам в течение минуты. Не обновился — напишите в поддержку.',
   },
 ];

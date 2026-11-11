@@ -58,6 +58,7 @@ export const ICON_NAMES = [
   'visibility',
   'visibility_off',
   'warning',
+  'zoom_in',
 ] as const;
 
 export type IconName = (typeof ICON_NAMES)[number];

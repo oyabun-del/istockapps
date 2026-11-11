@@ -16,7 +16,7 @@ function GuideStepCard({ step, index, isLast }: { step: GuideStep; index: number
           <RichText text={step.action} />
         </span>
       </p>
-      <StepImage image={step.image} />
+      {step.image && <StepImage image={step.image} />}
       <p className="text-body-sm text-on-surface-variant">
         <RichText text={step.text} />
       </p>

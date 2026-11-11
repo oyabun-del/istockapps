@@ -8,7 +8,8 @@ import { CopyField } from '../../components/ui/CopyField';
 import { Icon } from '../../components/ui/Icon';
 import { SettingsPath } from '../../components/ui/SettingsPath';
 import { Spinner } from '../../components/ui/Spinner';
-import { MEDIA_PURCHASES_PATH } from '../../content/guide';
+import { StepImage } from '../../components/ui/StepImage';
+import { GUIDE_IMAGES, MEDIA_PURCHASES_PATH } from '../../content/guide';
 import { api, errorMessage } from '../../lib/api';
 import { REVEAL } from '../../lib/motion';
 import { queryKeys } from '../../lib/queries';
@@ -103,6 +104,7 @@ function DownloadStep({ order, delivery, card }: { order: OrderDto; delivery: De
       <p className="text-body-sm text-on-surface-variant">
         Нажмите «Скачать», дождитесь окончания загрузки и подтвердите её кнопкой ниже.
       </p>
+      {card.state === 'active' && <StepImage image={GUIDE_IMAGES.download} />}
       {delivery.data && <DeliveryApps delivery={delivery.data} isDone={card.state === 'done'} />}
       {delivery.isPending && (
         <div className="flex justify-center py-2 text-primary">
@@ -165,6 +167,7 @@ function CredentialsStep({ order, delivery, card }: { order: OrderDto; delivery:
         <Icon name="warning" className="mt-0.5 text-[16px]" />
         Входите только в App Store. Не входите с этими данными в iCloud.
       </p>
+      {card.state === 'active' && <StepImage image={GUIDE_IMAGES.credentials} />}
 
       {isCompleted ? (
         <p className="text-body-sm text-on-surface-variant">Активация завершена, логин и пароль больше не показываются.</p>
@@ -211,6 +214,7 @@ function CodeStep({ order, delivery, card }: { order: OrderDto; delivery: Delive
 
   return (
     <StepCard index={3} title="Введите код подтверждения" {...card}>
+      {card.state === 'active' && <StepImage image={GUIDE_IMAGES.enterCode} />}
       {groups.length === 0 && (
         <p className="text-body-sm text-on-surface-variant">Код станет доступен, когда появится рабочий аккаунт.</p>
       )}
@@ -245,6 +249,7 @@ function FinishStep({ order, card }: { order: OrderDto; card: CardProps }) {
         <p className="text-body-sm text-on-surface-variant">
           Готово! Теперь выйдите из выданного аккаунта в «Медиаматериалы и покупки» и войдите в свой Apple ID.
         </p>
+        <StepImage image={GUIDE_IMAGES.signBackIn} />
       </StepCard>
     );
   }
@@ -254,6 +259,7 @@ function FinishStep({ order, card }: { order: OrderDto; card: CardProps }) {
       <p className="text-body-sm text-on-surface-variant">
         Запустите приложение на iPhone. Если оно открылось, подтвердите активацию.
       </p>
+      <StepImage image={GUIDE_IMAGES.openApp} />
       <Button isFullWidth icon="verified" isLoading={complete.isPending} onClick={() => complete.mutate()}>
         Приложение работает
       </Button>

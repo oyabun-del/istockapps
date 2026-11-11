@@ -3,6 +3,7 @@ import { SupportButton } from '../../components/SupportButton';
 import { Icon } from '../../components/ui/Icon';
 import { RichText } from '../../components/ui/RichText';
 import { SettingsPath } from '../../components/ui/SettingsPath';
+import { StepImage } from '../../components/ui/StepImage';
 import { ACTIVATION_STEPS, CRITICAL_SAFETY_RULE, FAQ, SAFETY_RULES, type GuideStep } from '../../content/guide';
 import { StepCard } from '../order/StepCard';
 
@@ -15,6 +16,7 @@ function GuideStepCard({ step, index, isLast }: { step: GuideStep; index: number
           <RichText text={step.action} />
         </span>
       </p>
+      <StepImage image={step.image} />
       <p className="text-body-sm text-on-surface-variant">
         <RichText text={step.text} />
       </p>
@@ -73,7 +75,7 @@ export function GuidePage() {
         <section className="rounded-xl bg-surface-container-high p-space-lg">
           <h1 className="text-balance text-headline-lg tracking-tight text-on-surface">Как активировать приложение</h1>
           <p className="mt-space-sm text-body-sm text-on-surface-variant">
-            Шесть шагов, около пяти минут. Логин, пароль и код появятся в вашем заказе после оплаты.
+            6 шагов, около 5 минут. Логин, пароль и код — в вашем заказе после оплаты. Нажмите на схему, чтобы увеличить.
           </p>
         </section>
 

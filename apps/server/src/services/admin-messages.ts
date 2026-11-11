@@ -13,6 +13,7 @@ const METHOD_LABELS: Record<PaymentMethod, string> = {
   SBP: 'СБП',
   CARD: 'Карта',
   CRYPTO: 'Крипта (USDT)',
+  PROMO: 'Промокод',
 };
 
 const MS_PER_MINUTE = 60_000;
@@ -65,6 +66,17 @@ export function purchaseMessage(order: Order, user: User | null, isSandbox: bool
     order.promoCodeId !== null ? '🎟 По промокоду' : null,
     `👤 ${describeUser(user, order.userId)}`,
     isSandbox ? '🧪 <i>Тестовый платёж, в выручку не входит</i>' : null,
+  ]);
+  return { html, button: chatButton(user) };
+}
+
+/** Every free order is reported: a leaked code spends the real Install-IOS balance. */
+export function freePurchaseMessage(order: Order, user: User | null, promoCode: string): AdminMessage {
+  const html = joinLines([
+    `🛒 <b>Новая выдача</b> · заказ <b>#${order.id}</b>`,
+    appsQuote(order),
+    `🎁 Бесплатно по промокоду <code>${escapeHtml(promoCode)}</code> · ${formatRub(order.subtotalKopecks)} по прайсу`,
+    `👤 ${describeUser(user, order.userId)}`,
   ]);
   return { html, button: chatButton(user) };
 }

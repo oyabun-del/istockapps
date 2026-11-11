@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
-import { formatAppCount, normalizePromoCode, PROMO_CODE_PATTERN, type PaymentsMode } from '@istock/shared';
-import type { InlineButton, Keyboard, PromoCode } from '../domain/models.js';
+import { formatAppCount, normalizePromoCode, PROMO_CODE_PATTERN, type PaymentsMode, type PromoKind } from '@istock/shared';
+import type { InlineButton, Keyboard, NewPromoCode, PromoCode } from '../domain/models.js';
 import { DEFAULT_PROMO_MAX_APPS, PROMO_MAX_APPS_LIMIT, promoHoldSince } from '../domain/promo.js';
 import { escapeHtml } from '../lib/html.js';
 import type { Repositories } from '../repositories/repositories.js';
@@ -24,7 +24,8 @@ const MODE_ORDER: readonly PaymentsMode[] = ['open', 'promo', 'closed'];
 
 const PROMO_HELP = [
   '<b>Команды</b>',
-  `/promo add [КОД] [N] — создать код на N приложений (по умолчанию случайный код на ${DEFAULT_PROMO_MAX_APPS})`,
+  `/promo add [КОД] [N] — код-пропуск на N приложений: при приёме «только по промокоду», покупатель платит (по умолчанию случайный код на ${DEFAULT_PROMO_MAX_APPS})`,
+  '/promo free [КОД] [N] — 🎁 бесплатный код: приложения выдаются без оплаты, работает и при приёме «для всех»',
   '/promo off КОД — выключить код',
 ].join('\n');
 
@@ -49,6 +50,20 @@ export interface ShopAdminDeps {
 
 function generateCode(): string {
   return Array.from({ length: GENERATED_CODE_LENGTH }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join('');
+}
+
+type PromoSpec = Omit<NewPromoCode, 'code'>;
+
+const FREE_PROMO_WARNING =
+  'Каждая выдача по нему тратит баланс Install-IOS: передавайте код только тем, кому он предназначен.';
+
+/** When a new code starts working, if not right away, and what a free one costs. */
+function promoHint(kind: PromoKind, mode: PaymentsMode): string | null {
+  if (kind === 'access') {
+    return mode === 'promo' ? null : 'Код заработает, когда приём оплат будет «только по промокоду»: /payments';
+  }
+  if (mode === 'closed') return `Код заработает, когда приём оплат будет открыт: /payments\n${FREE_PROMO_WARNING}`;
+  return FREE_PROMO_WARNING;
 }
 
 function parseMaxApps(raw: string | undefined): number | null {
@@ -113,7 +128,9 @@ export class ShopAdminService {
       case 'list':
         return this.promoList();
       case 'add':
-        return this.addPromo(rest, actor);
+        return this.addPromo(rest, actor, 'access');
+      case 'free':
+        return this.addPromo(rest, actor, 'free');
       case 'off':
         return this.disablePromo(rest[0]);
       default:
@@ -127,8 +144,9 @@ export class ShopAdminService {
     const lines = await Promise.all(
       codes.map(async (promo) => {
         const used = await this.deps.repos.orders.countPromoApps(promo.id, holdSince);
+        const kind = promo.kind === 'free' ? ' 🎁 бесплатно' : '';
         const state = promo.disabledAt ? ', выключен' : '';
-        return `<code>${promo.code}</code> — ${used}/${promo.maxApps}${state}`;
+        return `<code>${promo.code}</code> — ${used}/${promo.maxApps}${kind}${state}`;
       }),
     );
     const mode = await this.deps.checkout.getMode();
@@ -142,7 +160,7 @@ export class ShopAdminService {
     ].join('\n');
   }
 
-  private async addPromo(args: readonly string[], actor: AdminActor): Promise<string> {
+  private async addPromo(args: readonly string[], actor: AdminActor, kind: PromoKind): Promise<string> {
     // "/promo add 3" is a random code for 3 apps; "/promo add CODE [N]" names the code.
     const [first, second] = args;
     const isCountOnly = first !== undefined && second === undefined && POSITIVE_INT.test(first);
@@ -152,26 +170,26 @@ export class ShopAdminService {
 
     const created =
       rawCode === undefined
-        ? await this.createGenerated(maxApps, actor)
-        : await this.createNamed(rawCode, maxApps, actor);
+        ? await this.createGenerated({ maxApps, createdBy: actor.id, kind })
+        : await this.createNamed(rawCode, { maxApps, createdBy: actor.id, kind });
     if (typeof created === 'string') return created;
 
-    const mode = await this.deps.checkout.getMode();
-    const hint =
-      mode === 'promo' ? '' : '\n\nКод заработает, когда приём оплат будет «только по промокоду»: /payments';
-    return `✅ Промокод <code>${created.code}</code> на ${formatAppCount(created.maxApps)} создан.${hint}`;
+    const hint = promoHint(kind, await this.deps.checkout.getMode());
+    const title = kind === 'free' ? '🎁 Бесплатный промокод' : 'Промокод';
+    const text = `✅ ${title} <code>${created.code}</code> на ${formatAppCount(created.maxApps)} создан.`;
+    return hint ? `${text}\n\n${hint}` : text;
   }
 
-  private async createNamed(rawCode: string, maxApps: number, actor: AdminActor): Promise<PromoCode | string> {
+  private async createNamed(rawCode: string, spec: PromoSpec): Promise<PromoCode | string> {
     const code = normalizePromoCode(rawCode);
     if (!PROMO_CODE_PATTERN.test(code)) return 'Код — от 6 до 32 латинских букв, цифр, «_» или «-».';
-    const created = await this.deps.repos.promoCodes.create({ code, maxApps, createdBy: actor.id });
+    const created = await this.deps.repos.promoCodes.create({ ...spec, code });
     return created ?? `Промокод <code>${code}</code> уже есть.`;
   }
 
-  private async createGenerated(maxApps: number, actor: AdminActor): Promise<PromoCode | string> {
+  private async createGenerated(spec: PromoSpec): Promise<PromoCode | string> {
     for (let attempt = 0; attempt < GENERATE_ATTEMPTS; attempt += 1) {
-      const created = await this.deps.repos.promoCodes.create({ code: generateCode(), maxApps, createdBy: actor.id });
+      const created = await this.deps.repos.promoCodes.create({ ...spec, code: generateCode() });
       if (created) return created;
     }
     return 'Не удалось подобрать свободный код, попробуйте ещё раз.';

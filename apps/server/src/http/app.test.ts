@@ -388,7 +388,7 @@ describe('payments mode and promo codes through HTTP', () => {
   });
 
   it('checks a promo code and says how many apps it still covers', async () => {
-    await ctx.repos.promoCodes.create({ code: 'IOS-REVIEW', maxApps: 5, createdBy: 111 });
+    await ctx.repos.promoCodes.create({ code: 'IOS-REVIEW', maxApps: 5, createdBy: 111, kind: 'access' });
 
     const valid = await app.inject({
       method: 'POST',
@@ -396,7 +396,7 @@ describe('payments mode and promo codes through HTTP', () => {
       headers: authHeader(),
       payload: { code: ' ios-review ' },
     });
-    expect(valid.json()).toMatchObject({ success: true, data: { code: 'IOS-REVIEW', appsLeft: 5 } });
+    expect(valid.json()).toMatchObject({ success: true, data: { code: 'IOS-REVIEW', appsLeft: 5, isFree: false } });
 
     const unknown = await app.inject({
       method: 'POST',
@@ -417,7 +417,7 @@ describe('payments mode and promo codes through HTTP', () => {
   });
 
   it('opens an invoice by promo code only while payments are open by promo code', async () => {
-    await ctx.repos.promoCodes.create({ code: 'IOS-REVIEW', maxApps: 5, createdBy: 111 });
+    await ctx.repos.promoCodes.create({ code: 'IOS-REVIEW', maxApps: 5, createdBy: 111, kind: 'access' });
     await ctx.checkout.setMode('promo');
     const create = (promoCode?: string) =>
       app.inject({
@@ -434,6 +434,32 @@ describe('payments mode and promo codes through HTTP', () => {
     const created = await create('ios-review');
     expect(created.statusCode).toBe(200);
     expect(created.json().data.status).toBe('awaiting_payment');
+  });
+
+  it('hands out a free order by a free code while payments are open to everyone', async () => {
+    await ctx.repos.promoCodes.create({ code: 'GIFT-2026', maxApps: 5, createdBy: 111, kind: 'free' });
+
+    const check = await app.inject({
+      method: 'POST',
+      url: '/api/promo/check',
+      headers: authHeader(),
+      payload: { code: 'gift-2026' },
+    });
+    expect(check.json().data).toEqual({ code: 'GIFT-2026', appsLeft: 5, isFree: true });
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/orders',
+      headers: authHeader(),
+      payload: { appIds: ['sberbank'], paymentMethod: 'SBP', promoCode: 'GIFT-2026' },
+    });
+    expect(created.statusCode).toBe(200);
+    expect(created.json().data).toMatchObject({
+      status: 'paid',
+      paymentMethod: 'PROMO',
+      amountKopecks: 0,
+      paymentUrl: null,
+    });
   });
 });
 

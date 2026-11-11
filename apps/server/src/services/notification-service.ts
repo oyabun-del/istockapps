@@ -4,7 +4,7 @@ import { describeApps } from '../domain/order-items.js';
 import { getErrorMessage } from '../lib/app-error.js';
 import { escapeHtml } from '../lib/html.js';
 import type { Logger } from '../lib/logger.js';
-import { activationMessage, purchaseMessage } from './admin-messages.js';
+import { activationMessage, freePurchaseMessage, purchaseMessage } from './admin-messages.js';
 
 export interface MessageButton {
   text: string;
@@ -39,6 +39,11 @@ export class NotificationService {
     await this.notifyAdmins(html, { button });
   }
 
+  async freePurchaseCompleted(order: Order, user: User | null, promoCode: string): Promise<void> {
+    const { html, button } = freePurchaseMessage(order, user, promoCode);
+    await this.notifyAdmins(html, { button });
+  }
+
   /** The buyer pressed «Приложение работает». */
   async activationCompleted(order: Order, user: User | null): Promise<void> {
     const { html, button } = activationMessage(order, user);
@@ -70,7 +75,8 @@ export class NotificationService {
     try {
       await this.deps.sender.send(
         order.userId,
-        `✅ Оплата получена: <b>${escapeHtml(describeApps(order))}</b>\n` +
+        `${order.paymentMethod === 'PROMO' ? '🎁 Промокод применён' : '✅ Оплата получена'}: ` +
+          `<b>${escapeHtml(describeApps(order))}</b>\n` +
           (order.items.length > 1
             ? 'Откройте заказ, чтобы скачать приложения и активировать их.'
             : 'Откройте заказ, чтобы скачать приложение и активировать его.'),

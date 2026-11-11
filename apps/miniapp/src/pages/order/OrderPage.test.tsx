@@ -191,6 +191,18 @@ describe('OrderPage steps', () => {
     expect(visibleTitles()).toEqual(TITLES.slice(0, shown));
   });
 
+  it('shows a free order as free, not as 0 rubles', async () => {
+    const free = makeOrder({ status: 'paid', paymentMethod: 'PROMO', amountKopecks: 0, discountKopecks: 34900 });
+    vi.spyOn(api, 'order').mockResolvedValue(free);
+    vi.spyOn(api, 'delivery').mockResolvedValue(delivery());
+
+    renderOrder();
+
+    expect(await screen.findByText('Бесплатно')).toBeInTheDocument();
+    expect(screen.getByText('по промокоду')).toBeInTheDocument();
+    expect(screen.queryByText(/скидка/)).not.toBeInTheDocument();
+  });
+
   it('marks a completed order as done', async () => {
     vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'completed', isCodeReceived: true }));
     vi.spyOn(api, 'delivery').mockResolvedValue(delivery());

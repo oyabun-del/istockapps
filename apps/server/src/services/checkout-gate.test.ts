@@ -15,7 +15,7 @@ beforeEach(() => {
 });
 
 async function addPromo(code = 'IOS-REVIEW', maxApps = 5) {
-  const promo = await ctx.repos.promoCodes.create({ code, maxApps, createdBy: ADMIN_ID });
+  const promo = await ctx.repos.promoCodes.create({ code, maxApps, createdBy: ADMIN_ID, kind: 'access' });
   if (!promo) throw new Error('promo not created');
   return promo;
 }
@@ -43,8 +43,10 @@ describe('CheckoutGate modes', () => {
     expect(created.promoCodeId).toBeNull();
   });
 
-  it('ignores a promo code while payments are open to everyone', async () => {
-    const created = await order(['sberbank'], 'NO-SUCH-CODE');
+  it('ignores an access code while payments are open to everyone', async () => {
+    await addPromo();
+
+    const created = await order(['sberbank'], 'IOS-REVIEW');
 
     expect(created.promoCodeId).toBeNull();
   });

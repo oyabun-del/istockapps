@@ -138,6 +138,8 @@ model PromoCode {
   id         Int       @id @default(autoincrement())
   // Upper case, see PROMO_CODE_PATTERN.
   code       String    @unique
+  // access: lets the buyer pay while payments are promo only; free: the code pays for the order.
+  kind       String    @default("access")
   maxApps    Int
   createdBy  BigInt
   disabledAt DateTime?

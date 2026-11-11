@@ -1,3 +1,4 @@
+import { formatAppCount } from '@istock/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Order } from '../domain/models.js';
 import { BUYER, OTHER_USER, createTestContext, type TestContext } from '../test/fixtures.js';
@@ -77,7 +78,7 @@ describe('SalesStatsService', () => {
   });
 
   it('counts orders let through by a promo code', async () => {
-    await ctx.repos.promoCodes.create({ code: 'IOS-REVIEW', maxApps: 5, createdBy: 111 });
+    await ctx.repos.promoCodes.create({ code: 'IOS-REVIEW', maxApps: 5, createdBy: 111, kind: 'access' });
     await ctx.checkout.setMode('promo');
     await buy(['sberbank'], BUYER, false, 'IOS-REVIEW');
 
@@ -85,6 +86,23 @@ describe('SalesStatsService', () => {
 
     expect(text).toContain('🎟 По промокоду: 1 заказ');
     expect(text).toContain('💳 Приём оплат: 🟡 только по промокоду');
+  });
+
+  it('keeps free orders out of the sales and counts them on their own', async () => {
+    await ctx.repos.promoCodes.create({ code: 'GIFT-2026', maxApps: 5, createdBy: 111, kind: 'free' });
+    await buy(['sberbank']);
+    await ctx.orders.createOrder(OTHER_USER, { appIds: ['tbank', 'canva'], paymentMethod: 'SBP', promoCode: 'GIFT-2026' });
+
+    const text = await service.reportText('today', '📊 Статистика');
+
+    expect(text).toContain('💰 Выручка: <b>349 ₽</b>');
+    expect(text).toContain('🛒 Оплачено: <b>1 заказ</b>, 1 приложение');
+    expect(text).toContain('🧾 Средний чек: 349 ₽');
+    expect(text).not.toContain('🏷 Скидки');
+    expect(text).toContain('👥 Покупателей: 1');
+    expect(text).toContain(`🎁 Бесплатно по промокоду: 1 заказ, ${formatAppCount(2)}`);
+    expect(text).toContain('📝 Создано заказов: 1 (100% оплачено)');
+    expect(text).not.toContain('Т-Банк');
   });
 
   it('separates yesterday from today by Moscow days', async () => {

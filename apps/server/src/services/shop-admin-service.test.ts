@@ -1,3 +1,4 @@
+import { formatAppCount } from '@istock/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BUYER, createTestContext, type TestContext } from '../test/fixtures.js';
 import { CheckoutGate } from './checkout-gate.js';
@@ -107,6 +108,34 @@ describe('/promo', () => {
     const text = await service.promoCommand('list', ADMIN);
 
     expect(text).toContain('<code>OLD-CODE</code> — 0/2, выключен\n<code>IOS-REVIEW</code> — 2/5');
+  });
+
+  it('creates a free code that works while payments are open, and warns what it costs', async () => {
+    const text = await service.promoCommand('free gift-2026 2', ADMIN);
+
+    expect(text).toContain(`✅ 🎁 Бесплатный промокод <code>GIFT-2026</code> на ${formatAppCount(2)} создан.`);
+    expect(text).toContain('тратит баланс Install-IOS');
+    expect(text).not.toContain('/payments');
+    expect(await ctx.repos.promoCodes.findByCode('GIFT-2026')).toMatchObject({ kind: 'free', maxApps: 2 });
+  });
+
+  it('keeps "add" creating access codes', async () => {
+    await service.promoCommand('add IOS-REVIEW', ADMIN);
+
+    expect(await ctx.repos.promoCodes.findByCode('IOS-REVIEW')).toMatchObject({ kind: 'access' });
+  });
+
+  it('hints that a free code waits while payments are closed', async () => {
+    await ctx.checkout.setMode('closed');
+
+    expect(await service.promoCommand('free 3', ADMIN)).toContain('когда приём оплат будет открыт: /payments');
+  });
+
+  it('marks free codes in the list and counts the apps handed out', async () => {
+    await service.promoCommand('free GIFT-2026', ADMIN);
+    await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP', promoCode: 'GIFT-2026' });
+
+    expect(await service.promoCommand('list', ADMIN)).toContain('<code>GIFT-2026</code> — 1/5 🎁 бесплатно');
   });
 
   it('turns a code off and says when there is no such code', async () => {

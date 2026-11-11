@@ -84,15 +84,21 @@ export class CheckoutGate {
   }
 
   /**
-   * Lets a checkout through, or throws. Returns the promo code it goes through, if any. The code's
-   * app limit is not checked here: the buyer's own open invoice for the same apps may be handed out
-   * again without taking more, and a new order is checked atomically by OrderRepository.createWithinPromo.
+   * Lets a checkout through, or throws. Returns the promo code it goes through, if any: a free code
+   * pays for the order itself. While payments are open to everyone an access code changes nothing,
+   * so it is not returned and holds none of its apps. The code's app limit is not checked here: the
+   * buyer's own open invoice for the same apps may be handed out again without taking more, and a new
+   * order is checked atomically by OrderRepository.createWithinPromo.
    */
   async authorize(promoCode: string | undefined): Promise<PromoCode | null> {
     const mode = await this.getMode();
-    if (mode === 'open') return null;
     if (mode === 'closed') {
       throw new AppError('PAYMENTS_CLOSED', 'Приём оплат временно приостановлен. Попробуйте позже.');
+    }
+    if (mode === 'open') {
+      if (!promoCode) return null;
+      const { promo } = await this.checkPromo(promoCode);
+      return promo.kind === 'free' ? promo : null;
     }
     if (!promoCode) throw new AppError('PAYMENTS_CLOSED', 'Сейчас оплата доступна только по промокоду');
     return (await this.checkPromo(promoCode)).promo;

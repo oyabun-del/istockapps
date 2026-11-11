@@ -1,4 +1,4 @@
-import { formatRub, pluralRu } from '@istock/shared';
+import { formatAppCount, formatRub, pluralRu } from '@istock/shared';
 import type { InlineButton, Keyboard, SalesSummary } from '../domain/models.js';
 import { periodRange, type StatsPeriod } from '../domain/stats-period.js';
 import { escapeHtml } from '../lib/html.js';
@@ -61,6 +61,10 @@ function funnelLines(summary: SalesSummary): string[] {
     `📝 Создано заказов: ${summary.createdOrders}${conversion}`,
     `🙋 Новых пользователей: ${summary.newUsers}`,
     summary.refunds > 0 ? `↩️ Возвраты: ${summary.refunds} на ${formatRub(summary.refundedKopecks)}` : null,
+    summary.freeOrders > 0
+      ? `🎁 Бесплатно по промокоду: ${count(summary.freeOrders, ['заказ', 'заказа', 'заказов'])}, ` +
+        formatAppCount(summary.freeApps)
+      : null,
     summary.sandboxOrders > 0
       ? `🧪 Тестовые платежи: ${summary.sandboxOrders} на ${formatRub(summary.sandboxKopecks)} (не в выручке)`
       : null,

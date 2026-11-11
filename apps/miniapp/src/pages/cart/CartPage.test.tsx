@@ -252,7 +252,7 @@ describe('CartPage payments mode', () => {
 
   it('asks for a promo code and pays with it once it is applied', async () => {
     mockShop('promo');
-    const checkPromo = vi.spyOn(api, 'checkPromo').mockResolvedValue({ code: 'IOS-REVIEW', appsLeft: 5 });
+    const checkPromo = vi.spyOn(api, 'checkPromo').mockResolvedValue({ code: 'IOS-REVIEW', appsLeft: 5, isFree: false });
     const createOrder = vi
       .spyOn(api, 'createOrder')
       .mockResolvedValue(makeOrder({ status: 'awaiting_payment', paymentUrl: 'https://pay.example.com/1' }));
@@ -294,7 +294,7 @@ describe('CartPage payments mode', () => {
 
   it('warns when the cart has more apps than the code still covers, and the code can be removed', async () => {
     mockShop('promo');
-    vi.spyOn(api, 'checkPromo').mockResolvedValue({ code: 'IOS-REVIEW', appsLeft: 1 });
+    vi.spyOn(api, 'checkPromo').mockResolvedValue({ code: 'IOS-REVIEW', appsLeft: 1, isFree: false });
     fillCart(2);
     renderCart();
 
@@ -319,6 +319,88 @@ describe('CartPage payments mode', () => {
     expect(screen.queryByRole('textbox', { name: 'Промокод' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Оплатить/ }));
 
+    await waitFor(() => expect(createOrder).toHaveBeenCalled());
+    expect(createOrder.mock.calls[0]?.[0]).not.toHaveProperty('promoCode');
+  });
+});
+
+describe('CartPage free promo codes', () => {
+  function mockShop(paymentsMode: 'open' | 'promo', isSbpAvailable = true) {
+    mockCatalog();
+    vi.spyOn(api, 'paymentMethods').mockResolvedValue(isSbpAvailable ? [{ method: 'SBP' }] : []);
+    vi.spyOn(api, 'checkout').mockResolvedValue({ paymentsMode });
+  }
+
+  async function applyCode(code: string) {
+    await userEvent.type(await screen.findByRole('textbox', { name: 'Промокод' }), code);
+    await userEvent.click(screen.getByRole('button', { name: 'Применить' }));
+  }
+
+  it('hands out the cart for free by a code entered while payments are open to everyone', async () => {
+    mockShop('open', false);
+    vi.spyOn(api, 'checkPromo').mockResolvedValue({ code: 'GIFT-2026', appsLeft: 5, isFree: true });
+    const createOrder = vi
+      .spyOn(api, 'createOrder')
+      .mockResolvedValue(makeOrder({ status: 'paid', paymentMethod: 'PROMO', amountKopecks: 0, paymentUrl: null }));
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    fillCart(2);
+    renderCart();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Есть промокод?' }));
+    await applyCode('gift-2026');
+
+    expect(await screen.findByText(/^Бесплатно: до 5\sприложений$/)).toBeInTheDocument();
+    const summary = screen.getByLabelText('Итог');
+    expect(within(summary).getByText('По промокоду')).toBeInTheDocument();
+    expect(within(summary).getByText('Бесплатно')).toBeInTheDocument();
+    expect(screen.queryByText(/Безопасный платёж/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Получить бесплатно' }));
+
+    await waitFor(() =>
+      expect(createOrder).toHaveBeenCalledWith(
+        expect.objectContaining({ appIds: ['sberbank', 'tbank'], promoCode: 'GIFT-2026' }),
+      ),
+    );
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('works while payments are open by promo code only', async () => {
+    mockShop('promo');
+    vi.spyOn(api, 'checkPromo').mockResolvedValue({ code: 'GIFT-2026', appsLeft: 5, isFree: true });
+    fillCart(1);
+    renderCart();
+
+    await applyCode('GIFT-2026');
+
+    expect(await screen.findByRole('button', { name: 'Получить бесплатно' })).toBeEnabled();
+  });
+
+  it('refuses a free cart larger than what the code still covers', async () => {
+    mockShop('open');
+    vi.spyOn(api, 'checkPromo').mockResolvedValue({ code: 'GIFT-2026', appsLeft: 1, isFree: true });
+    fillCart(2);
+    renderCart();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Есть промокод?' }));
+    await applyCode('GIFT-2026');
+
+    expect(await screen.findByText(/По промокоду можно получить ещё 1\sприложение/)).toHaveAttribute('role', 'status');
+    expect(screen.getByRole('button', { name: 'Получить бесплатно' })).toBeDisabled();
+  });
+
+  it('explains that an access code is not needed while payments are open to everyone', async () => {
+    mockShop('open');
+    vi.spyOn(api, 'checkPromo').mockResolvedValue({ code: 'IOS-REVIEW', appsLeft: 5, isFree: false });
+    const createOrder = vi.spyOn(api, 'createOrder').mockResolvedValue(makeOrder({ status: 'awaiting_payment' }));
+    fillCart(1);
+    renderCart();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Есть промокод?' }));
+    await applyCode('IOS-REVIEW');
+
+    expect(await screen.findByText(/Сейчас оплатить можно и без промокода/)).toHaveAttribute('role', 'status');
+    expect(screen.queryByText('IOS-REVIEW')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Оплатить/ }));
     await waitFor(() => expect(createOrder).toHaveBeenCalled());
     expect(createOrder.mock.calls[0]?.[0]).not.toHaveProperty('promoCode');
   });

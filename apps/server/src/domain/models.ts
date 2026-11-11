@@ -1,4 +1,4 @@
-import type { OrderStatus, PaymentMethod } from '@istock/shared';
+import type { OrderStatus, PaymentMethod, PromoKind } from '@istock/shared';
 
 export interface User {
   id: number;
@@ -77,11 +77,12 @@ export type OrderPatch = Partial<
   >
 >;
 
-/** Lets a buyer pay while payments are open by promo code only. */
+/** Lets a buyer pay while payments are open by promo code only, or pays for the order itself (free). */
 export interface PromoCode {
   id: number;
   /** Upper case, matches PROMO_CODE_PATTERN. */
   code: string;
+  kind: PromoKind;
   /** Apps the code covers in total, across all buyers and orders. */
   maxApps: number;
   /** Admin who created the code. */
@@ -90,7 +91,7 @@ export interface PromoCode {
   createdAt: Date;
 }
 
-export type NewPromoCode = Pick<PromoCode, 'code' | 'maxApps' | 'createdBy'>;
+export type NewPromoCode = Pick<PromoCode, 'code' | 'maxApps' | 'createdBy' | 'kind'>;
 
 /** Sales of a period; revenue figures leave out test payments, which are counted on their own. */
 export interface SalesSummary {
@@ -102,6 +103,9 @@ export interface SalesSummary {
   buyers: number;
   /** Of paidOrders: let through by a promo code. */
   promoOrders: number;
+  /** Orders handed out for free by a promo code; never part of the paid figures above. */
+  freeOrders: number;
+  freeApps: number;
   sandboxOrders: number;
   sandboxKopecks: number;
   /** Orders opened in the period, whatever happened to them. */

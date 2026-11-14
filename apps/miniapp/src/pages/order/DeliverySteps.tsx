@@ -48,9 +48,72 @@ function stepProgress(order: OrderDto): Record<StepKey, StepProgress> {
   };
 }
 
-function progressLabel(progress: Record<StepKey, StepProgress>): string {
+/** Number of the current step, or the total once everything is done. */
+function currentStep(progress: Record<StepKey, StepProgress>): number {
   const active = STEP_KEYS.findIndex((key) => progress[key] === 'active');
-  return active === -1 ? 'Готово' : `Шаг ${active + 1} из ${STEP_KEYS.length}`;
+  return active === -1 ? STEP_KEYS.length : active + 1;
+}
+
+function progressLabel(progress: Record<StepKey, StepProgress>): string {
+  return STEP_KEYS.some((key) => progress[key] === 'active') ? `Шаг ${currentStep(progress)} из ${STEP_KEYS.length}` : 'Готово';
+}
+
+/** What a step not opened yet will ask for: the buyer sees the whole path, but cannot jump ahead. */
+const LOCKED_STEPS: Record<StepKey, { title: string; hint: string }> = {
+  download: { title: 'Скачайте приложение', hint: 'Загрузка на iPhone' },
+  credentials: { title: 'Войдите в App Store', hint: 'Логин и пароль из заказа' },
+  code: { title: 'Введите код подтверждения', hint: 'Код придёт в заказ' },
+  finish: { title: 'Откройте приложение', hint: 'Проверка и завершение' },
+};
+
+function LockedStep({ stepKey, isLast }: { stepKey: StepKey; isLast: boolean }) {
+  const { title, hint } = LOCKED_STEPS[stepKey];
+  return (
+    <StepCard index={STEP_KEYS.indexOf(stepKey) + 1} title={title} state="locked" isLast={isLast}>
+      <p className="text-body-sm text-outline">{hint}</p>
+    </StepCard>
+  );
+}
+
+function StepsProgress({ progress }: { progress: Record<StepKey, StepProgress> }) {
+  return (
+    <div
+      role="progressbar"
+      aria-label="Прогресс активации"
+      aria-valuemin={1}
+      aria-valuemax={STEP_KEYS.length}
+      aria-valuenow={currentStep(progress)}
+      className="grid grid-cols-4 gap-1 px-space-xs"
+    >
+      {STEP_KEYS.map((key) => (
+        <span
+          key={key}
+          className={`h-1 rounded-full transition-colors duration-300 ${
+            progress[key] === 'done' ? 'bg-success' : progress[key] === 'active' ? 'bg-primary' : 'bg-surface-container-highest'
+          }`}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** After «Я скачал» buyers often think the app is ready; it opens only after the remaining steps. */
+function NotActivatedNotice() {
+  return (
+    <motion.div
+      {...REVEAL}
+      role="status"
+      className="flex items-start gap-space-sm rounded-xl bg-primary/10 p-space-md ring-1 ring-primary/40"
+    >
+      <Icon name="hourglass_top" className="mt-0.5 text-[20px] text-primary" />
+      <div className="flex flex-col gap-0.5">
+        <strong className="text-label-lg text-on-surface">Приложение скачано, но ещё не активировано</strong>
+        <span className="text-body-sm text-on-surface-variant">
+          Оно не откроется, пока вы не пройдёте все шаги ниже. Не удаляйте его.
+        </span>
+      </div>
+    </motion.div>
+  );
 }
 
 function availableGroups(delivery: DeliveryDto | undefined): DeliveryGroupDto[] {
@@ -104,6 +167,12 @@ function DownloadStep({ order, delivery, card }: { order: OrderDto; delivery: De
       <p className="text-body-sm text-on-surface-variant">
         Нажмите «Скачать», дождитесь окончания загрузки и подтвердите её кнопкой ниже.
       </p>
+      {card.state === 'active' && (
+        <p className="flex items-start gap-1.5 text-body-sm text-on-surface">
+          <Icon name="info" className="mt-0.5 text-[16px] text-primary" />
+          Это первый из {STEP_KEYS.length} шагов: после загрузки приложение ещё не откроется.
+        </p>
+      )}
       {card.state === 'active' && <StepImage image={GUIDE_IMAGES.download} />}
       {delivery.data && <DeliveryApps delivery={delivery.data} isDone={card.state === 'done'} />}
       {delivery.isPending && (
@@ -285,34 +354,50 @@ export function DeliverySteps({ order }: Props) {
   // Steps that open while the buyer is on the page are animated in and scrolled to.
   const [initiallyVisible] = useState(visible);
 
+  const lastKey = STEP_KEYS[STEP_KEYS.length - 1];
   const card = (key: StepKey, state: StepState): CardProps => ({
     state,
     isNew: !initiallyVisible.includes(key),
-    isLast: key === visible.at(-1),
+    isLast: key === lastKey,
   });
+  // Locked steps are listed but have no actions: a step opens only once the previous one is done.
+  const locked = (key: StepKey) => <LockedStep stepKey={key} isLast={key === lastKey} />;
+  const isDownloadedNotActivated = progress.download === 'done' && order.status !== 'completed';
 
   return (
     <section aria-labelledby="steps-heading" className="flex flex-col gap-space-md">
-      <div className="flex items-center justify-between px-space-xs">
-        <h2 id="steps-heading" className="flex items-center gap-space-xs text-headline-sm text-on-surface">
-          <Icon name="verified" className="text-[20px] text-primary" />
-          Получение и активация
-        </h2>
-        <span className="tabular rounded-full bg-secondary-container/20 px-space-sm py-0.5 text-label-sm text-secondary">
-          {progressLabel(progress)}
-        </span>
+      <div className="flex flex-col gap-space-sm">
+        <div className="flex items-center justify-between px-space-xs">
+          <h2 id="steps-heading" className="flex items-center gap-space-xs text-headline-sm text-on-surface">
+            <Icon name="verified" className="text-[20px] text-primary" />
+            Получение и активация
+          </h2>
+          <span className="tabular text-label-md text-primary">{progressLabel(progress)}</span>
+        </div>
+        <StepsProgress progress={progress} />
       </div>
+      {isDownloadedNotActivated && <NotActivatedNotice />}
       <ol className="flex flex-col gap-space-md">
-        {progress.download !== 'locked' && (
+        {progress.download === 'locked' ? (
+          locked('download')
+        ) : (
           <DownloadStep order={order} delivery={delivery} card={card('download', progress.download)} />
         )}
-        {progress.credentials !== 'locked' && (
+        {progress.credentials === 'locked' ? (
+          locked('credentials')
+        ) : (
           <CredentialsStep order={order} delivery={delivery.data} card={card('credentials', progress.credentials)} />
         )}
-        {progress.code !== 'locked' && (
+        {progress.code === 'locked' ? (
+          locked('code')
+        ) : (
           <CodeStep order={order} delivery={delivery.data} card={card('code', progress.code)} />
         )}
-        {progress.finish !== 'locked' && <FinishStep order={order} card={card('finish', progress.finish)} />}
+        {progress.finish === 'locked' ? (
+          locked('finish')
+        ) : (
+          <FinishStep order={order} card={card('finish', progress.finish)} />
+        )}
       </ol>
     </section>
   );

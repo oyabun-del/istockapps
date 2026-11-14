@@ -6,8 +6,8 @@
   <text x="160" y="72" text-anchor="middle" font-size="13" fill="#0a84ff">Просмотреть учётную запись</text>
   <line x1="24" y1="82" x2="296" y2="82" stroke="#48484a"/>
   <text x="160" y="105" text-anchor="middle" font-size="14" font-weight="600" fill="#ff453a">Выйти</text>
-  <rect x="30" y="86" width="260" height="26" rx="9" fill="none" stroke="#4cd7f6" stroke-width="2.5"/>
-  <g transform="translate(290 86)"><circle r="11" fill="#2563eb" stroke="#fff" stroke-width="2"/><text y="4" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">1</text></g>
+  <rect x="30" y="86" width="260" height="26" rx="9" fill="none" stroke="#FACC15" stroke-width="2.5"/>
+  <g transform="translate(290 86)"><circle r="11" fill="#FACC15" stroke="#1c1c1e" stroke-width="2"/><text y="4" text-anchor="middle" font-size="12" font-weight="700" fill="#1a1600">1</text></g>
   <g transform="translate(236 100)"><circle r="16" fill="#fff" fill-opacity=".22"/><circle r="8" fill="#fff" fill-opacity=".9"/></g>
 
   <path d="M160 126v14m-5-5 5 5 5-5" stroke="#8e8e93" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
@@ -23,6 +23,6 @@
 
   <rect x="40" y="300" width="240" height="38" rx="12" fill="#0a84ff"/>
   <text x="160" y="324" text-anchor="middle" font-size="14" font-weight="600" fill="#fff">Войти</text>
-  <rect x="35" y="295" width="250" height="48" rx="16" fill="none" stroke="#4cd7f6" stroke-width="2.5"/>
-  <g transform="translate(284 296)"><circle r="11" fill="#2563eb" stroke="#fff" stroke-width="2"/><text y="4" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">2</text></g>
+  <rect x="35" y="295" width="250" height="48" rx="16" fill="none" stroke="#FACC15" stroke-width="2.5"/>
+  <g transform="translate(284 296)"><circle r="11" fill="#FACC15" stroke="#1c1c1e" stroke-width="2"/><text y="4" text-anchor="middle" font-size="12" font-weight="700" fill="#1a1600">2</text></g>
 </svg>

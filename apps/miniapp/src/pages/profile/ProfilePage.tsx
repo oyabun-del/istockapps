@@ -64,7 +64,7 @@ function Avatar({ name, photoUrl }: { name: string; photoUrl: string | null | un
   }
   return (
     <span
-      className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary-container text-headline-lg text-white ${ring}`}
+      className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary-container text-headline-lg text-on-primary ${ring}`}
     >
       {name.charAt(0).toUpperCase()}
     </span>

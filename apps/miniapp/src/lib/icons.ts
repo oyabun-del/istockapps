@@ -31,6 +31,8 @@ export const ICON_NAMES = [
   'forum',
   'grid_view',
   'help',
+  'hourglass_top',
+  'info',
   'key',
   'lock',
   'menu_book',

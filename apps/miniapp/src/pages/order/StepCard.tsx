@@ -3,8 +3,11 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { Icon } from '../../components/ui/Icon';
 import { POP_SPRING, REVEAL } from '../../lib/motion';
 
-/** Locked steps are not rendered at all, so a card is either the current step or a finished one. */
-export type StepState = 'done' | 'active';
+/**
+ * A locked step shows only its number and title, so the buyer sees the whole path from the start
+ * (downloading alone does not make the app work) but cannot act on it ahead of time.
+ */
+export type StepState = 'done' | 'active' | 'locked';
 
 type Props = {
   index: number;
@@ -18,12 +21,15 @@ type Props = {
 
 const INDICATOR_CLASSES: Record<StepState, string> = {
   done: 'bg-success/20 text-success',
-  active: 'bg-primary-container text-white shadow-[0_0_16px_-2px_rgba(37,99,235,0.55)]',
+  active: 'bg-primary-container text-on-primary shadow-[0_0_16px_-2px_rgba(250,204,21,0.55)]',
+  locked: 'bg-surface-container-high text-on-surface-variant',
 };
 
 /** Numbered timeline card (design/_1 "Пошаговый процесс активации"). */
 export function StepCard({ index, title, state, isLast = false, isNew = false, children }: Props) {
   const ref = useRef<HTMLLIElement>(null);
+
+  const isLocked = state === 'locked';
 
   useEffect(() => {
     // Older WebViews and jsdom have no scrollIntoView.
@@ -35,7 +41,8 @@ export function StepCard({ index, title, state, isLast = false, isNew = false, c
       ref={ref}
       {...(isNew ? REVEAL : {})}
       aria-current={state === 'active' ? 'step' : undefined}
-      className="flex gap-space-md rounded-xl bg-surface-container p-space-lg"
+      aria-disabled={isLocked || undefined}
+      className={`flex gap-space-md rounded-xl ${isLocked ? 'bg-surface-container-low px-space-lg py-space-md' : 'bg-surface-container p-space-lg'}`}
     >
       <div className="flex flex-col items-center">
         <span
@@ -59,12 +66,22 @@ export function StepCard({ index, title, state, isLast = false, isNew = false, c
             )}
           </AnimatePresence>
         </span>
-        {!isLast && <span className="my-space-xs w-0.5 grow rounded-full bg-surface-container-highest" />}
+        {!isLast && !isLocked && <span className="my-space-xs w-0.5 grow rounded-full bg-surface-container-highest" />}
       </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-space-sm pb-space-xs">
-        <h3 className="text-balance text-headline-sm text-on-surface">{title}</h3>
-        {children}
-      </div>
+      {isLocked ? (
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+          <h3 className="flex items-center justify-between gap-space-xs text-body-md font-medium text-on-surface-variant">
+            {title}
+            <Icon name="lock" className="text-[16px] text-outline" />
+          </h3>
+          {children}
+        </div>
+      ) : (
+        <div className="flex min-w-0 flex-1 flex-col gap-space-sm pb-space-xs">
+          <h3 className="text-balance text-headline-sm text-on-surface">{title}</h3>
+          {children}
+        </div>
+      )}
     </motion.li>
   );
 }

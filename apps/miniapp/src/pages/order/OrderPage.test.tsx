@@ -171,16 +171,18 @@ function issuedOrder() {
 describe('OrderPage steps', () => {
   const TITLES = ['Скачайте приложение', 'Войдите в App Store', 'Введите код подтверждения', 'Откройте приложение'];
 
-  function visibleTitles() {
-    return TITLES.filter((title) => screen.queryByRole('heading', { name: title }));
+  function stepItem(title: string) {
+    const item = screen.getByRole('heading', { name: title }).closest('li');
+    if (!item) throw new Error(`No step card for ${title}`);
+    return item;
   }
 
   it.each([
-    { order: makeOrder({ status: 'paid' }), shown: 1, label: 'Шаг 1 из 4' },
-    { order: makeOrder({ status: 'download_confirmed' }), shown: 2, label: 'Шаг 2 из 4' },
-    { order: makeOrder({ status: 'credentials_issued' }), shown: 3, label: 'Шаг 3 из 4' },
-    { order: makeOrder({ status: 'credentials_issued', isCodeReceived: true }), shown: 4, label: 'Шаг 4 из 4' },
-  ])('shows only the steps opened so far ($label)', async ({ order, shown, label }) => {
+    { order: makeOrder({ status: 'paid' }), current: 1, label: 'Шаг 1 из 4' },
+    { order: makeOrder({ status: 'download_confirmed' }), current: 2, label: 'Шаг 2 из 4' },
+    { order: makeOrder({ status: 'credentials_issued' }), current: 3, label: 'Шаг 3 из 4' },
+    { order: makeOrder({ status: 'credentials_issued', isCodeReceived: true }), current: 4, label: 'Шаг 4 из 4' },
+  ])('shows every step but opens only the current one ($label)', async ({ order, current, label }) => {
     vi.spyOn(api, 'order').mockResolvedValue(order);
     vi.spyOn(api, 'delivery').mockResolvedValue(delivery());
     vi.spyOn(api, 'credentials').mockResolvedValue(credentialsFor());
@@ -188,7 +190,40 @@ describe('OrderPage steps', () => {
     renderOrder();
 
     expect(await screen.findByText(label)).toBeInTheDocument();
-    expect(visibleTitles()).toEqual(TITLES.slice(0, shown));
+    expect(screen.getByRole('progressbar', { name: 'Прогресс активации' })).toHaveAttribute('aria-valuenow', String(current));
+    TITLES.forEach((title, index) => {
+      const item = stepItem(title);
+      const step = index + 1;
+      if (step === current) expect(item).toHaveAttribute('aria-current', 'step');
+      else expect(item).not.toHaveAttribute('aria-current');
+      if (step > current) {
+        // Locked: listed so the buyer sees the whole path, but nothing to tap ahead of time.
+        expect(item).toHaveAttribute('aria-disabled', 'true');
+        expect(within(item).queryByRole('button')).not.toBeInTheDocument();
+        expect(within(item).queryByRole('link')).not.toBeInTheDocument();
+      } else {
+        expect(item).not.toHaveAttribute('aria-disabled');
+      }
+    });
+  });
+
+  it('tells the buyer the downloaded app is not activated yet', async () => {
+    vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'paid' }));
+    vi.spyOn(api, 'delivery').mockResolvedValue(delivery());
+
+    renderOrder();
+
+    expect(await screen.findByText(/Это первый из 4 шагов/)).toBeInTheDocument();
+    expect(screen.queryByText('Приложение скачано, но ещё не активировано')).not.toBeInTheDocument();
+  });
+
+  it('warns after the download that the remaining steps are still needed', async () => {
+    vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'download_confirmed' }));
+    vi.spyOn(api, 'delivery').mockResolvedValue(delivery());
+
+    renderOrder();
+
+    expect(await screen.findByText('Приложение скачано, но ещё не активировано')).toBeInTheDocument();
   });
 
   it('shows a free order as free, not as 0 rubles', async () => {

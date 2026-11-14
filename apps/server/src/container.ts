@@ -67,7 +67,12 @@ function createSupply(env: Env, logger: Logger): Supply {
     };
   }
   const client = new InstalliosClient({ apiBase: env.INSTALLIOS_API_BASE, apiKey: env.INSTALLIOS_API_KEY, logger });
-  const catalog = new InstalliosCatalogProvider({ client, priceOf: installiosPriceOf(env), logger });
+  const catalog = new InstalliosCatalogProvider({
+    client,
+    priceOf: installiosPriceOf(env),
+    categoryOverrides: env.INSTALLIOS_CATEGORIES,
+    logger,
+  });
   return {
     catalog,
     delivery: new InstalliosDeliveryProvider(client),

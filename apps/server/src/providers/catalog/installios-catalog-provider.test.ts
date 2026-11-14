@@ -104,7 +104,26 @@ describe('InstalliosCatalogProvider', () => {
 
     expect(client.listCatalogs).toHaveBeenCalledTimes(1);
     expect(found.map((app) => app.id)).toEqual(['app_vk']);
-    expect(await provider.listCategories()).toEqual([{ id: 'all', title: 'Все', icon: 'grid_view' }]);
+  });
+
+  it('assigns categories by name, honours overrides and filters by category', async () => {
+    const client = fakeClient(CATALOGS, {
+      ...PAGES,
+      cat_b: [...(PAGES.cat_b as InstalliosApplication[]), { id: 'app_vpn', name: 'Best VPN', icon_url: null }],
+    });
+    const provider = new InstalliosCatalogProvider({
+      client,
+      priceOf: () => 19900,
+      categoryOverrides: { app_ok: 'other' },
+      logger: silentLogger,
+      retryDelaysMs: [],
+    });
+
+    expect((await provider.listCategories()).map((category) => category.id)).toEqual(['all', 'vpn', 'social', 'other']);
+    expect((await provider.listApps({ category: 'social' })).map((app) => app.id).sort()).toEqual(['app_tg', 'app_vk']);
+    expect((await provider.listApps({ category: 'social', q: 'tele' })).map((app) => app.id)).toEqual(['app_tg']);
+    expect(await provider.listApps({ category: 'all' })).toHaveLength(4);
+    expect(await provider.listApps({ category: 'games' })).toEqual([]);
   });
 
   it('refreshes on a timer that does not keep the process alive', async () => {

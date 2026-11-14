@@ -6,14 +6,15 @@ import {
   INTERACTIVE_RETRY_DELAYS_MS,
   type InstalliosClient,
 } from '../installios/installios-client.js';
+import { categorize, OTHER_CATEGORY, visibleCategories, type AppCategoryId } from './app-categories.js';
 import { ALL_CATEGORY, type CatalogProvider } from './catalog-provider.js';
 import { initialOf, placeholderIcon } from './placeholder-icon.js';
 
 /** The API docs ask for a background refresh every 5–10 minutes. */
 export const CATALOG_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
-/** Install-IOS has no categories, so the shop shows a single "all" tab. */
-const CATEGORIES: readonly CategoryDto[] = [{ id: ALL_CATEGORY, title: 'Все', icon: 'grid_view' }];
+/** How many uncategorized names the sync log lists, so the name rules can be extended. */
+const LOGGED_UNCATEGORIZED = 50;
 
 export type PriceResolver = (appId: string) => number;
 
@@ -21,6 +22,8 @@ export interface InstalliosCatalogDeps {
   client: Pick<InstalliosClient, 'listCatalogs' | 'listApplications'>;
   /** Price in kopecks for an Install-IOS application id. */
   priceOf: PriceResolver;
+  /** Manual category by Install-IOS application id; wins over the name rules. */
+  categoryOverrides?: Readonly<Record<string, AppCategoryId>>;
   logger: Logger;
   retryDelaysMs?: readonly number[];
 }
@@ -41,6 +44,7 @@ export class CatalogUnavailableError extends Error {
 }
 
 function matchesQuery(app: AppDto, query: CatalogQuery): boolean {
+  if (query.category && query.category !== ALL_CATEGORY && app.categoryId !== query.category) return false;
   const q = query.q?.toLocaleLowerCase('ru-RU');
   return !q || app.name.toLocaleLowerCase('ru-RU').includes(q);
 }
@@ -52,6 +56,8 @@ function matchesQuery(app: AppDto, query: CatalogQuery): boolean {
 export class InstalliosCatalogProvider implements CatalogProvider {
   private apps: readonly AppDto[] | null = null;
   private byId: ReadonlyMap<string, AppDto> = new Map();
+  private categories: readonly CategoryDto[] = [];
+  private lastUncategorized: string | null = null;
   private inflight: Promise<boolean> | null = null;
   private timer: NodeJS.Timeout | null = null;
 
@@ -81,8 +87,10 @@ export class InstalliosCatalogProvider implements CatalogProvider {
     return this.apps?.length ?? 0;
   }
 
+  /** Only categories that have apps in the current snapshot. */
   async listCategories(): Promise<CategoryDto[]> {
-    return [...CATEGORIES];
+    await this.snapshot();
+    return [...this.categories];
   }
 
   async listApps(query: CatalogQuery): Promise<AppDto[]> {
@@ -111,7 +119,17 @@ export class InstalliosCatalogProvider implements CatalogProvider {
         .sort((a, b) => a.name.localeCompare(b.name, 'ru-RU'));
       this.apps = apps;
       this.byId = new Map(apps.map((app) => [app.id, app]));
-      this.deps.logger.info({ apps: apps.length }, 'Install-IOS catalog synced');
+      this.categories = visibleCategories(new Set(apps.map((app) => app.categoryId)));
+      const uncategorized = apps.filter((app) => app.categoryId === OTHER_CATEGORY).map((app) => app.name);
+      // Names only when the list changed, so the 5-minute refresh does not repeat them.
+      const uncategorizedKey = uncategorized.join('\n');
+      const uncategorizedNames =
+        uncategorizedKey === this.lastUncategorized ? undefined : uncategorized.slice(0, LOGGED_UNCATEGORIZED);
+      this.lastUncategorized = uncategorizedKey;
+      this.deps.logger.info(
+        { apps: apps.length, uncategorized: uncategorized.length, uncategorizedNames },
+        'Install-IOS catalog synced',
+      );
       return true;
     } catch (error: unknown) {
       this.deps.logger.warn(
@@ -157,7 +175,7 @@ export class InstalliosCatalogProvider implements CatalogProvider {
       name: item.name,
       subtitle: '',
       iconUrl: item.iconUrl ?? placeholderIcon(initialOf(item.name)),
-      categoryId: ALL_CATEGORY,
+      categoryId: categorize(item, this.deps.categoryOverrides),
       priceKopecks: this.deps.priceOf(item.id),
       version: null,
       minIos: null,

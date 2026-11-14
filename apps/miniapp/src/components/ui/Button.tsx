@@ -17,7 +17,7 @@ type Props = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> & {
 
 const VARIANT_CLASSES: Record<Variant, string> = {
   primary:
-    'bg-primary-container text-on-primary shadow-lg shadow-primary-container/25 hover:bg-[#2f6bf0] disabled:shadow-none',
+    'bg-primary-container text-on-primary shadow-lg shadow-primary-container/25 hover:bg-[#fcd535] disabled:shadow-none',
   secondary: 'bg-surface-container-high text-on-surface hover:bg-surface-bright',
   ghost: 'bg-transparent text-primary hover:bg-surface-container-high',
 };

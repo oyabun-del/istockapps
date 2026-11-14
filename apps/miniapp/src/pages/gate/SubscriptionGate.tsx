@@ -25,7 +25,7 @@ function ChannelCard({ me }: Props) {
       onClick={() => openTelegramLink(me.channelUrl)}
       className="flex w-full items-center gap-space-md rounded-xl bg-surface-container-high p-space-md text-left transition-[background-color,transform] hover:bg-surface-bright active:scale-[0.99]"
     >
-      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary-container text-headline-md text-white">
+      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary-container text-headline-md text-on-primary">
         {title.charAt(0).toUpperCase()}
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -65,7 +65,7 @@ export function SubscriptionGate({ me }: Props) {
           initial={{ scale: 0.7, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={POP_SPRING}
-          className="relative mb-space-sm flex h-20 w-20 items-center justify-center rounded-full bg-primary-container text-white shadow-[0_12px_32px_-8px_rgba(37,99,235,0.6)] ring-8 ring-primary-container/15"
+          className="relative mb-space-sm flex h-20 w-20 items-center justify-center rounded-full bg-primary-container text-on-primary shadow-[0_12px_32px_-8px_rgba(250,204,21,0.45)] ring-8 ring-primary-container/15"
         >
           <Icon name="send" className="-rotate-12 text-[36px]" isFilled />
         </motion.span>

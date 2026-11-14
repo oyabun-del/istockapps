@@ -75,7 +75,14 @@ export function GuidePage() {
         <section className="rounded-xl bg-surface-container-high p-space-lg">
           <h1 className="text-balance text-headline-lg tracking-tight text-on-surface">Как активировать приложение</h1>
           <p className="mt-space-sm text-body-sm text-on-surface-variant">
-            6 шагов, около 5 минут. Логин, пароль и код — в вашем заказе после оплаты. Нажмите на схему, чтобы увеличить.
+            {ACTIVATION_STEPS.length} шагов, около 5 минут. Логин, пароль и код — в вашем заказе после оплаты. Нажмите на схему, чтобы увеличить.
+          </p>
+          <p className="mt-space-md flex items-start gap-space-sm rounded-lg bg-primary/10 p-space-sm text-body-sm text-on-surface ring-1 ring-primary/40">
+            <Icon name="hourglass_top" className="mt-px text-[18px] text-primary" />
+            <span>
+              <strong className="font-semibold">Скачать мало.</strong> Приложение откроется только после всех{' '}
+              {ACTIVATION_STEPS.length} шагов, пройдите их до конца.
+            </span>
           </p>
         </section>
 

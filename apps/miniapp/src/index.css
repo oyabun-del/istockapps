@@ -26,7 +26,7 @@
   }
 
   :focus-visible {
-    outline: 2px solid #2563eb;
+    outline: 2px solid #facc15;
     outline-offset: 2px;
   }
 
@@ -39,8 +39,8 @@
   input,
   textarea,
   select {
-    caret-color: #4cd7f6;
-    accent-color: #2563eb;
+    caret-color: #facc15;
+    accent-color: #facc15;
     color-scheme: dark;
   }
 

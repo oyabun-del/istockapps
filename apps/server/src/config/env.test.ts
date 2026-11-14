@@ -222,6 +222,15 @@ describe('Install-IOS settings', () => {
     expect(() => parseEnv(withoutPrice)).toThrow(/INSTALLIOS_DEFAULT_PRICE_RUB/);
   });
 
+  it('parses category overrides and rejects unknown categories', () => {
+    expect(parseEnv(INSTALLIOS).INSTALLIOS_CATEGORIES).toEqual({});
+    expect(parseEnv({ ...INSTALLIOS, INSTALLIOS_CATEGORIES: '{"app_x": "vpn"}' }).INSTALLIOS_CATEGORIES).toEqual({
+      app_x: 'vpn',
+    });
+    expect(() => parseEnv({ ...INSTALLIOS, INSTALLIOS_CATEGORIES: '{"app_x": "cars"}' })).toThrow(/INSTALLIOS_CATEGORIES/);
+    expect(() => parseEnv({ ...INSTALLIOS, INSTALLIOS_CATEGORIES: '{oops' })).toThrow(/INSTALLIOS_CATEGORIES/);
+  });
+
   it('rejects broken price JSON and mixed providers', () => {
     expect(() => parseEnv({ ...INSTALLIOS, INSTALLIOS_PRICES: '{oops' })).toThrow(/INSTALLIOS_PRICES/);
     expect(() => parseEnv({ ...INSTALLIOS, INSTALLIOS_PRICES: '{"app_vk": -1}' })).toThrow(/INSTALLIOS_PRICES/);

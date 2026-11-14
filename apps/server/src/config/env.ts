@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { APP_CATEGORY_IDS } from '../providers/catalog/app-categories.js';
 
 const TELEGRAM_ID = /^-?\d+$/;
 
@@ -49,6 +50,20 @@ const pricesSchema = z
     }
   })
   .pipe(z.record(z.string().min(1), z.number().positive().max(MAX_PRICE_RUB).multipleOf(0.01)));
+/** JSON object of app id → category id, e.g. {"app_x": "vpn"}. */
+const categoriesSchema = z
+  .string()
+  .trim()
+  .transform((raw, ctx) => {
+    try {
+      return JSON.parse(raw) as unknown;
+    } catch {
+      ctx.addIssue({ code: 'custom', message: 'INSTALLIOS_CATEGORIES must be a JSON object like {"app_x": "vpn"}' });
+      return z.NEVER;
+    }
+  })
+  .pipe(z.record(z.string().min(1), z.enum(APP_CATEGORY_IDS)));
+
 /** IANA zone such as Europe/Moscow; checked against the runtime's time zone data. */
 const timeZoneSchema = z
   .string()
@@ -139,6 +154,8 @@ const envSchema = z
     INSTALLIOS_DEFAULT_PRICE_RUB: rublesSchema.optional(),
     /** Per-app prices in rubles: {"app_…": 299}. */
     INSTALLIOS_PRICES: pricesSchema.default({}),
+    /** Category fixes by app id when the name rules guess wrong: {"app_…": "vpn"}. */
+    INSTALLIOS_CATEGORIES: categoriesSchema.default({}),
 
     /** Development only: lets the Mini App work in a regular browser without Telegram initData. */
     DEV_USER_ID: z.coerce.number().int().positive().optional(),

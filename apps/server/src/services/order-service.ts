@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import {
-  ACTIVE_PAYMENT_METHOD,
+  ACTIVE_PAYMENT_METHODS,
   calculateCartPricing,
+  CARD_MIN_KOPECKS,
   exceedsOrderLimit,
   formatRub,
   MAX_ORDER_TOTAL_KOPECKS,
@@ -9,16 +10,17 @@ import {
   type AppDto,
   type CartPricing,
   type CreateOrderInput,
+  type PaymentMethod,
 } from '@istock/shared';
 import type { NewOrder, Order, PromoCode, User } from '../domain/models.js';
 import { describeApps } from '../domain/order-items.js';
-import { allowedSourcesFor, INVOICE_TTL_MS } from '../domain/order-transitions.js';
+import { allowedSourcesFor, invoiceTtlMs, MAX_INVOICE_TTL_MS } from '../domain/order-transitions.js';
 import { promoHoldSince } from '../domain/promo.js';
 import { AppError, getErrorMessage } from '../lib/app-error.js';
 import { KeyedLock } from '../lib/keyed-lock.js';
 import type { Logger } from '../lib/logger.js';
 import type { CatalogProvider } from '../providers/catalog/catalog-provider.js';
-import type { PaymentProvider, PaymentState, PaymentStatus } from '../providers/payment/payment-provider.js';
+import type { PaymentGateway, PaymentState, PaymentStatus } from '../providers/payment/payment-provider.js';
 import type { Repositories } from '../repositories/repositories.js';
 import { promoLimitError, type CheckoutGate } from './checkout-gate.js';
 import { FreeOrderCheckout } from './free-order.js';
@@ -26,15 +28,13 @@ import type { NotificationService } from './notification-service.js';
 import { findBuyer, getOwnedOrder } from './order-access.js';
 import { recordOrderEvent } from './order-events.js';
 
-/** A fresh unpaid order for the same app is reused instead of creating a new invoice. */
-const PENDING_REUSE_WINDOW_MS = INVOICE_TTL_MS;
 /** Fallback polling of the payment provider when the webhook is late. */
 export const PAYMENT_SYNC_INTERVAL_MS = 15_000;
 /**
  * A cancelled or expired order is still polled this long after creation: the buyer may pay the
  * invoice until the provider closes it, and that payment must not depend on the webhook alone.
  */
-export const LATE_PAYMENT_WINDOW_MS = INVOICE_TTL_MS + 30 * 60 * 1000;
+export const LATE_PAYMENT_WINDOW_MS = MAX_INVOICE_TTL_MS + 30 * 60 * 1000;
 /** Orders checked by one background reconciliation pass. */
 const RECONCILE_BATCH_LIMIT = 100;
 const ORDER_LIST_LIMIT = 50;
@@ -54,7 +54,7 @@ export type PaymentNotice = Omit<PaymentUpdate, 'amountKopecks'> & { amountKopec
 export interface OrderServiceDeps {
   repos: Repositories;
   catalog: CatalogProvider;
-  payments: PaymentProvider;
+  payments: PaymentGateway;
   notifications: NotificationService;
   /** Payments mode and promo codes: who may open a new invoice. */
   checkout: Pick<CheckoutGate, 'authorize'>;
@@ -66,7 +66,7 @@ export interface OrderServiceDeps {
   now?: () => Date;
 }
 
-/** Platega documents no limit for the description; this one keeps it sane. */
+/** CisPay takes at most 512 characters; Platega documents no limit. */
 const PAYMENT_DESCRIPTION_MAX = 512;
 
 /** "СберБанк Онлайн, Т-Банк, заказ #12"; long app lists are cut so the order number always fits. */
@@ -119,11 +119,11 @@ export class OrderService {
     });
   }
 
-  /** SBP when the provider has it enabled for the shop, otherwise nothing: other methods are not offered. */
+  /** Methods the shop offers (SBP, card) that their provider has enabled right now, in the shop's order. */
   async listPaymentMethods(): Promise<ActivePaymentMethod[]> {
     try {
       const methods = await this.deps.payments.listMethods();
-      return methods.filter((method): method is ActivePaymentMethod => method === ACTIVE_PAYMENT_METHOD);
+      return ACTIVE_PAYMENT_METHODS.filter((method) => methods.includes(method));
     } catch (error: unknown) {
       this.deps.logger.error({ err: getErrorMessage(error) }, 'Failed to load payment methods');
       throw new AppError('PAYMENT_PROVIDER_ERROR', 'Платёжный сервис временно недоступен', { cause: error });
@@ -158,11 +158,18 @@ export class OrderService {
     if (!methods.includes(input.paymentMethod)) {
       throw new AppError('PAYMENT_METHOD_UNAVAILABLE', 'Этот способ оплаты сейчас недоступен');
     }
+    if (input.paymentMethod === 'CARD' && pricing.totalKopecks < CARD_MIN_KOPECKS) {
+      throw new AppError(
+        'PAYMENT_METHOD_UNAVAILABLE',
+        `Картой можно оплатить заказ от ${formatRub(CARD_MIN_KOPECKS)}. Выберите СБП.`,
+      );
+    }
 
     await repos.users.upsert(user);
 
     return this.checkoutLocks.run(user.id, async () => {
-      const reuseAfter = new Date(this.now().getTime() - PENDING_REUSE_WINDOW_MS);
+      // A fresh unpaid order for the same apps is reused instead of creating a new invoice.
+      const reuseAfter = new Date(this.now().getTime() - invoiceTtlMs(input.paymentMethod));
       const pending = await repos.orders.findPendingForApps(user.id, input.appIds, reuseAfter);
       const isSamePromo = pending?.promoCodeId === (promo?.id ?? null);
       const reusable = isSamePromo
@@ -292,11 +299,23 @@ export class OrderService {
     return cancelled;
   }
 
-  /** Applies a verified payment webhook. Safe to call repeatedly with the same payload. */
-  async handlePaymentWebhook(paymentOrderId: string, notice: PaymentNotice): Promise<void> {
+  /**
+   * Applies a verified payment webhook. Safe to call repeatedly with the same payload.
+   * `sourceMethods`: the methods of the provider that sent it; it may only touch orders paid through it.
+   * Left out only by callers that are not a provider's callback (the mock payment page).
+   */
+  async handlePaymentWebhook(
+    paymentOrderId: string,
+    notice: PaymentNotice,
+    sourceMethods?: readonly PaymentMethod[],
+  ): Promise<void> {
     const order = await this.deps.repos.orders.findByPaymentOrderId(paymentOrderId);
     if (!order) {
       this.deps.logger.warn({ paymentOrderId }, 'Webhook for unknown order ignored');
+      return;
+    }
+    if (sourceMethods && !sourceMethods.includes(order.paymentMethod)) {
+      this.deps.logger.warn({ orderId: order.id, method: order.paymentMethod }, 'Webhook from another provider ignored');
       return;
     }
     if (order.paymentId && order.paymentId !== notice.paymentId) {
@@ -318,7 +337,7 @@ export class OrderService {
    */
   private async resolveAmount(order: Order, notice: PaymentNotice): Promise<PaymentUpdate | null> {
     if (notice.amountKopecks !== null) return { ...notice, amountKopecks: notice.amountKopecks };
-    const state = await this.deps.payments.getPayment(notice.paymentId);
+    const state = await this.deps.payments.getPayment(notice.paymentId, order.paymentMethod);
     if (this.isOtherOrdersPayment(order, state)) return null;
     return {
       paymentId: notice.paymentId,
@@ -353,7 +372,7 @@ export class OrderService {
 
   private async syncPayment(order: Order): Promise<Order> {
     const paymentId = order.paymentId as string;
-    const state = await this.deps.payments.getPayment(paymentId);
+    const state = await this.deps.payments.getPayment(paymentId, order.paymentMethod);
     if (this.isOtherOrdersPayment(order, state)) {
       return this.deps.repos.orders.update(order.id, { paymentSyncedAt: this.now() });
     }
@@ -447,7 +466,7 @@ export class OrderService {
    */
   private closedStatus(order: Order, status: 'FAILED' | 'EXPIRED'): 'failed' | 'expired' {
     if (status === 'EXPIRED') return 'expired';
-    const isPastLifetime = this.now().getTime() - order.createdAt.getTime() >= INVOICE_TTL_MS;
+    const isPastLifetime = this.now().getTime() - order.createdAt.getTime() >= invoiceTtlMs(order.paymentMethod);
     return isPastLifetime ? 'expired' : 'failed';
   }
 

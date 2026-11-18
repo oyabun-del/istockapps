@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  ACTIVE_PAYMENT_METHOD,
+  ACTIVE_PAYMENT_METHODS,
   normalizePromoCode,
   type CatalogQuery,
   type CreateOrderInput,
@@ -29,7 +29,7 @@ export const createOrderSchema: z.ZodType<CreateOrderInput> = z.object({
     .min(1)
     .max(MAX_ORDER_ITEMS)
     .refine((ids) => new Set(ids).size === ids.length, 'Duplicate app ids'),
-  paymentMethod: z.literal(ACTIVE_PAYMENT_METHOD),
+  paymentMethod: z.enum(ACTIVE_PAYMENT_METHODS),
   expectedTotalKopecks: z.number().int().nonnegative().optional(),
   promoCode: promoInputSchema.optional(),
 });

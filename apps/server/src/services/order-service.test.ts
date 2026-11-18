@@ -1,6 +1,6 @@
 import { MAX_ORDER_TOTAL_KOPECKS } from '@istock/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { INVOICE_TTL_MS } from '../domain/order-transitions.js';
+import { invoiceTtlMs } from '../domain/order-transitions.js';
 import { AppError } from '../lib/app-error.js';
 import { ADMIN_IDS, BUYER, OTHER_USER, createPaidOrder, createTestContext, type TestContext } from '../test/fixtures.js';
 import { silentLogger } from '../lib/logger.js';
@@ -148,9 +148,53 @@ describe('OrderService.createOrder', () => {
     });
   });
 
-  it('offers SBP only, even when the provider enables other methods', async () => {
-    vi.spyOn(ctx.payments, 'listMethods').mockResolvedValue(['CARD', 'SBP', 'CRYPTO']);
-    expect(await ctx.orders.listPaymentMethods()).toEqual(['SBP']);
+  it('offers SBP and card in that order, never the methods the shop does not take', async () => {
+    vi.spyOn(ctx.payments, 'listMethods').mockResolvedValue(['CRYPTO', 'CARD', 'SBP']);
+    expect(await ctx.orders.listPaymentMethods()).toEqual(['SBP', 'CARD']);
+  });
+
+  it('offers card alone when SBP is disabled', async () => {
+    vi.spyOn(ctx.payments, 'listMethods').mockResolvedValue(['CARD']);
+    expect(await ctx.orders.listPaymentMethods()).toEqual(['CARD']);
+  });
+
+  it('opens a card payment with the card method', async () => {
+    const createPayment = vi.spyOn(ctx.payments, 'createPayment');
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'CARD' });
+
+    expect(order.paymentMethod).toBe('CARD');
+    expect(createPayment).toHaveBeenCalledWith(expect.objectContaining({ method: 'CARD', amountKopecks: 34900 }));
+  });
+
+  it('refuses a card payment below the card minimum without opening an invoice', async () => {
+    const real = await ctx.catalog.getApp('sberbank');
+    vi.spyOn(ctx.catalog, 'getApp').mockResolvedValue(real && { ...real, priceKopecks: 4900 });
+    const createPayment = vi.spyOn(ctx.payments, 'createPayment');
+
+    await expect(ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'CARD' })).rejects.toMatchObject({
+      code: 'PAYMENT_METHOD_UNAVAILABLE',
+    });
+    expect(createPayment).not.toHaveBeenCalled();
+    // SBP has no minimum.
+    expect((await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' })).amountKopecks).toBe(4900);
+  });
+
+  it('does not reuse an unpaid SBP order for a card checkout', async () => {
+    const sbp = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
+    const card = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'CARD' });
+    expect(card.id).not.toBe(sbp.id);
+  });
+
+  it('ignores a callback from a provider that did not open the invoice', async () => {
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'CARD' });
+    ctx.payments.setStatus(order.paymentId as string, 'PAID');
+    const notice = { paymentId: order.paymentId as string, status: 'PAID' as const, amountKopecks: null, isSandbox: false };
+
+    await ctx.orders.handlePaymentWebhook(order.paymentOrderId, notice, ['SBP']);
+    expect((await ctx.repos.orders.findById(order.id))?.status).toBe('awaiting_payment');
+
+    await ctx.orders.handlePaymentWebhook(order.paymentOrderId, notice, ['CARD']);
+    expect((await ctx.repos.orders.findById(order.id))?.status).toBe('paid');
   });
 
   it('reuses a fresh unpaid order for the same set of apps in any order', async () => {
@@ -265,7 +309,7 @@ describe('OrderService payment webhooks', () => {
       isSandbox: false,
     });
 
-    expect(getPayment).toHaveBeenCalledWith(order.paymentId);
+    expect(getPayment).toHaveBeenCalledWith(order.paymentId, 'SBP');
     expect((await ctx.repos.orders.findById(order.id))?.status).toBe('paid');
   });
 
@@ -447,7 +491,7 @@ describe('OrderService payment webhooks', () => {
 
   it('calls a rejected payment expired once the invoice lifetime has passed', async () => {
     const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
-    ctx.clock.advance(INVOICE_TTL_MS);
+    ctx.clock.advance(invoiceTtlMs('SBP'));
 
     await ctx.orders.handlePaymentWebhook(order.paymentOrderId, {
       paymentId: order.paymentId as string,
@@ -457,6 +501,17 @@ describe('OrderService payment webhooks', () => {
     });
 
     expect((await ctx.repos.orders.findById(order.id))?.status).toBe('expired');
+  });
+
+  it('measures the invoice lifetime of a card payment by its own, longer provider limit', async () => {
+    const order = await ctx.orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'CARD' });
+    ctx.clock.advance(invoiceTtlMs('SBP'));
+    const failed = { paymentId: order.paymentId as string, status: 'FAILED' as const, amountKopecks: order.amountKopecks, isSandbox: false };
+
+    await ctx.orders.handlePaymentWebhook(order.paymentOrderId, failed);
+
+    expect((await ctx.repos.orders.findById(order.id))?.status).toBe('failed');
+    expect(invoiceTtlMs('CARD')).toBeGreaterThan(invoiceTtlMs('SBP'));
   });
 
   it('keeps a paid order under review and alerts the admins once', async () => {

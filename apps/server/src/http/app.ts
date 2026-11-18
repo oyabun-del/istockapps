@@ -6,7 +6,7 @@ import type { SellerDto } from '@istock/shared';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import type { CatalogProvider } from '../providers/catalog/catalog-provider.js';
 import type { MockPaymentProvider } from '../providers/payment/mock-payment-provider.js';
-import type { PaymentProvider } from '../providers/payment/payment-provider.js';
+import type { PaymentRoute } from '../providers/payment/payment-router.js';
 import type { Repositories } from '../repositories/repositories.js';
 import type { ChannelInfoService } from '../services/channel-info-service.js';
 import type { CheckoutGate } from '../services/checkout-gate.js';
@@ -51,7 +51,8 @@ export interface AppDeps {
   channel: ChannelInfoService;
   repos: Repositories;
   catalog: CatalogProvider;
-  payments: PaymentProvider;
+  /** Providers that send payment callbacks, each to /webhooks/<name>. */
+  paymentWebhooks: readonly PaymentRoute[];
   /** Set only when PAYMENT_PROVIDER=mock: enables the fake payment page. */
   mockPayments?: MockPaymentProvider;
   orders: OrderService;
@@ -90,7 +91,7 @@ export async function buildApp(deps: AppDeps, loggerInstance?: FastifyBaseLogger
     { prefix: '/api' },
   );
 
-  await app.register(webhookRoutes, { prefix: '/webhooks', payments: deps.payments, orders: deps.orders });
+  await app.register(webhookRoutes, { prefix: '/webhooks', sources: deps.paymentWebhooks, orders: deps.orders });
 
   if (deps.mockPayments) {
     await app.register(devRoutes, { prefix: '/dev', payments: deps.mockPayments, orders: deps.orders });

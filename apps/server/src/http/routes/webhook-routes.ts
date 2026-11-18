@@ -1,10 +1,11 @@
 import type { FastifyInstance } from 'fastify';
-import type { PaymentProvider } from '../../providers/payment/payment-provider.js';
+import type { PaymentRoute } from '../../providers/payment/payment-router.js';
 import type { OrderService } from '../../services/order-service.js';
 import { fail, ok } from '../envelope.js';
 
 export interface WebhookRoutesDeps {
-  payments: PaymentProvider;
+  /** Each provider gets /webhooks/<name>; its callbacks may only touch orders of its methods. */
+  sources: readonly PaymentRoute[];
   orders: OrderService;
 }
 
@@ -14,26 +15,32 @@ export async function webhookRoutes(app: FastifyInstance, deps: WebhookRoutesDep
   app.removeContentTypeParser('application/json');
   app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_request, body, done) => done(null, body));
 
-  app.post('/platega', async (request, reply) => {
-    const raw = Buffer.isBuffer(request.body) ? request.body : Buffer.alloc(0);
-    const result = deps.payments.parseWebhook(raw, request.headers);
-    if (result.kind === 'unauthorized') {
-      request.log.warn('Rejected Platega callback: bad credentials');
-      return reply.status(401).send(fail('UNAUTHORIZED', 'Invalid credentials'));
-    }
-    if (result.kind === 'malformed') {
-      // Authentic, so possibly a refund we can no longer see: paid orders are not polled afterwards.
-      request.log.error({ reason: result.reason }, 'Unreadable Platega callback: check the callback format');
-      return reply.status(400).send(fail('VALIDATION_ERROR', 'Malformed callback'));
-    }
+  for (const { name, provider, methods } of deps.sources) {
+    app.post(`/${name}`, async (request, reply) => {
+      const raw = Buffer.isBuffer(request.body) ? request.body : Buffer.alloc(0);
+      const result = provider.parseWebhook(raw, request.headers);
+      if (result.kind === 'unauthorized') {
+        request.log.warn({ provider: name }, 'Rejected payment callback: bad credentials');
+        return reply.status(401).send(fail('UNAUTHORIZED', 'Invalid credentials'));
+      }
+      if (result.kind === 'malformed') {
+        // Authentic, so possibly a refund we can no longer see: paid orders are not polled afterwards.
+        request.log.error({ provider: name, reason: result.reason }, 'Unreadable payment callback: check the callback format');
+        return reply.status(400).send(fail('VALIDATION_ERROR', 'Malformed callback'));
+      }
+      if (result.kind === 'ignored') {
+        request.log.info({ provider: name, reason: result.reason }, 'Payment callback ignored');
+        return ok({ received: true });
+      }
 
-    const { webhook } = result;
-    request.log.info(
-      { paymentId: webhook.paymentId, status: webhook.status, sandbox: webhook.isSandbox },
-      'Platega callback received',
-    );
-    // Errors propagate → 5xx → Platega retries (5, 10 and 15 minutes later).
-    await deps.orders.handlePaymentWebhook(webhook.orderId, webhook);
-    return ok({ received: true });
-  });
+      const { webhook } = result;
+      request.log.info(
+        { provider: name, paymentId: webhook.paymentId, status: webhook.status, sandbox: webhook.isSandbox },
+        'Payment callback received',
+      );
+      // Errors propagate → 5xx → the provider retries the callback later.
+      await deps.orders.handlePaymentWebhook(webhook.orderId, webhook, methods);
+      return ok({ received: true });
+    });
+  }
 }

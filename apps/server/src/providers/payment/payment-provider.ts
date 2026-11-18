@@ -36,12 +36,14 @@ export interface PaymentWebhook extends Omit<PaymentState, 'amountKopecks'> {
 
 /**
  * unauthorized: not from the provider. malformed: authentic, but its body could not be read; such a
- * callback may carry a refund, so it must be noticed rather than dropped as a forgery.
+ * callback may carry a refund, so it must be noticed rather than dropped as a forgery. ignored:
+ * authentic and readable, but about nothing an order cares for (for example a subscription event).
  */
 export type WebhookParseResult =
   | { kind: 'accepted'; webhook: PaymentWebhook }
   | { kind: 'unauthorized' }
-  | { kind: 'malformed'; reason: string };
+  | { kind: 'malformed'; reason: string }
+  | { kind: 'ignored'; reason: string };
 
 export interface PaymentProvider {
   /** Methods currently enabled for the shop. */
@@ -50,6 +52,16 @@ export interface PaymentProvider {
   getPayment(paymentId: string): Promise<PaymentState>;
   /** Authenticates the callback first, and only then reads its body. */
   parseWebhook(rawBody: Buffer, headers: Record<string, string | string[] | undefined>): WebhookParseResult;
+}
+
+/**
+ * What orders need from payments: one provider, or several of them each serving its own methods.
+ * getPayment is told the order's method, so it asks the provider that opened the invoice.
+ */
+export interface PaymentGateway {
+  listMethods(): Promise<PaymentMethod[]>;
+  createPayment(input: CreatePaymentInput): Promise<CreatedPayment>;
+  getPayment(paymentId: string, method: PaymentMethod): Promise<PaymentState>;
 }
 
 export class PaymentProviderError extends Error {

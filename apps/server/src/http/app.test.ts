@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { silentLogger } from '../lib/logger.js';
 import { initDataSecret, signInitData } from '../lib/telegram-init-data.js';
 import { MOCK_CODE_AFTER_POLLS } from '../providers/delivery/mock-delivery-provider.js';
+import { CispayProvider } from '../providers/payment/cispay-provider.js';
+import { PaymentRouter, type PaymentRoute } from '../providers/payment/payment-router.js';
 import { PlategaProvider } from '../providers/payment/platega-provider.js';
 import { CODE_POLL_MIN_INTERVAL_MS } from '../services/delivery-service.js';
 import { OrderService } from '../services/order-service.js';
@@ -40,7 +43,7 @@ function baseDeps(overrides: Partial<AppDeps> = {}): AppDeps {
     channel: ctx.channel,
     repos: ctx.repos,
     catalog: ctx.catalog,
-    payments: ctx.payments,
+    paymentWebhooks: [{ name: 'platega', methods: ['SBP'], provider: ctx.payments }],
     mockPayments: ctx.payments,
     orders: ctx.orders,
     checkout: ctx.checkout,
@@ -149,9 +152,9 @@ describe('catalog', () => {
     expect(failed.json().error.code).toBe('CATALOG_PROVIDER_ERROR');
   });
 
-  it('lists SBP as the only payment method', async () => {
+  it('lists SBP and card as the payment methods', async () => {
     const response = await app.inject({ method: 'GET', url: '/api/payment-methods', headers: authHeader() });
-    expect(response.json().data).toEqual([{ method: 'SBP' }]);
+    expect(response.json().data).toEqual([{ method: 'SBP' }, { method: 'CARD' }]);
   });
 });
 
@@ -323,7 +326,7 @@ describe('purchase flow through HTTP', () => {
   });
 
   it('validates input and hides other users orders', async () => {
-    for (const paymentMethod of ['TPAY', 'CARD', 'CRYPTO']) {
+    for (const paymentMethod of ['TPAY', 'PROMO', 'CRYPTO']) {
       const invalid = await app.inject({
         method: 'POST',
         url: '/api/orders',
@@ -496,7 +499,9 @@ describe('Platega callback', () => {
     });
     const order = await orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'SBP' });
     await app.close();
-    app = await buildApp(baseDeps({ payments: platega, mockPayments: undefined, orders }));
+    app = await buildApp(
+      baseDeps({ paymentWebhooks: [{ name: 'platega', methods: ['SBP'], provider: platega }], mockPayments: undefined, orders }),
+    );
     return { order };
   }
 
@@ -621,6 +626,116 @@ describe('Platega callback', () => {
     await appWithPlatega();
     const response = await app.inject({ method: 'GET', url: '/dev/mock-pay/x' });
     expect(response.statusCode).toBe(404);
+  });
+});
+
+describe('CisPay callback alongside Platega', () => {
+  const CISPAY_SHOP_ID = '0192a4b8-0000-7000-8000-0000000000c1';
+  const CISPAY_KEY = 'cis_sec_test_key';
+  const CARD_PAYMENT_ID = '0192a4b8-0000-7000-8000-0000000000aa';
+  const CONTENT_TYPE = 'application/json; charset=utf-8';
+
+  /** Platega takes SBP and CisPay cards, as in production; `cardStatus` is what CisPay's status API answers. */
+  async function appWithBoth(cardStatus: { status: string; is_sandbox?: boolean } = { status: 'PAID' }) {
+    let invoiceOrderId = '';
+    const cispayFetch = vi.fn<typeof fetch>().mockImplementation(async (url, init) => {
+      if (init?.method === 'POST') {
+        invoiceOrderId = (JSON.parse(String(init.body)) as { order_id: string }).order_id;
+        return new Response(JSON.stringify({ id: CARD_PAYMENT_ID, payment_url: 'https://pay.cispay.app/p/1' }), { status: 201 });
+      }
+      if (String(url).includes('/store/capabilities')) {
+        return new Response(JSON.stringify({ is_active: true, payment_methods: [{ payment_method: 'CARD', is_active: true }] }));
+      }
+      const state = { id: CARD_PAYMENT_ID, order_id: invoiceOrderId, currency: 'RUB', amount: 34900, is_sandbox: false };
+      return new Response(JSON.stringify({ ...state, ...cardStatus }));
+    });
+    const platega = new PlategaProvider({
+      apiUrl: 'https://app.platega.io',
+      merchantId: PLATEGA_MERCHANT_ID,
+      secret: PLATEGA_SECRET,
+      fetchFn: vi.fn<typeof fetch>().mockRejectedValue(new Error('Platega must not be called')),
+    });
+    const cispay = new CispayProvider({ apiUrl: 'https://api.cispay.app', shopId: CISPAY_SHOP_ID, apiKey: CISPAY_KEY, fetchFn: cispayFetch });
+    const routes: PaymentRoute[] = [
+      { name: 'platega', methods: ['SBP'], provider: platega },
+      { name: 'cispay', methods: ['CARD'], provider: cispay },
+    ];
+    const orders = new OrderService({
+      repos: ctx.repos,
+      catalog: ctx.catalog,
+      payments: new PaymentRouter(routes, silentLogger),
+      notifications: ctx.notifications,
+      checkout: ctx.checkout,
+      logger: silentLogger,
+      returnUrl: (order) => `https://t.me/test_bot?start=${order.id}`,
+      acceptSandboxPayments: false,
+      now: ctx.clock.now,
+    });
+    const order = await orders.createOrder(BUYER, { appIds: ['sberbank'], paymentMethod: 'CARD' });
+    await app.close();
+    app = await buildApp(baseDeps({ paymentWebhooks: routes, mockPayments: undefined, orders }));
+    return { order };
+  }
+
+  function signedCallback(paymentOrderId: string, status = 'PAID', key = CISPAY_KEY) {
+    const payload = JSON.stringify({ id: CARD_PAYMENT_ID, order_id: paymentOrderId, payment_method: 'CARD', status, amount: 34900, currency: 'RUB', is_sandbox: false });
+    return { payload, headers: { 'content-type': CONTENT_TYPE, 'x-signature': createHmac('sha256', key).update(payload).digest('hex') } };
+  }
+
+  it('opens the card invoice at CisPay', async () => {
+    const { order } = await appWithBoth();
+    expect(order).toMatchObject({ paymentMethod: 'CARD', paymentId: CARD_PAYMENT_ID, paymentUrl: 'https://pay.cispay.app/p/1' });
+  });
+
+  it('marks a card order paid on a signed callback confirmed by the status API', async () => {
+    const { order } = await appWithBoth();
+    const response = await app.inject({ method: 'POST', url: '/webhooks/cispay', ...signedCallback(order.paymentOrderId) });
+
+    expect(response.statusCode).toBe(200);
+    expect((await ctx.repos.orders.findById(order.id))?.status).toBe('paid');
+  });
+
+  it('rejects a callback with a wrong signature', async () => {
+    const { order } = await appWithBoth();
+    const response = await app.inject({ method: 'POST', url: '/webhooks/cispay', ...signedCallback(order.paymentOrderId, 'PAID', 'wrong') });
+
+    expect(response.statusCode).toBe(401);
+    expect((await ctx.repos.orders.findById(order.id))?.status).toBe('awaiting_payment');
+  });
+
+  it('does not count a sandbox card payment', async () => {
+    const { order } = await appWithBoth({ status: 'PAID', is_sandbox: true });
+    const response = await app.inject({ method: 'POST', url: '/webhooks/cispay', ...signedCallback(order.paymentOrderId) });
+
+    expect(response.statusCode).toBe(200);
+    expect((await ctx.repos.orders.findById(order.id))?.status).toBe('awaiting_payment');
+  });
+
+  it('answers 200 to a subscription event and changes nothing', async () => {
+    const { order } = await appWithBoth();
+    const payload = JSON.stringify({ event: 'subscription.activated', object: 'subscription', id: 'sub-1' });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/webhooks/cispay',
+      payload,
+      headers: { 'content-type': CONTENT_TYPE, 'x-signature': createHmac('sha256', CISPAY_KEY).update(payload).digest('hex') },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect((await ctx.repos.orders.findById(order.id))?.status).toBe('awaiting_payment');
+  });
+
+  it('does not let a Platega callback touch a card order', async () => {
+    const { order } = await appWithBoth();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/webhooks/platega',
+      headers: { 'x-merchantid': PLATEGA_MERCHANT_ID, 'x-secret': PLATEGA_SECRET, 'content-type': CONTENT_TYPE },
+      payload: JSON.stringify({ id: CARD_PAYMENT_ID, status: 'CONFIRMED', payload: order.paymentOrderId }),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect((await ctx.repos.orders.findById(order.id))?.status).toBe('awaiting_payment');
   });
 });
 

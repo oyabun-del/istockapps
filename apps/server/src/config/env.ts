@@ -136,6 +136,11 @@ const envSchema = z
     /** API key; server-to-server only, never sent to the Mini App. */
     PLATEGA_SECRET: z.string().trim().min(1).optional(),
     PLATEGA_API_URL: httpsUrl.default('https://app.platega.io'),
+    /** Card payments through CisPay; set both or neither. Works alongside Platega (PAYMENT_PROVIDER=platega). */
+    CISPAY_SHOP_ID: z.uuid().optional(),
+    /** API key (cis_sec_…), also signs the callbacks; server-to-server only, never sent to the Mini App. */
+    CISPAY_API_KEY: z.string().trim().min(1).optional(),
+    CISPAY_API_URL: httpsUrl.default('https://api.cispay.app'),
     /**
      * Production without Platega: PAYMENT_PROVIDER=mock is refused unless this is true. Real apps are
      * then handed out by promo code only (see CheckoutGate.isOpenModeAllowed).
@@ -192,6 +197,20 @@ const envSchema = z
         code: 'custom',
         path: ['PAYMENT_PROVIDER'],
         message: 'PLATEGA_MERCHANT_ID and PLATEGA_SECRET are required when PAYMENT_PROVIDER=platega',
+      });
+    }
+    if (Boolean(env.CISPAY_SHOP_ID) !== Boolean(env.CISPAY_API_KEY)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CISPAY_API_KEY'],
+        message: 'CISPAY_SHOP_ID and CISPAY_API_KEY go together: set both to accept cards, or neither',
+      });
+    }
+    if (env.CISPAY_SHOP_ID && env.PAYMENT_PROVIDER !== 'platega') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CISPAY_SHOP_ID'],
+        message: 'CisPay card payments work only with real payments (PAYMENT_PROVIDER=platega)',
       });
     }
     if (env.NODE_ENV === 'production' && env.PAYMENT_PROVIDER === 'mock' && !env.ALLOW_MOCK_PAYMENTS) {

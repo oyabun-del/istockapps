@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Order } from '../domain/models.js';
-import { INVOICE_TTL_MS } from '../domain/order-transitions.js';
+import { MAX_INVOICE_TTL_MS } from '../domain/order-transitions.js';
 import { BUYER, OTHER_USER, createTestContext, type TestContext } from '../test/fixtures.js';
 import { CheckoutGate, PAYMENTS_MODE_KEY } from './checkout-gate.js';
 
@@ -138,7 +138,7 @@ describe('CheckoutGate promo codes', () => {
 
     expect((await ctx.checkout.checkPromo('HOLD-1')).appsLeft).toBe(0);
 
-    ctx.clock.advance(INVOICE_TTL_MS + 1);
+    ctx.clock.advance(MAX_INVOICE_TTL_MS + 1);
     expect((await ctx.checkout.checkPromo('HOLD-1')).appsLeft).toBe(3);
   });
 

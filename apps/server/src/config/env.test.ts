@@ -159,6 +159,32 @@ describe('parseEnv', () => {
     ).toThrow(/DEV_USER_ID is allowed only/);
   });
 
+  describe('CisPay card payments', () => {
+    const PLATEGA = {
+      PAYMENT_PROVIDER: 'platega',
+      PLATEGA_MERCHANT_ID: '0192a4b8-0000-7000-8000-000000000001',
+      PLATEGA_SECRET: 'secret',
+    };
+    const CISPAY = { CISPAY_SHOP_ID: '0192a4b8-0000-7000-8000-0000000000c1', CISPAY_API_KEY: 'cis_sec_key' };
+
+    it('is off unless configured, and points at the public API by default', () => {
+      const env = parseEnv({ ...BASE, ...PLATEGA });
+      expect(env.CISPAY_SHOP_ID).toBeUndefined();
+      expect(env.CISPAY_API_URL).toBe('https://api.cispay.app');
+      expect(parseEnv({ ...BASE, ...PLATEGA, ...CISPAY }).CISPAY_API_KEY).toBe('cis_sec_key');
+    });
+
+    it('needs both the shop id and the key', () => {
+      expect(() => parseEnv({ ...BASE, ...PLATEGA, CISPAY_SHOP_ID: CISPAY.CISPAY_SHOP_ID })).toThrow(/go together/);
+      expect(() => parseEnv({ ...BASE, ...PLATEGA, CISPAY_API_KEY: 'cis_sec_key' })).toThrow(/go together/);
+      expect(() => parseEnv({ ...BASE, ...PLATEGA, ...CISPAY, CISPAY_SHOP_ID: 'not-a-uuid' })).toThrow(/CISPAY_SHOP_ID/);
+    });
+
+    it('is refused with mock payments', () => {
+      expect(() => parseEnv({ ...BASE, ...CISPAY })).toThrow(/only with real payments/);
+    });
+  });
+
   it('needs an explicit channel url for numeric channel ids', () => {
     expect(() => parseEnv({ ...BASE, REQUIRED_CHANNEL: '-1001234567890' })).toThrow(/REQUIRED_CHANNEL_URL/);
   });

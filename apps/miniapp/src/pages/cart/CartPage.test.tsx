@@ -170,7 +170,67 @@ describe('CartPage', () => {
     expect(screen.getByRole('link', { name: 'политику конфиденциальности' })).toHaveAttribute('href', '/legal/privacy');
   });
 
-  it('blocks payment while SBP is unavailable', async () => {
+  describe('payment methods', () => {
+    it('picks SBP first and pays by card once the buyer chooses it', async () => {
+      mockCatalog();
+      vi.spyOn(api, 'paymentMethods').mockResolvedValue([{ method: 'SBP' }, { method: 'CARD' }]);
+      const createOrder = vi
+        .spyOn(api, 'createOrder')
+        .mockResolvedValue(makeOrder({ status: 'awaiting_payment', paymentMethod: 'CARD', paymentUrl: 'https://pay.cispay.app/1' }));
+      vi.spyOn(window, 'open').mockReturnValue(null);
+      fillCart(1);
+      renderCart();
+
+      const sbp = await screen.findByRole('radio', { name: /СБП/ });
+      const card = screen.getByRole('radio', { name: /Карта РФ/ });
+      expect(sbp).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByText(/Безопасный платёж через Platega/)).toBeInTheDocument();
+
+      await userEvent.click(card);
+      expect(card).toHaveAttribute('aria-checked', 'true');
+      expect(sbp).toHaveAttribute('aria-checked', 'false');
+      expect(screen.getByText(/Безопасный платёж через CisPay/)).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Оплатить 349 ₽' }));
+      await waitFor(() =>
+        expect(createOrder).toHaveBeenCalledWith({ appIds: ['sberbank'], paymentMethod: 'CARD', expectedTotalKopecks: 34900 }),
+      );
+    });
+
+    it('takes card alone when SBP is off', async () => {
+      mockCatalog();
+      vi.spyOn(api, 'paymentMethods').mockResolvedValue([{ method: 'CARD' }]);
+      fillCart(1);
+      renderCart();
+
+      expect(await screen.findByRole('radio', { name: /Карта РФ/ })).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByRole('button', { name: /Оплатить/ })).toBeEnabled();
+    });
+
+    it('does not offer card below its minimum and falls back to SBP', async () => {
+      vi.spyOn(api, 'app').mockResolvedValue({ ...SBER, priceKopecks: 4900 });
+      vi.spyOn(api, 'paymentMethods').mockResolvedValue([{ method: 'SBP' }, { method: 'CARD' }]);
+      fillCart(1);
+      renderCart();
+
+      const card = await screen.findByRole('radio', { name: /Карта РФ/ });
+      expect(card).toBeDisabled();
+      expect(screen.getByText('Картой — от 50 ₽')).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: /СБП/ })).toHaveAttribute('aria-checked', 'true');
+    });
+
+    it('blocks payment when card is the only method and the cart is below its minimum', async () => {
+      vi.spyOn(api, 'app').mockResolvedValue({ ...SBER, priceKopecks: 4900 });
+      vi.spyOn(api, 'paymentMethods').mockResolvedValue([{ method: 'CARD' }]);
+      fillCart(1);
+      renderCart();
+
+      await screen.findByRole('radio', { name: /Карта РФ/ });
+      expect(screen.getByRole('button', { name: /Оплатить/ })).toBeDisabled();
+    });
+  });
+
+  it('blocks payment while no method is available', async () => {
     mockCatalog();
     vi.spyOn(api, 'paymentMethods').mockResolvedValue([]);
     fillCart(1);

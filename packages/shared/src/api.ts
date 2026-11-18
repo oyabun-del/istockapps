@@ -47,9 +47,12 @@ export type ErrorCode = (typeof ERROR_CODES)[number];
 export const PAYMENT_METHODS = ['SBP', 'CARD', 'CRYPTO', 'PROMO'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
-/** The shop accepts new payments by SBP only. */
-export const ACTIVE_PAYMENT_METHOD = 'SBP' satisfies PaymentMethod;
-export type ActivePaymentMethod = typeof ACTIVE_PAYMENT_METHOD;
+/** Methods the shop takes new payments by, in the order the cart shows them. */
+export const ACTIVE_PAYMENT_METHODS = ['SBP', 'CARD'] as const satisfies readonly PaymentMethod[];
+export type ActivePaymentMethod = (typeof ACTIVE_PAYMENT_METHODS)[number];
+
+/** CisPay refuses card payments below 50 ₽. */
+export const CARD_MIN_KOPECKS = 5000;
 
 export interface PaymentMethodDto {
   method: ActivePaymentMethod;

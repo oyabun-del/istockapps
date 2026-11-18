@@ -1,6 +1,6 @@
 /**
  * Privacy policy under 152-FZ. Lists only what the shop really stores (apps/server/prisma/schema.prisma)
- * and sends (Platega: Telegram id, order number and amount; Install-IOS: no personal data).
+ * and sends (Platega and CisPay: Telegram id, order number and amount; Install-IOS: no personal data).
  * Update it whenever the schema or a provider integration starts collecting something new.
  */
 import type { LegalSection } from './legal';
@@ -50,6 +50,7 @@ export const PRIVACY_SECTIONS: readonly LegalSection[] = [
     title: '5. Кому передаются данные',
     paragraphs: [
       'Platega — платёжному сервису: номер заказа, сумма, описание заказа и идентификатор Telegram Покупателя (в том числе в виде адреса на домене telegram.org) для проведения платежа.',
+      'CisPay — платёжному сервису, если Покупатель платит картой: номер заказа, сумма, описание заказа и идентификатор Telegram Покупателя для проведения платежа. Данные карты Покупатель вводит на странице CisPay, Продавцу они не передаются.',
       'Install-IOS — партнёру по выдаче приложений: только номер заказа и выбранные приложения, без персональных данных Покупателя.',
       'Telegram — сообщения бота проходят через Telegram по его собственным правилам.',
       'Иным лицам данные передаются только в случаях, прямо предусмотренных законом.',

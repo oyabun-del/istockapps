@@ -40,6 +40,8 @@ export const ICON_NAMES = [
   'open_in_new',
   'person',
   'qr_code_2',
+  'radio_button_checked',
+  'radio_button_unchecked',
   'refresh',
   'report',
   'schedule',

@@ -1,6 +1,6 @@
 import type { OrderDto } from '@istock/shared';
 import type { Order } from '../domain/models.js';
-import { INVOICE_TTL_MS } from '../domain/order-transitions.js';
+import { invoiceTtlMs } from '../domain/order-transitions.js';
 
 export function toOrderDto(order: Order): OrderDto {
   const isAwaitingPayment = order.status === 'awaiting_payment';
@@ -20,7 +20,7 @@ export function toOrderDto(order: Order): OrderDto {
     paymentMethod: order.paymentMethod,
     // The payment link is only useful while the order is unpaid.
     paymentUrl: isAwaitingPayment ? order.paymentUrl : null,
-    expiresAt: isAwaitingPayment ? new Date(order.createdAt.getTime() + INVOICE_TTL_MS).toISOString() : null,
+    expiresAt: isAwaitingPayment ? new Date(order.createdAt.getTime() + invoiceTtlMs(order.paymentMethod)).toISOString() : null,
     createdAt: order.createdAt.toISOString(),
     isCodeReceived: order.codeReceivedAt !== null || order.status === 'completed',
     paidAt: order.paidAt?.toISOString() ?? null,

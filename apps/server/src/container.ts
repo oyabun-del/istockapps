@@ -13,7 +13,9 @@ import { MockDeliveryProvider } from './providers/delivery/mock-delivery-provide
 import { InstalliosClient } from './providers/installios/installios-client.js';
 import { InstalliosDeliveryProvider } from './providers/installios/installios-delivery-provider.js';
 import { MockPaymentProvider } from './providers/payment/mock-payment-provider.js';
-import type { PaymentProvider } from './providers/payment/payment-provider.js';
+import { CispayProvider } from './providers/payment/cispay-provider.js';
+import type { PaymentGateway } from './providers/payment/payment-provider.js';
+import { PaymentRouter, type PaymentRoute } from './providers/payment/payment-router.js';
 import { PlategaProvider } from './providers/payment/platega-provider.js';
 import { createPrismaRepositories } from './repositories/prisma/prisma-repositories.js';
 import type { Repositories } from './repositories/repositories.js';
@@ -81,25 +83,45 @@ function createSupply(env: Env, logger: Logger): Supply {
   };
 }
 
-function createPayments(env: Env): { payments: PaymentProvider; mockPayments?: MockPaymentProvider } {
+interface Payments {
+  payments: PaymentGateway;
+  webhooks: PaymentRoute[];
+  mockPayments?: MockPaymentProvider;
+}
+
+/** SBP through Platega; cards through CisPay when its keys are set (env allows them with Platega only). */
+function createPayments(env: Env, logger: Logger): Payments {
   if (env.PAYMENT_PROVIDER === 'platega' && env.PLATEGA_MERCHANT_ID && env.PLATEGA_SECRET) {
-    return {
-      payments: new PlategaProvider({
-        apiUrl: env.PLATEGA_API_URL,
-        merchantId: env.PLATEGA_MERCHANT_ID,
-        secret: env.PLATEGA_SECRET,
-      }),
-    };
+    const routes: PaymentRoute[] = [
+      {
+        name: 'platega',
+        methods: ['SBP'],
+        provider: new PlategaProvider({
+          apiUrl: env.PLATEGA_API_URL,
+          merchantId: env.PLATEGA_MERCHANT_ID,
+          secret: env.PLATEGA_SECRET,
+        }),
+      },
+    ];
+    if (env.CISPAY_SHOP_ID && env.CISPAY_API_KEY) {
+      routes.push({
+        name: 'cispay',
+        methods: ['CARD'],
+        provider: new CispayProvider({ apiUrl: env.CISPAY_API_URL, shopId: env.CISPAY_SHOP_ID, apiKey: env.CISPAY_API_KEY }),
+      });
+    }
+    return { payments: new PaymentRouter(routes, logger), webhooks: routes };
   }
   const mockPayments = new MockPaymentProvider(env.PUBLIC_URL);
-  return { payments: mockPayments, mockPayments };
+  // Mock payments settle through the dev page; the callback url only answers 401, as before.
+  return { payments: mockPayments, webhooks: [{ name: 'platega', methods: ['SBP'], provider: mockPayments }], mockPayments };
 }
 
 export function createContainer(env: Env, telegram: TelegramAdapters, logger: Logger): Container {
   const db = new PrismaClient();
   const repos = createPrismaRepositories(db);
   const { catalog, delivery, installiosCatalog, partnerAdmin } = createSupply(env, logger);
-  const { payments, mockPayments } = createPayments(env);
+  const { payments, webhooks, mockPayments } = createPayments(env, logger);
 
   const notifications = new NotificationService({
     sender: telegram.sender,
@@ -123,7 +145,7 @@ export function createContainer(env: Env, telegram: TelegramAdapters, logger: Lo
     notifications,
     checkout,
     logger,
-    // Platega requires both redirect urls, so without a bot username the Mini App itself is the way back.
+    // Providers take both redirect urls, so without a bot username the Mini App itself is the way back.
     returnUrl: (order) =>
       env.BOT_USERNAME ? `https://t.me/${env.BOT_USERNAME}?start=${order.id}` : `${env.WEBAPP_URL}#/orders/${order.id}`,
     // Mock payments are all test ones: with the mock provider chosen, they are the only payments there are.
@@ -140,7 +162,7 @@ export function createContainer(env: Env, telegram: TelegramAdapters, logger: Lo
     channel: new ChannelInfoService({ channel: env.REQUIRED_CHANNEL, fetchChannel: telegram.fetchChannel, logger }),
     repos,
     catalog,
-    payments,
+    paymentWebhooks: webhooks,
     mockPayments,
     orders,
     checkout,

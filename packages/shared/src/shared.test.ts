@@ -48,9 +48,11 @@ describe('order status helpers', () => {
 });
 
 describe('request schemas', () => {
-  it('accepts only SBP for new orders', () => {
-    expect(createOrderSchema.safeParse({ appIds: ['sber'], paymentMethod: 'SBP' }).success).toBe(true);
-    for (const paymentMethod of ['CARD', 'CRYPTO', 'TPAY']) {
+  it('accepts only SBP and card for new orders', () => {
+    for (const paymentMethod of ['SBP', 'CARD']) {
+      expect(createOrderSchema.safeParse({ appIds: ['sber'], paymentMethod }).success).toBe(true);
+    }
+    for (const paymentMethod of ['CRYPTO', 'PROMO', 'TPAY']) {
       expect(createOrderSchema.safeParse({ appIds: ['sber'], paymentMethod }).success).toBe(false);
     }
   });

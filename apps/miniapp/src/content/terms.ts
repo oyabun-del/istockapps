@@ -1,5 +1,5 @@
 /**
- * Terms of service (public offer). Describes our real flow: catalog → cart → SBP via Platega →
+ * Terms of service (public offer). Describes our real flow: catalog → cart → SBP via Platega or card via CisPay →
  * download → temporary App Store sign-in with the code → the buyer returns to their own Apple ID.
  * Keep in sync with content/guide.ts and the refund rules the shop actually applies.
  */
@@ -35,7 +35,7 @@ export const TERMS_SECTIONS: readonly LegalSection[] = [
     title: '3. Заказ и оплата',
     paragraphs: [
       'Покупатель выбирает приложения в каталоге, добавляет их в корзину и нажимает «Оплатить». Цена каждого приложения и скидки указаны в корзине и фиксируются в момент создания заказа.',
-      'Оплата производится через Систему быстрых платежей при посредничестве платёжного сервиса Platega. Данные банковских карт и счетов Покупателя Продавцу не передаются.',
+      'Оплата производится через Систему быстрых платежей при посредничестве платёжного сервиса Platega или банковской картой при посредничестве платёжного сервиса CisPay. Данные карты Покупатель вводит на странице CisPay; данные банковских карт и счетов Покупателя Продавцу не передаются.',
       'Неоплаченный счёт действует ограниченное время и затем закрывается. Чтобы купить приложения, нужно оформить заказ заново.',
       'Услуга считается заказанной с момента поступления оплаты. Подтверждение оплаты приходит в бот и отображается в разделе «Мои загрузки».',
     ],

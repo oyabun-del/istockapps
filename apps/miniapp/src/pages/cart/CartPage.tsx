@@ -1,9 +1,9 @@
 import {
-  ACTIVE_PAYMENT_METHOD,
   BULK_DISCOUNT_TIERS,
   exceedsOrderLimit,
   formatRub,
   MAX_ORDER_TOTAL_KOPECKS,
+  type ActivePaymentMethod,
   type CartPricing,
   type ErrorCode,
   type PromoCheckDto,
@@ -20,12 +20,13 @@ import { LEGAL_PATHS } from '../../content/legal';
 import { useCart } from '../../hooks/useCart';
 import { ApiError, api, errorMessage } from '../../lib/api';
 import { cartStore } from '../../lib/cart';
+import { PAYMENT_PROCESSORS } from '../../lib/order-status';
 import { queryKeys } from '../../lib/queries';
 import { hapticNotify, openExternalLink } from '../../lib/telegram';
 import { CartItemRow } from './CartItemRow';
 import { DiscountProgress } from './DiscountProgress';
 import { PromoCodeField } from './PromoCodeField';
-import { SbpPaymentRow } from './SbpPaymentRow';
+import { methodBlocker, PaymentMethodPicker } from './PaymentMethodPicker';
 
 const PAYMENT_METHODS_STALE_MS = 5 * 60_000;
 /** Admins switch payments on and off from the bot; a cart left open should notice soon. */
@@ -125,16 +126,22 @@ function OrderLimitNotice() {
   );
 }
 
-type CheckoutVariables = { appIds: string[]; totalKopecks: number; promoCode?: string };
+type CheckoutVariables = {
+  appIds: string[];
+  totalKopecks: number;
+  paymentMethod: ActivePaymentMethod;
+  promoCode?: string;
+};
+
 
 function useCheckout() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ appIds, totalKopecks, promoCode }: CheckoutVariables) =>
+    mutationFn: ({ appIds, totalKopecks, paymentMethod, promoCode }: CheckoutVariables) =>
       api.createOrder({
         appIds,
-        paymentMethod: ACTIVE_PAYMENT_METHOD,
+        paymentMethod,
         expectedTotalKopecks: totalKopecks,
         ...(promoCode ? { promoCode } : {}),
       }),
@@ -173,13 +180,17 @@ export function CartPage() {
   });
   const rules = useQuery({ queryKey: queryKeys.checkout, queryFn: api.checkout, staleTime: CHECKOUT_STALE_MS });
   const [promo, setPromo] = useState<PromoCheckDto | null>(null);
-  const isSbpAvailable = methods.data?.some((item) => item.method === ACTIVE_PAYMENT_METHOD) ?? false;
+  const [chosenMethod, setChosenMethod] = useState<ActivePaymentMethod | null>(null);
   const { pricing } = cart;
+  const available = methods.data?.map((item) => item.method) ?? [];
+  const payable = pricing ? available.filter((method) => methodBlocker(method, pricing.totalKopecks) === null) : [];
+  // The buyer's choice while it can pay this cart, otherwise the first method that can.
+  const paymentMethod = chosenMethod && payable.includes(chosenMethod) ? chosenMethod : (payable[0] ?? null);
   const isEmpty = cart.ids.length === 0;
   // Unknown mode (request failed): let the buyer try, the server has the final word.
   const paymentsMode = rules.data?.paymentsMode ?? 'open';
   const isPromoOnly = paymentsMode === 'promo';
-  // A free code pays for the cart itself: no invoice, so SBP does not have to be available.
+  // A free code pays for the cart itself: no invoice, so no payment method has to be available.
   const isFree = paymentsMode !== 'closed' && promo?.isFree === true;
   // Too many apps for an access code only warns: the buyer's own open invoice for this cart is handed out again.
   // A free order has no invoice to reuse, so a cart the code cannot cover is refused here.
@@ -188,13 +199,19 @@ export function CartPage() {
   const isOverLimit = pricing !== null && exceedsOrderLimit(pricing.totalKopecks);
   const canPay = isFree
     ? !isFreeOverLimit && !isOverLimit
-    : isSbpAvailable && paymentsMode !== 'closed' && !isPromoMissing && !isOverLimit;
+    : paymentMethod !== null && paymentsMode !== 'closed' && !isPromoMissing && !isOverLimit;
   const actionLabel = isFree ? 'Получить бесплатно' : 'Оплатить';
 
   const pay = () => {
     if (!pricing) return;
     const promoCode = isPromoOnly || isFree ? promo?.code : undefined;
-    checkout.mutate({ appIds: [...cart.ids], totalKopecks: pricing.totalKopecks, promoCode });
+    // A free order opens no invoice; the server records it as PROMO whatever is sent here.
+    checkout.mutate({
+      appIds: [...cart.ids],
+      totalKopecks: pricing.totalKopecks,
+      paymentMethod: paymentMethod ?? 'SBP',
+      promoCode,
+    });
   };
 
   // An error about the previous set of apps no longer applies once the buyer changes the cart.
@@ -249,8 +266,11 @@ export function CartPage() {
           {paymentsMode === 'closed' && <PaymentsClosedNotice />}
           {paymentsMode !== 'closed' && isFree && <FreePaymentRow />}
           {paymentsMode !== 'closed' && !isFree && (
-            <SbpPaymentRow
-              isAvailable={isSbpAvailable}
+            <PaymentMethodPicker
+              methods={available}
+              selected={paymentMethod}
+              onSelect={setChosenMethod}
+              totalKopecks={pricing.totalKopecks}
               isLoading={methods.isPending}
               error={methods.isError ? errorMessage(methods.error) : null}
             />
@@ -281,10 +301,10 @@ export function CartPage() {
                 {checkoutError}
               </p>
             )}
-            {!isFree && (
+            {!isFree && paymentMethod && (
               <p className="mt-2.5 flex items-center justify-center gap-1 text-label-sm text-on-surface-variant">
                 <Icon name="verified_user" className="text-[13px] text-secondary" />
-                Безопасный платёж через Platega
+                Безопасный платёж через {PAYMENT_PROCESSORS[paymentMethod]}
               </p>
             )}
             <p className="mt-1.5 text-balance text-center text-label-sm text-outline">

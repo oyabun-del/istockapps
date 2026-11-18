@@ -1,4 +1,4 @@
-import type { OrderDto } from '@istock/shared';
+import type { OrderDto, PaymentMethod } from '@istock/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useState } from 'react';
@@ -9,7 +9,7 @@ import { useSecondsUntil } from '../../hooks/useSecondsUntil';
 import { api, errorMessage } from '../../lib/api';
 import { formatCountdown } from '../../lib/format';
 import { REVEAL } from '../../lib/motion';
-import { PAYMENT_METHOD_META } from '../../lib/order-status';
+import { PAYMENT_METHOD_META, PAYMENT_PROCESSORS } from '../../lib/order-status';
 import { ORDER_POLL_MS, queryKeys } from '../../lib/queries';
 import { hapticImpact, hapticNotify, openExternalLink } from '../../lib/telegram';
 
@@ -114,6 +114,10 @@ function CancelOrder({ orderId }: { orderId: number }) {
   );
 }
 
+function paymentPageName(method: PaymentMethod): string {
+  return method === 'SBP' || method === 'CARD' ? `странице ${PAYMENT_PROCESSORS[method]}` : 'странице оплаты';
+}
+
 export function AwaitingPayment({ order, isRefreshing, onRefresh }: Props) {
   const method = PAYMENT_METHOD_META[order.paymentMethod];
 
@@ -133,7 +137,7 @@ export function AwaitingPayment({ order, isRefreshing, onRefresh }: Props) {
           </div>
         )}
         <p className="relative max-w-[34ch] text-body-sm text-on-surface-variant">
-          Оплатите счёт на странице Platega. Статус обновится сам, как только платёж подтвердится, эту страницу можно не закрывать.
+          Оплатите счёт на {paymentPageName(order.paymentMethod)}. Статус обновится сам, как только платёж подтвердится, эту страницу можно не закрывать.
         </p>
         <p className="relative flex items-center gap-1.5 text-label-md text-on-surface-variant">
           <Icon name="autorenew" className="text-[18px] text-secondary" />

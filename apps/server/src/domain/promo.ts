@@ -1,6 +1,6 @@
 import { PAID_STATUSES, type OrderStatus } from '@istock/shared';
 import type { Order } from './models.js';
-import { INVOICE_TTL_MS } from './order-transitions.js';
+import { MAX_INVOICE_TTL_MS } from './order-transitions.js';
 
 /** Apps every new promo code covers unless the admin names another number. */
 export const DEFAULT_PROMO_MAX_APPS = 5;
@@ -12,9 +12,12 @@ export const PROMO_MAX_APPS_LIMIT = 100;
  */
 export const PROMO_PENDING_STATUSES: readonly OrderStatus[] = ['awaiting_payment', 'cancelled'];
 
-/** Unpaid orders created after this moment still hold their apps of the promo code. */
+/**
+ * Unpaid orders created after this moment still hold their apps of the promo code. The longest
+ * invoice lifetime is used for every method: a place is never given away while an invoice is payable.
+ */
 export function promoHoldSince(now: Date): Date {
-  return new Date(now.getTime() - INVOICE_TTL_MS);
+  return new Date(now.getTime() - MAX_INVOICE_TTL_MS);
 }
 
 /** Paid orders and unpaid ones with a live invoice count against the code; refunds free their apps. */

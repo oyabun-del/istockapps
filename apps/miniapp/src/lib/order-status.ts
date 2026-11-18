@@ -1,4 +1,4 @@
-import type { OrderStatus, PaymentMethod } from '@istock/shared';
+import type { ActivePaymentMethod, OrderStatus, PaymentMethod } from '@istock/shared';
 import type { IconName } from './icons';
 
 export type Tone = 'info' | 'success' | 'warning' | 'danger' | 'neutral';
@@ -23,6 +23,9 @@ export const PAYMENT_METHOD_META: Record<PaymentMethod, PaymentMethodMeta> = {
   CRYPTO: { label: 'USDT', payLabel: 'Оплатить в USDT', icon: 'currency_bitcoin', iconClass: 'text-success' },
   PROMO: { label: 'Промокод', payLabel: 'Получить бесплатно', icon: 'sell', iconClass: 'text-success' },
 };
+
+/** The payment service whose page takes each method's payment. */
+export const PAYMENT_PROCESSORS: Record<ActivePaymentMethod, string> = { SBP: 'Platega', CARD: 'CisPay' };
 
 /** Paid for by a free promo code: there is no amount worth showing. */
 export function isFreeOrder(order: { paymentMethod: PaymentMethod }): boolean {

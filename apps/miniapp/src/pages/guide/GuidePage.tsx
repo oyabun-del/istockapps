@@ -16,11 +16,13 @@ function GuideStepCard({ step, index, isLast }: { step: GuideStep; index: number
           <RichText text={step.action} />
         </span>
       </p>
-      {step.image && <StepImage image={step.image} />}
-      <p className="text-body-sm text-on-surface-variant">
-        <RichText text={step.text} />
-      </p>
       {step.path && <SettingsPath path={step.path} />}
+      {step.text && (
+        <p className="text-body-sm text-on-surface-variant">
+          <RichText text={step.text} />
+        </p>
+      )}
+      {step.image && <StepImage image={step.image} />}
       {step.note && (
         <p className="flex items-start gap-1.5 rounded-lg bg-warning/10 p-space-sm text-body-sm text-warning">
           <Icon name="warning" className="mt-0.5 text-[16px]" />
@@ -74,14 +76,11 @@ export function GuidePage() {
       <div className="flex flex-col gap-space-lg">
         <section className="rounded-xl bg-surface-container-high p-space-lg">
           <h1 className="text-balance text-headline-lg tracking-tight text-on-surface">Как активировать приложение</h1>
-          <p className="mt-space-sm text-body-sm text-on-surface-variant">
-            {ACTIVATION_STEPS.length} шагов, около 5 минут. Логин, пароль и код — в вашем заказе после оплаты. Нажмите на схему, чтобы увеличить.
-          </p>
           <p className="mt-space-md flex items-start gap-space-sm rounded-lg bg-primary/10 p-space-sm text-body-sm text-on-surface ring-1 ring-primary/40">
             <Icon name="hourglass_top" className="mt-px text-[18px] text-primary" />
             <span>
               <strong className="font-semibold">Скачать мало.</strong> Приложение откроется только после всех{' '}
-              {ACTIVATION_STEPS.length} шагов, пройдите их до конца.
+              {ACTIVATION_STEPS.length} шагов, около 5 минут.
             </span>
           </p>
         </section>

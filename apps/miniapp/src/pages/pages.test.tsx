@@ -142,14 +142,14 @@ describe('GuidePage', () => {
     return item;
   };
 
-  it('explains the Apple ID activation from download to getting your own Apple ID back', () => {
+  it('explains the activation from download to getting your own Apple Account back', () => {
     renderWithProviders(<GuidePage />);
 
     expect(screen.getByRole('heading', { name: 'Как активировать приложение' })).toBeInTheDocument();
     const steps = within(screen.getByRole('list', { name: 'Шаги активации' })).getAllByRole('listitem');
-    expect(steps).toHaveLength(6);
+    expect(steps).toHaveLength(5);
     expect(steps[0]).toHaveTextContent('Скачайте приложение');
-    expect(steps[5]).toHaveTextContent('Верните свой Apple ID');
+    expect(steps[4]).toHaveTextContent('Верните свой аккаунт');
     expect(screen.getAllByText('Медиаматериалы и покупки').length).toBeGreaterThan(0);
   });
 
@@ -157,12 +157,12 @@ describe('GuidePage', () => {
     renderWithProviders(<GuidePage />);
 
     const rules = screen.getByRole('region', { name: 'Важно до начала' });
-    expect(within(rules).getByText(/никогда не входите с данными из заказа в iCloud/i)).toBeInTheDocument();
-    expect(within(rules).getByText(/Сгружать неиспользуемые/)).toBeInTheDocument();
-    expect(within(rules).getByText(/Не удаляйте приложение/)).toBeInTheDocument();
+    expect(within(rules).getByText(/только в App Store, не в iCloud/)).toBeInTheDocument();
+    expect(within(rules).getByText(/Настройки → Приложения → App Store/)).toBeInTheDocument();
+    expect(within(rules).getByText(/Не удаляйте и не обновляйте приложение/)).toBeInTheDocument();
     expect(screen.getByText('Код не приходит или не подходит')).toBeInTheDocument();
     expect(screen.getByText('Я удалил приложение')).toBeInTheDocument();
-    expect(screen.getByText('Можно ли скачать приложение ещё раз после активации?')).toBeInTheDocument();
+    expect(screen.getByText('Нет кнопки «Выйти»')).toBeInTheDocument();
   });
 
   it('opens every step with its key action and shows the names to tap as chips', () => {
@@ -174,8 +174,8 @@ describe('GuidePage', () => {
     });
     expect(within(nth(steps, 0)).getByText('Я скачал', { selector: 'strong' })).toBeInTheDocument();
     expect(within(nth(steps, 2)).getByText('Получить логин и пароль', { selector: 'strong' })).toBeInTheDocument();
-    expect(within(nth(steps, 3)).getByText('Включить ожидание кода', { selector: 'strong' })).toBeInTheDocument();
-    expect(within(nth(steps, 4)).getByText('Приложение работает', { selector: 'strong' })).toBeInTheDocument();
+    expect(within(nth(steps, 2)).getByText('Включить ожидание кода', { selector: 'strong' })).toBeInTheDocument();
+    expect(within(nth(steps, 3)).getByText('Приложение работает', { selector: 'strong' })).toBeInTheDocument();
   });
 
   it('shows a schematic only for steps done on the iPhone outside the Mini App', () => {
@@ -194,8 +194,6 @@ describe('GuidePage', () => {
       expect(image.alt).toMatch(/^Схема: .{20,}/);
       return [images[0]?.getAttribute('src')];
     });
-    // Getting the login and password happens entirely in the Mini App: no picture.
-    expect(ACTIVATION_STEPS[2]?.image).toBeUndefined();
     expect(sources).toHaveLength(5);
     expect(new Set(sources).size).toBe(5);
   });

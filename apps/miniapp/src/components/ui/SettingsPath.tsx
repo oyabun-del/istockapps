@@ -1,24 +1,28 @@
+import { Fragment } from 'react';
 import { Icon } from './Icon';
 
 type Props = {
   path: readonly string[];
 };
 
-const INDENT_PX = 12;
-
-/** iOS Settings breadcrumb: "Настройки → Ваше имя → …", one level per line. */
+/**
+ * iOS Settings breadcrumb on one line: "Настройки › Ваше имя › …". An item never breaks inside;
+ * on a narrow screen the line wraps only between items.
+ */
 export function SettingsPath({ path }: Props) {
   return (
-    <div className="flex flex-col gap-1 rounded-lg bg-surface-container-low p-space-sm text-code-sm text-on-surface-variant">
+    <p className="flex flex-wrap items-center gap-x-1 gap-y-0.5 rounded-lg bg-surface-container-low px-space-sm py-1.5 text-code-sm text-on-surface-variant">
+      <Icon name="settings" className="text-[14px] text-primary" />
       {path.map((item, index) => (
-        <span key={item} className="flex items-center gap-space-xs" style={{ paddingLeft: `${index * INDENT_PX}px` }}>
-          <Icon
-            name={index === 0 ? 'settings' : 'subdirectory_arrow_right'}
-            className={`text-[14px] ${index === 0 ? 'text-primary' : 'text-outline'}`}
-          />
-          <span className={index === path.length - 1 ? 'font-semibold text-on-surface' : ''}>{item}</span>
-        </span>
+        <Fragment key={item}>
+          {index > 0 && (
+            <span aria-hidden="true" className="text-outline">
+              ›
+            </span>
+          )}
+          <span className={`whitespace-nowrap ${index === path.length - 1 ? 'font-semibold text-on-surface' : ''}`}>{item}</span>
+        </Fragment>
       ))}
-    </div>
+    </p>
   );
 }

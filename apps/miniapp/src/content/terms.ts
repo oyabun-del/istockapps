@@ -1,6 +1,6 @@
 /**
  * Terms of service (public offer). Describes our real flow: catalog → cart → SBP via Platega or card via CisPay →
- * download → temporary App Store sign-in with the code → the buyer returns to their own Apple ID.
+ * download → temporary App Store sign-in with the code → the buyer returns to their own Apple Account.
  * Keep in sync with content/guide.ts and the refund rules the shop actually applies.
  */
 import type { LegalSection } from './legal';
@@ -52,6 +52,7 @@ export const TERMS_SECTIONS: readonly LegalSection[] = [
     title: '5. Обязанности Покупателя',
     paragraphs: [
       ...SAFETY_RULES,
+      'Не менять пароль, почту и настройки выданной учётной записи.',
       'Не передавать данные для входа третьим лицам и не использовать их для иных целей, кроме установки приложений из своего заказа.',
     ],
   },

@@ -23,7 +23,7 @@ type Props = {
 
 /**
  * Instruction copy with the names to tap highlighted, so the buyer finds the same button on the
- * order screen. The quotes stay in the text for screen readers and copy-paste, hidden visually.
+ * order screen. A chip never breaks across lines: it moves to the next line whole. The quotes stay in the text for screen readers and copy-paste, hidden visually.
  */
 export function RichText({ text }: Props) {
   return (
@@ -32,7 +32,7 @@ export function RichText({ text }: Props) {
         segment.isChip ? (
           <strong
             key={index}
-            className="rounded-md bg-primary-container/20 px-1.5 py-px font-semibold text-primary box-decoration-clone"
+            className="whitespace-nowrap rounded-md bg-primary-container/20 px-1.5 py-px font-semibold text-primary"
           >
             <span className="sr-only">«</span>
             {segment.text}

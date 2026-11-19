@@ -25,6 +25,12 @@ describe('RichText', () => {
     expect(chips(container)).toEqual(['«Получить логин и пароль»', '«Включить ожидание кода»']);
   });
 
+  it('keeps a chip on one line', () => {
+    render(<RichText text="Откройте «Медиаматериалы и покупки»." />);
+
+    expect(screen.getByText('Медиаматериалы и покупки', { selector: 'strong' })).toHaveClass('whitespace-nowrap');
+  });
+
   it('leaves an unclosed quote as plain text', () => {
     const { container } = render(<RichText text="Нажмите «Скачать и подождите" />);
 

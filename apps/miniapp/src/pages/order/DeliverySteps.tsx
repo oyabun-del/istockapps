@@ -315,7 +315,7 @@ function FinishStep({ order, card }: { order: OrderDto; card: CardProps }) {
     return (
       <StepCard index={4} title="Приложение активировано" {...card}>
         <p className="text-body-sm text-on-surface-variant">
-          Готово! Теперь выйдите из выданного аккаунта в «Медиаматериалы и покупки» и войдите в свой Apple ID.
+          Готово! Теперь выйдите из выданного аккаунта в «Медиаматериалы и покупки» и войдите в свой Аккаунт Apple.
         </p>
         <StepImage image={GUIDE_IMAGES.signBackIn} />
       </StepCard>

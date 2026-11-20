@@ -45,7 +45,7 @@ export const GUIDE_IMAGES = {
   },
   signOut: {
     src: signOutSrc,
-    alt: 'Схема: в Настройках откройте «Медиаматериалы и покупки» и нажмите «Выйти». iCloud не трогайте.',
+    alt: 'Схема: в Настройках нажмите на своё имя, затем «Медиаматериалы и покупки» и в меню «Выйти». iCloud и «Выйти» внизу экрана с именем не трогайте.',
   },
   enterCode: {
     src: enterCodeSrc,
@@ -71,6 +71,11 @@ export interface GuideStep {
   image?: GuideImage;
   /** Settings path shown as a one-line breadcrumb; only where the action does not name the way there. */
   path?: readonly string[];
+  /**
+   * Tap-by-tap walkthrough for a step done in iPhone Settings, from opening them to checking the
+   * result. Same «Label» convention as the rest of the copy; replaces `path`, which it spells out.
+   */
+  substeps?: readonly string[];
   note?: string;
 }
 
@@ -94,10 +99,17 @@ export const ACTIVATION_STEPS: readonly GuideStep[] = [
   },
   {
     title: 'Выйдите из App Store',
-    action: 'Откройте «Медиаматериалы и покупки» и нажмите «Выйти»',
-    text: 'iCloud, фото и контакты не затрагиваются.',
+    action: 'Выйдите из «Медиаматериалы и покупки», iCloud не трогайте',
+    substeps: [
+      'Сверните Telegram и откройте «Настройки»',
+      'Нажмите на своё имя в самом верху',
+      'Нажмите «Медиаматериалы и покупки»',
+      'В меню нажмите «Выйти». Нет кнопки — нажмите «Просмотреть учётную запись» и прокрутите вниз',
+      'Подтвердите: ещё раз нажмите «Выйти»',
+      'Готово, если «Медиаматериалы и покупки» теперь предлагают войти. Вернитесь в Telegram к заказу',
+    ],
     image: GUIDE_IMAGES.signOut,
-    path: [...MEDIA_PURCHASES_PATH, 'Выйти'],
+    note: 'Не нажимайте «Выйти» внизу экрана с вашим именем: это выход из всего Аккаунта Apple, вместе с iCloud и «Локатором».',
   },
   {
     title: 'Войдите по данным заказа',
@@ -114,6 +126,12 @@ export const ACTIVATION_STEPS: readonly GuideStep[] = [
   {
     title: 'Верните свой аккаунт',
     action: 'В «Медиаматериалы и покупки» нажмите «Выйти» и войдите в свой Аккаунт Apple',
+    substeps: [
+      'Откройте «Настройки» и нажмите на своё имя вверху',
+      'Нажмите «Медиаматериалы и покупки», затем «Выйти» и подтвердите',
+      'Снова нажмите «Медиаматериалы и покупки» и войдите в свой Аккаунт Apple. iPhone предложит его сам — нажмите «Продолжить»',
+      'Готово, если в App Store под значком аккаунта вверху справа ваш адрес',
+    ],
     image: GUIDE_IMAGES.signBackIn,
   },
 ];

@@ -17,6 +17,23 @@ function GuideStepCard({ step, index, isLast }: { step: GuideStep; index: number
         </span>
       </p>
       {step.path && <SettingsPath path={step.path} />}
+      {step.substeps && (
+        <ol aria-label={`${step.title}: по нажатиям`} className="flex flex-col gap-1.5">
+          {step.substeps.map((substep, substepIndex) => (
+            <li key={substep} className="flex items-start gap-space-xs text-body-sm text-on-surface">
+              <span
+                aria-hidden="true"
+                className="mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-label-sm font-semibold text-primary"
+              >
+                {substepIndex + 1}
+              </span>
+              <span>
+                <RichText text={substep} />
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
       {step.text && (
         <p className="text-body-sm text-on-surface-variant">
           <RichText text={step.text} />

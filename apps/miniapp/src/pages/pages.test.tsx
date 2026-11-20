@@ -141,12 +141,15 @@ describe('GuidePage', () => {
     if (!item) throw new Error(`No list item at ${index}`);
     return item;
   };
+  /** Top-level steps only: a step's own walkthrough is a nested list. */
+  const activationSteps = (): HTMLElement[] =>
+    Array.from(screen.getByRole('list', { name: 'Шаги активации' }).children) as HTMLElement[];
 
   it('explains the activation from download to getting your own Apple Account back', () => {
     renderWithProviders(<GuidePage />);
 
     expect(screen.getByRole('heading', { name: 'Как активировать приложение' })).toBeInTheDocument();
-    const steps = within(screen.getByRole('list', { name: 'Шаги активации' })).getAllByRole('listitem');
+    const steps = activationSteps();
     expect(steps).toHaveLength(5);
     expect(steps[0]).toHaveTextContent('Скачайте приложение');
     expect(steps[4]).toHaveTextContent('Верните свой аккаунт');
@@ -167,7 +170,7 @@ describe('GuidePage', () => {
 
   it('opens every step with its key action and shows the names to tap as chips', () => {
     renderWithProviders(<GuidePage />);
-    const steps = within(screen.getByRole('list', { name: 'Шаги активации' })).getAllByRole('listitem');
+    const steps = activationSteps();
 
     ACTIVATION_STEPS.forEach((step, index) => {
       expect(steps[index]).toHaveTextContent(step.action);
@@ -178,9 +181,24 @@ describe('GuidePage', () => {
     expect(within(nth(steps, 3)).getByText('Приложение работает', { selector: 'strong' })).toBeInTheDocument();
   });
 
+  it('walks through signing out tap by tap and warns off the Apple Account sign-out', () => {
+    renderWithProviders(<GuidePage />);
+    const signOut = nth(activationSteps(), 1);
+
+    const taps = within(within(signOut).getByRole('list', { name: 'Выйдите из App Store: по нажатиям' })).getAllByRole('listitem');
+    expect(taps).toHaveLength(6);
+    expect(taps[0]).toHaveTextContent('Настройки');
+    expect(within(nth(taps, 2)).getByText('Медиаматериалы и покупки', { selector: 'strong' })).toBeInTheDocument();
+    expect(within(nth(taps, 3)).getByText('Просмотреть учётную запись', { selector: 'strong' })).toBeInTheDocument();
+    expect(within(signOut).getByText(/выход из всего Аккаунта Apple/)).toBeInTheDocument();
+
+    const signBackIn = nth(activationSteps(), 4);
+    expect(within(signBackIn).getByRole('list', { name: 'Верните свой аккаунт: по нажатиям' })).toBeInTheDocument();
+  });
+
   it('shows a schematic only for steps done on the iPhone outside the Mini App', () => {
     renderWithProviders(<GuidePage />);
-    const steps = within(screen.getByRole('list', { name: 'Шаги активации' })).getAllByRole('listitem');
+    const steps = activationSteps();
 
     const sources = steps.flatMap((step, index) => {
       const images = step.querySelectorAll('img');

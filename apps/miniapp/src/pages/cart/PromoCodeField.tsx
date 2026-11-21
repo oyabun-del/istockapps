@@ -1,6 +1,6 @@
 import { formatAppCount, type PromoCheckDto } from '@istock/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { api, errorMessage } from '../../lib/api';
@@ -15,6 +15,8 @@ type Props = {
   itemCount: number;
   onApply: (promo: PromoCheckDto) => void;
   onClear: () => void;
+  /** A code is typed but not applied: paying now would silently ignore it. */
+  onDraftChange: (hasDraft: boolean) => void;
 };
 
 const ACCESS_CODE_NOT_NEEDED = 'Этот промокод нужен, только когда оплата открыта по промокоду. Сейчас оплатить можно и без промокода.';
@@ -58,13 +60,19 @@ function AppliedPromo({ applied, itemCount, onClear }: Pick<Props, 'itemCount' |
   );
 }
 
-function PromoForm({ mode, onApply }: Pick<Props, 'mode' | 'onApply'>) {
+function PromoForm({ mode, onApply, onDraftChange }: Pick<Props, 'mode' | 'onApply' | 'onDraftChange'>) {
   const [code, setCode] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
+  const updateCode = (value: string) => {
+    setCode(value);
+    onDraftChange(value.trim() !== '');
+  };
+  // A typed code goes away with the form (payments closed, code applied): it no longer holds the payment.
+  useEffect(() => () => onDraftChange(false), [onDraftChange]);
   const check = useMutation({
     mutationFn: (value: string) => api.checkPromo(value),
     onSuccess: (promo) => {
-      setCode('');
+      updateCode('');
       // While payments are open to everyone only a free code changes anything.
       if (mode === 'open' && !promo.isFree) {
         setNotice(ACCESS_CODE_NOT_NEEDED);
@@ -89,7 +97,7 @@ function PromoForm({ mode, onApply }: Pick<Props, 'mode' | 'onApply'>) {
       <form onSubmit={submit} className="flex gap-2">
         <input
           value={code}
-          onChange={(event) => setCode(event.target.value)}
+          onChange={(event) => updateCode(event.target.value)}
           aria-label="Промокод"
           placeholder="Введите промокод"
           autoComplete="off"
@@ -122,7 +130,7 @@ function PromoForm({ mode, onApply }: Pick<Props, 'mode' | 'onApply'>) {
  * Promo code of the cart. While payments are open by promo code only it is required and shown at once;
  * while they are open to everyone it is tucked behind a link, since only a free code matters then.
  */
-export function PromoCodeField({ mode, applied, itemCount, onApply, onClear }: Props) {
+export function PromoCodeField({ mode, applied, itemCount, onApply, onClear, onDraftChange }: Props) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   if (!applied && !isExpanded && mode === 'open') {
@@ -145,7 +153,7 @@ export function PromoCodeField({ mode, applied, itemCount, onApply, onClear }: P
       {applied ? (
         <AppliedPromo applied={applied} itemCount={itemCount} onClear={onClear} />
       ) : (
-        <PromoForm mode={mode} onApply={onApply} />
+        <PromoForm mode={mode} onApply={onApply} onDraftChange={onDraftChange} />
       )}
     </section>
   );

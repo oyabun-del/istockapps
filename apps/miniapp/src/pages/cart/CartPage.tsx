@@ -180,6 +180,7 @@ export function CartPage() {
   });
   const rules = useQuery({ queryKey: queryKeys.checkout, queryFn: api.checkout, staleTime: CHECKOUT_STALE_MS });
   const [promo, setPromo] = useState<PromoCheckDto | null>(null);
+  const [hasPromoDraft, setHasPromoDraft] = useState(false);
   const [chosenMethod, setChosenMethod] = useState<ActivePaymentMethod | null>(null);
   const { pricing } = cart;
   const available = methods.data?.map((item) => item.method) ?? [];
@@ -197,9 +198,13 @@ export function CartPage() {
   const isFreeOverLimit = isFree && pricing !== null && pricing.itemCount > (promo?.appsLeft ?? 0);
   const isPromoMissing = isPromoOnly && !promo;
   const isOverLimit = pricing !== null && exceedsOrderLimit(pricing.totalKopecks);
-  const canPay = isFree
-    ? !isFreeOverLimit && !isOverLimit
-    : paymentMethod !== null && paymentsMode !== 'closed' && !isPromoMissing && !isOverLimit;
+  // A typed but unapplied code (maybe a free one) must not be skipped on the way to an invoice.
+  const isPromoDraftPending = paymentsMode !== 'closed' && hasPromoDraft;
+  const canPay =
+    !isPromoDraftPending &&
+    (isFree
+      ? !isFreeOverLimit && !isOverLimit
+      : paymentMethod !== null && paymentsMode !== 'closed' && !isPromoMissing && !isOverLimit);
   const actionLabel = isFree ? 'Получить бесплатно' : 'Оплатить';
 
   const pay = () => {
@@ -282,6 +287,7 @@ export function CartPage() {
               itemCount={pricing.itemCount}
               onApply={setPromo}
               onClear={() => setPromo(null)}
+              onDraftChange={setHasPromoDraft}
             />
           )}
 
@@ -296,6 +302,11 @@ export function CartPage() {
             >
               {isFree ? actionLabel : `${actionLabel} ${formatRub(pricing.totalKopecks)}`}
             </Button>
+            {isPromoDraftPending && (
+              <p role="status" className="mt-2.5 text-balance text-center text-body-sm text-warning">
+                Нажмите «Применить», чтобы использовать промокод
+              </p>
+            )}
             {checkout.isError && (
               <p role="alert" className="mt-2.5 text-center text-body-sm text-error">
                 {checkoutError}

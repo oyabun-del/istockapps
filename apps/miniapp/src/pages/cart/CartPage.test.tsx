@@ -424,6 +424,50 @@ describe('CartPage free promo codes', () => {
     expect(open).not.toHaveBeenCalled();
   });
 
+  it('does not open a payment while a typed code is not applied yet', async () => {
+    mockShop('open');
+    const createOrder = vi.spyOn(api, 'createOrder').mockResolvedValue(makeOrder({ status: 'awaiting_payment' }));
+    fillCart(1);
+    renderCart();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Есть промокод?' }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Промокод' }), 'gift-2026');
+
+    expect(screen.getByRole('button', { name: /Оплатить/ })).toBeDisabled();
+    expect(screen.getByText('Нажмите «Применить», чтобы использовать промокод')).toHaveAttribute('role', 'status');
+    await userEvent.click(screen.getByRole('button', { name: /Оплатить/ }));
+    expect(createOrder).not.toHaveBeenCalled();
+  });
+
+  it('keeps the payment off while the code is being checked', async () => {
+    mockShop('open');
+    vi.spyOn(api, 'checkPromo').mockReturnValue(new Promise(() => {}));
+    fillCart(1);
+    renderCart();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Есть промокод?' }));
+    await applyCode('gift-2026');
+
+    expect(screen.getByRole('button', { name: /Оплатить/ })).toBeDisabled();
+  });
+
+  it('lets the buyer pay once the typed code is erased', async () => {
+    mockShop('open');
+    const createOrder = vi.spyOn(api, 'createOrder').mockResolvedValue(makeOrder({ status: 'awaiting_payment' }));
+    fillCart(1);
+    renderCart();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Есть промокод?' }));
+    const input = screen.getByRole('textbox', { name: 'Промокод' });
+    await userEvent.type(input, 'gift');
+    await userEvent.clear(input);
+
+    expect(screen.queryByText(/Нажмите «Применить»/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Оплатить/ }));
+    await waitFor(() => expect(createOrder).toHaveBeenCalled());
+    expect(createOrder.mock.calls[0]?.[0]).not.toHaveProperty('promoCode');
+  });
+
   it('works while payments are open by promo code only', async () => {
     mockShop('promo');
     vi.spyOn(api, 'checkPromo').mockResolvedValue({ code: 'GIFT-2026', appsLeft: 5, isFree: true });

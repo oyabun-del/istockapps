@@ -67,6 +67,11 @@ export const orderSchema = z.object({
   status: z.enum(['active', 'completed', 'expired', 'unknown']).catch('unknown'),
   sandbox: z.boolean(),
   expires_at: z.number().int(),
+  /** Partner settings: order lifetime before the first code request (12 h at the time of writing). */
+  initial_ttl_seconds: z.number().int().positive().optional(),
+  /** Lifetime of the whole order after the first code request (6 h at the time of writing). */
+  code_window_ttl_seconds: z.number().int().positive().optional(),
+  code_window_started_at: z.number().int().nullish(),
   fallback_url: z.string(),
   qr_url: z.string(),
   groups: z.array(orderGroupSchema),

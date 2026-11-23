@@ -1,4 +1,4 @@
-import type { CheckoutDto, MeDto, PaymentMethodDto, PromoCheckDto, SellerDto } from '@istock/shared';
+import type { CheckoutDto, MeDto, PaymentMethodDto, PromoCheckDto, DeliveryLimitsDto, SellerDto } from '@istock/shared';
 import {
   appIdParamSchema,
   catalogQuerySchema,
@@ -55,6 +55,7 @@ export interface ApiRoutesDeps {
   subscription: SubscriptionService;
   links: { channelUrl: string; supportUrl: string };
   seller: SellerDto | null;
+  deliveryLimits: DeliveryLimitsDto;
   channel: ChannelInfoService;
 }
 
@@ -83,6 +84,7 @@ export function registerApiRoutes(app: FastifyInstance, deps: ApiRoutesDeps): vo
       isSubscriptionRequired: deps.subscription.isRequired,
       ...deps.links,
       seller: deps.seller,
+      deliveryLimits: deps.deliveryLimits,
       channel,
     };
     return ok(me);

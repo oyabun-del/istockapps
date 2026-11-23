@@ -143,7 +143,14 @@ function deliveryGroup(id: string, apps: DeliveryAppDto[], overrides: Partial<De
 }
 
 function delivery(groups: DeliveryGroupDto[] = [deliveryGroup('grp_1', [appEntry('app_sber')])]): DeliveryDto {
-  return { expiresAt: IN_6_HOURS(), isSandbox: false, groups, isReplacing: groups.some((g) => g.state === 'replacing') };
+  return {
+    expiresAt: IN_6_HOURS(),
+    limits: { installSeconds: 43_200, activationSeconds: 21_600 },
+    activationStartedAt: null,
+    isSandbox: false,
+    groups,
+    isReplacing: groups.some((g) => g.state === 'replacing'),
+  };
 }
 
 function credentialsFor(groupId = 'grp_1', login = 'id@example.com', password = 'secret'): CredentialsDto {
@@ -293,7 +300,8 @@ describe('OrderPage delivery', () => {
     expect(open).toHaveBeenCalledWith('https://install.example/app_sber', '_blank', 'noopener,noreferrer');
     await userEvent.click(screen.getByRole('button', { name: /Резервная ссылка/ }));
     expect(open).toHaveBeenCalledWith('https://reserve.example/app_sber', '_blank', 'noopener,noreferrer');
-    expect(screen.getByText(/Ссылки действуют до/)).toBeInTheDocument();
+    expect(screen.getByRole('timer')).toHaveTextContent(/5:59:\d\d|6:00:00/);
+    expect(screen.getByText(/На скачивание и вход осталось/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Я скачал/ }));
 
     await waitFor(() => expect(confirm).toHaveBeenCalledWith(7));
@@ -418,6 +426,46 @@ describe('OrderPage credentials', () => {
 
     expect(await screen.findByText(/Код станет доступен/)).toBeInTheDocument();
     expect(credentials).not.toHaveBeenCalled();
+  });
+});
+
+describe('OrderPage delivery deadline', () => {
+  it('warns before the first code request that it shortens the order', async () => {
+    issuedOrder();
+
+    renderOrder();
+
+    expect(await screen.findByText(/После запроса кода на завершение активации останется 6 ч/)).toBeInTheDocument();
+    expect(screen.getByText(/На скачивание и вход осталось/)).toBeInTheDocument();
+    expect(screen.getByText(/срок истёк, мы не можем гарантировать работу приложения/)).toBeInTheDocument();
+  });
+
+  it('counts the activation window once a code was requested', async () => {
+    issuedOrder();
+    vi.mocked(api.delivery).mockResolvedValue({
+      ...delivery(),
+      expiresAt: new Date(Date.now() + 20 * 60 * 1000).toISOString(),
+      activationStartedAt: new Date().toISOString(),
+    });
+
+    renderOrder();
+
+    expect(await screen.findByText('На активацию осталось')).toBeInTheDocument();
+    const timer = screen.getAllByRole('timer')[0];
+    expect(timer).toHaveTextContent(/1[89]:\d\d|20:00/);
+    // Under half an hour the countdown turns red.
+    expect(timer).toHaveClass('text-error');
+    expect(screen.queryByText(/После запроса кода на завершение/)).not.toBeInTheDocument();
+  });
+
+  it('re-reads the delivery when the time is up and says the order expired', async () => {
+    issuedOrder();
+    vi.mocked(api.delivery).mockResolvedValue({ ...delivery(), expiresAt: new Date(Date.now() - 1000).toISOString() });
+
+    renderOrder();
+
+    expect(await screen.findByText('Срок выдачи истёк')).toBeInTheDocument();
+    await waitFor(() => expect(vi.mocked(api.delivery).mock.calls.length).toBeGreaterThan(1));
   });
 });
 

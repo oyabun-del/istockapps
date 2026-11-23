@@ -39,6 +39,8 @@ export function snapshot(groups: DeliveryGroup[], overrides: Partial<DeliverySna
     isExpired: false,
     isSandbox: true,
     expiresAt: new Date('2026-10-14T18:00:00Z'),
+    limits: null,
+    activationStartedAt: null,
     groups,
     replacingAppIds: new Set(),
     ...overrides,

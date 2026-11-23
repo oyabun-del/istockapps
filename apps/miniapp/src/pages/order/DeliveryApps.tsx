@@ -1,7 +1,6 @@
 import type { DeliveryAppDto, DeliveryDto, DeliveryGroupDto, DeliveryState } from '@istock/shared';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
-import { formatDeadline } from '../../lib/format';
 import type { IconName } from '../../lib/icons';
 import { openExternalLink } from '../../lib/telegram';
 
@@ -18,7 +17,7 @@ const STATE_NOTICE: Record<Exclude<DeliveryState, 'available'>, { icon: IconName
   },
   expired: {
     icon: 'timer_off',
-    text: 'Срок выдачи истёк. Напишите в поддержку, если не успели установить приложение.',
+    text: 'Срок выдачи истёк, ссылки больше не работают. По условиям соглашения деньги за просроченный заказ не возвращаются.',
     tone: 'bg-surface-container-highest text-on-surface-variant',
   },
   unavailable: {
@@ -94,12 +93,6 @@ export function DeliveryApps({ delivery, isDone }: Props) {
         <p className="flex items-start gap-1.5 rounded-lg bg-warning/10 p-space-sm text-body-sm text-warning">
           <Icon name="warning" className="mt-0.5 text-[16px]" />
           Нажимайте, только если загрузка не завершилась. Установленное и удалённое приложение скачать повторно нельзя.
-        </p>
-      )}
-      {hasAvailable && (
-        <p className="tabular flex items-center gap-1.5 text-label-md text-secondary">
-          <Icon name="schedule" className="text-[16px]" />
-          {`Ссылки действуют до ${formatDeadline(delivery.expiresAt)}`}
         </p>
       )}
     </div>

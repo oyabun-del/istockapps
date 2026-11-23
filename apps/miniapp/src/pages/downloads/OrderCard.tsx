@@ -1,4 +1,4 @@
-import { formatRub, type OrderDto } from '@istock/shared';
+import { formatRub, isPaidStatus, type OrderDto } from '@istock/shared';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { AppIconStack } from '../../components/ui/AppIconStack';
@@ -107,6 +107,9 @@ export function OrderCard({ order }: { order: OrderDto }) {
             <span>
               {meta.label}
               {order.status === 'awaiting_payment' && order.expiresAt && <TimeLeft expiresAt={order.expiresAt} />}
+              {isPaidStatus(order.status) && order.status !== 'completed' && order.deliveryExpiresAt && (
+                <TimeLeft expiresAt={order.deliveryExpiresAt} />
+              )}
             </span>
           </span>
           <span className="tabular text-body-sm text-on-surface-variant">

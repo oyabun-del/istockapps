@@ -161,6 +161,12 @@ const envSchema = z
     INSTALLIOS_PRICES: pricesSchema.default({}),
     /** Category fixes by app id when the name rules guess wrong: {"app_…": "vpn"}. */
     INSTALLIOS_CATEGORIES: categoriesSchema.default({}),
+    /**
+     * Shown in the cart before an order exists. Must match the Install-IOS partner settings
+     * (initial_ttl_seconds, code_window_ttl_seconds); a mismatch is logged as a warning.
+     */
+    DELIVERY_INSTALL_TTL_MIN: z.coerce.number().int().positive().default(720),
+    DELIVERY_ACTIVATION_TTL_MIN: z.coerce.number().int().positive().default(360),
 
     /** Development only: lets the Mini App work in a regular browser without Telegram initData. */
     DEV_USER_ID: z.coerce.number().int().positive().optional(),
@@ -318,6 +324,17 @@ export function sellerOf(env: Pick<Env, (typeof SELLER_KEYS)[number]>): Seller |
   const { SELLER_NAME: name, SELLER_EMAIL: email } = env;
   if (!name || !email) return null;
   return { name, email };
+}
+
+const SECONDS_PER_MINUTE = 60;
+
+export function deliveryLimitsOf(
+  env: Pick<Env, 'DELIVERY_INSTALL_TTL_MIN' | 'DELIVERY_ACTIVATION_TTL_MIN'>,
+): { installSeconds: number; activationSeconds: number } {
+  return {
+    installSeconds: env.DELIVERY_INSTALL_TTL_MIN * SECONDS_PER_MINUTE,
+    activationSeconds: env.DELIVERY_ACTIVATION_TTL_MIN * SECONDS_PER_MINUTE,
+  };
 }
 
 export function supportUrl(env: Pick<Env, 'SUPPORT_USERNAME'>): string {

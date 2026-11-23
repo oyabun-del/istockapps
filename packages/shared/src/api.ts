@@ -140,6 +140,8 @@ export interface OrderDto {
   paymentUrl: string | null;
   /** When the unpaid invoice expires (ISO); null once the order is no longer awaiting payment. */
   expiresAt: string | null;
+  /** Deadline of the delivery once it was issued (ISO); the first code request moves it closer. */
+  deliveryExpiresAt: string | null;
   createdAt: string;
   /** The login code step is done (code received or not asked by Apple); unlocks the last step. */
   isCodeReceived: boolean;
@@ -174,9 +176,23 @@ export interface DeliveryGroupDto {
   apps: DeliveryAppDto[];
 }
 
+/**
+ * Time the delivery API gives the buyer: to download and sign in before the first code request, and
+ * to finish activation after it. The first code request shortens the whole order, links included.
+ */
+export interface DeliveryLimitsDto {
+  installSeconds: number;
+  activationSeconds: number;
+}
+
 /** Fresh snapshot of the delivery: always replaces the previous one as a whole. */
 export interface DeliveryDto {
+  /** Current deadline of the whole order; it moves closer once the first code is requested. */
   expiresAt: string;
+  /** Limits of this order from the delivery API; null when it did not send them. */
+  limits: DeliveryLimitsDto | null;
+  /** When the shortened activation window started; null until the first code request. */
+  activationStartedAt: string | null;
   /** Test mode of the delivery API: nothing is really charged. */
   isSandbox: boolean;
   groups: DeliveryGroupDto[];
@@ -228,6 +244,8 @@ export interface MeDto {
   supportUrl: string;
   /** Seller named in the terms and privacy policy; null only in development. */
   seller: SellerDto | null;
+  /** Shown in the cart before an order exists; each order then uses the limits from the delivery API. */
+  deliveryLimits: DeliveryLimitsDto;
   /** Unknown values are null (e.g. the bot cannot read the channel). */
   channel: { title: string | null; subscriberCount: number | null };
 }

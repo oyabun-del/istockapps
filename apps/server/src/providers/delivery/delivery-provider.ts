@@ -23,12 +23,22 @@ export interface DeliveryGroup {
   apps: DeliveryApp[];
 }
 
+/** Seconds to download and sign in before the first code request, and to finish after it. */
+export interface DeliveryLimits {
+  installSeconds: number;
+  activationSeconds: number;
+}
+
 /** Full state of a delivery at one moment; each fetch replaces the previous snapshot entirely. */
 export interface DeliverySnapshot {
   ref: string;
   isExpired: boolean;
   isSandbox: boolean;
   expiresAt: Date;
+  /** null when the provider does not report its limits. */
+  limits: DeliveryLimits | null;
+  /** Start of the shortened window after the first code request; null before it. */
+  activationStartedAt: Date | null;
   groups: DeliveryGroup[];
   /** App ids still waiting for a free replacement account. */
   replacingAppIds: ReadonlySet<string>;

@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import type { TelegramAdapters } from './bot/bot.js';
-import { channelUrl, installiosPriceOf, sellerOf, supportUrl, type Env } from './config/env.js';
+import { channelUrl, deliveryLimitsOf, installiosPriceOf, sellerOf, supportUrl, type Env } from './config/env.js';
 import type { AppDeps } from './http/app.js';
 import type { Logger } from './lib/logger.js';
 import { initDataSecret } from './lib/telegram-init-data.js';
@@ -166,7 +166,8 @@ export function createContainer(env: Env, telegram: TelegramAdapters, logger: Lo
     mockPayments,
     orders,
     checkout,
-    delivery: new DeliveryService({ repos, delivery, notifications, logger }),
+    deliveryLimits: deliveryLimitsOf(env),
+    delivery: new DeliveryService({ repos, delivery, notifications, logger, expectedLimits: deliveryLimitsOf(env) }),
     subscription,
     miniappDir: env.SERVE_MINIAPP ? MINIAPP_DIST : null,
   };

@@ -216,6 +216,32 @@ describe('DeliveryService with Install-IOS semantics', () => {
     expect(stored).toMatchObject({ deliveryRef: 'ord_1', deliveryExpiresAt: provider.current.expiresAt });
   });
 
+  it('passes the limits through and warns once when they differ from the configured ones', async () => {
+    const logger = { ...silentLogger, warn: vi.fn() };
+    const checked = new DeliveryService({
+      repos: ctx.repos,
+      delivery: provider,
+      notifications: ctx.notifications,
+      logger,
+      expectedLimits: { installSeconds: 43_200, activationSeconds: 21_600 },
+      now: ctx.clock.now,
+    });
+    const paid = await createPaidOrder(ctx);
+    provider.current = snapshot([group('grp_1', ['sberbank'])], {
+      limits: { installSeconds: 43_200, activationSeconds: 3_600 },
+      activationStartedAt: new Date('2026-10-14T12:00:00Z'),
+    });
+
+    const delivery = await checked.getDelivery(BUYER.id, paid.id);
+    await checked.getDelivery(BUYER.id, paid.id);
+
+    expect(delivery).toMatchObject({
+      limits: { installSeconds: 43_200, activationSeconds: 3_600 },
+      activationStartedAt: '2026-10-14T12:00:00.000Z',
+    });
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+  });
+
   it('creates one delivery with every app of the order', async () => {
     const paid = await createPaidOrder(ctx, ['sberbank', 'tbank', 'minecraft']);
 

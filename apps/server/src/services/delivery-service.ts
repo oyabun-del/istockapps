@@ -9,6 +9,7 @@ import {
   DeliveryExpiredError,
   DeliveryRateLimitedError,
   type CodeWait,
+  type DeliveryLimits,
   type DeliveryProvider,
   type DeliverySnapshot,
   type GroupCredentials,
@@ -35,6 +36,8 @@ export interface DeliveryServiceDeps {
   delivery: DeliveryProvider;
   notifications: Pick<NotificationService, 'activationCompleted'>;
   logger: Logger;
+  /** The limits the cart promises (env); an order that reports others is logged once per distinct pair. */
+  expectedLimits?: DeliveryLimits;
   now?: () => Date;
 }
 
@@ -59,6 +62,7 @@ export class DeliveryService {
   private readonly polls = new Map<string, CachedPoll>();
   /** Two taps at once must not both miss the running wait and spend two of the account's codes. */
   private readonly codeStarts = new KeyedLock<string>();
+  private readonly reportedLimits = new Set<string>();
 
   constructor(private readonly deps: DeliveryServiceDeps) {
     this.now = deps.now ?? (() => new Date());
@@ -244,7 +248,22 @@ export class DeliveryService {
       await this.deps.repos.orders.update(order.id, { deliveryRef: snapshot.ref, deliveryExpiresAt: snapshot.expiresAt });
     }
     if (isNew) await this.recordEvent(order.id, 'delivery_created', { sandbox: snapshot.isSandbox });
+    this.checkLimits(snapshot.limits);
     return snapshot;
+  }
+
+  /** The cart and the terms quote the env limits: say so when the partner settings changed. */
+  private checkLimits(actual: DeliveryLimits | null): void {
+    const expected = this.deps.expectedLimits;
+    if (!expected || !actual) return;
+    if (actual.installSeconds === expected.installSeconds && actual.activationSeconds === expected.activationSeconds) return;
+    const key = `${actual.installSeconds}:${actual.activationSeconds}`;
+    if (this.reportedLimits.has(key)) return;
+    this.reportedLimits.add(key);
+    this.deps.logger.warn(
+      { expected, actual },
+      'Delivery limits differ from DELIVERY_INSTALL_TTL_MIN / DELIVERY_ACTIVATION_TTL_MIN',
+    );
   }
 
   /** Reuses a status read younger than a second, so polling never exceeds the API's rate. */

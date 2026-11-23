@@ -83,6 +83,18 @@ describe('toSnapshot', () => {
     expect(toSnapshot(withoutReplacement).replacingAppIds.size).toBe(0);
     expect(toSnapshot({ ...BASE_ORDER, status: 'expired' }).isExpired).toBe(true);
   });
+
+  it('reads the order limits and the start of the activation window', () => {
+    const snapshot = toSnapshot({
+      ...BASE_ORDER,
+      initial_ttl_seconds: 43_200,
+      code_window_ttl_seconds: 21_600,
+      code_window_started_at: 1_799_990_000,
+    });
+    expect(snapshot.limits).toEqual({ installSeconds: 43_200, activationSeconds: 21_600 });
+    expect(snapshot.activationStartedAt).toEqual(new Date(1_799_990_000_000));
+    expect(toSnapshot(BASE_ORDER)).toMatchObject({ limits: null, activationStartedAt: null });
+  });
 });
 
 describe('InstalliosDeliveryProvider', () => {

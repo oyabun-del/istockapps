@@ -55,6 +55,8 @@ export function toDeliveryDto(snapshot: DeliverySnapshot, now: Date): DeliveryDt
   const groups = withoutSupersededApps(snapshot.groups.map((group) => toGroupDto(group, snapshot, now)));
   return {
     expiresAt: snapshot.expiresAt.toISOString(),
+    limits: snapshot.limits ? { ...snapshot.limits } : null,
+    activationStartedAt: snapshot.activationStartedAt?.toISOString() ?? null,
     isSandbox: snapshot.isSandbox,
     groups,
     isReplacing: groups.some((group) => group.apps.some((app) => app.state === 'replacing')),

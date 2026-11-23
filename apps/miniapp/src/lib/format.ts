@@ -1,4 +1,5 @@
 const SECONDS_PER_MINUTE = 60;
+const MINUTES_PER_HOUR = 60;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const COMPACT_FROM = 10_000;
 
@@ -25,18 +26,23 @@ export function formatOrderDate(iso: string, now: Date = new Date()): string {
   return format.format(date).replace(/\s?г\.$/, '');
 }
 
-/** "18:30" today, otherwise "15 октября, 18:30". */
-export function formatDeadline(iso: string, now: Date = new Date()): string {
-  const date = new Date(iso);
-  const time = TIME.format(date);
-  return startOfDay(date) === startOfDay(now) ? time : `${DAY_MONTH.format(date)}, ${time}`;
-}
-
-/** 886 → "14:46". */
+/** 886 → "14:46"; an hour or more → "5:59:30". */
 export function formatCountdown(totalSeconds: number): string {
   const seconds = Math.max(0, Math.floor(totalSeconds));
-  const minutes = Math.floor(seconds / SECONDS_PER_MINUTE);
-  return `${minutes}:${String(seconds % SECONDS_PER_MINUTE).padStart(2, '0')}`;
+  const ss = String(seconds % SECONDS_PER_MINUTE).padStart(2, '0');
+  const totalMinutes = Math.floor(seconds / SECONDS_PER_MINUTE);
+  if (totalMinutes < MINUTES_PER_HOUR) return `${totalMinutes}:${ss}`;
+  const mm = String(totalMinutes % MINUTES_PER_HOUR).padStart(2, '0');
+  return `${Math.floor(totalMinutes / MINUTES_PER_HOUR)}:${mm}:${ss}`;
+}
+
+/** 43200 → "12 ч", 5400 → "1 ч 30 мин", 600 → "10 мин". */
+export function formatDuration(totalSeconds: number): string {
+  const totalMinutes = Math.max(1, Math.round(totalSeconds / SECONDS_PER_MINUTE));
+  const hours = Math.floor(totalMinutes / MINUTES_PER_HOUR);
+  const minutes = totalMinutes % MINUTES_PER_HOUR;
+  if (hours === 0) return `${minutes} мин`;
+  return minutes === 0 ? `${hours} ч` : `${hours} ч ${minutes} мин`;
 }
 
 /** "СберБанк Онлайн" for one app, "СберБанк Онлайн и ещё 2" for several. */

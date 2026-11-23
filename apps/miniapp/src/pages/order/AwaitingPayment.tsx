@@ -1,11 +1,11 @@
 import type { OrderDto, PaymentMethod } from '@istock/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
-import { useSecondsUntil } from '../../hooks/useSecondsUntil';
+import { useDeadline } from '../../hooks/useSecondsUntil';
 import { api, errorMessage } from '../../lib/api';
 import { formatCountdown } from '../../lib/format';
 import { REVEAL } from '../../lib/motion';
@@ -24,13 +24,8 @@ type Props = {
 };
 
 function InvoiceTimer({ expiresAt, onExpire }: { expiresAt: string; onExpire: () => void }) {
-  const secondsLeft = useSecondsUntil(expiresAt);
-  const isExpired = secondsLeft === 0;
-
-  useEffect(() => {
-    // The server learns about the expiry from the provider; ask for the fresh status once.
-    if (isExpired) onExpire();
-  }, [isExpired, onExpire]);
+  // The server learns about the expiry from the provider; ask for the fresh status once.
+  const { secondsLeft, isExpired } = useDeadline(expiresAt, onExpire);
 
   if (isExpired) {
     return <p className="text-body-md text-on-surface-variant">Время на оплату вышло. Проверяем статус счёта.</p>;

@@ -5,6 +5,7 @@ import {
   MAX_ORDER_TOTAL_KOPECKS,
   type ActivePaymentMethod,
   type CartPricing,
+  type DeliveryLimitsDto,
   type ErrorCode,
   type PromoCheckDto,
 } from '@istock/shared';
@@ -16,12 +17,13 @@ import { Page } from '../../components/layout/Page';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { EmptyState, ErrorState, Skeleton } from '../../components/ui/StateViews';
+import { deliveryTimeText, RULES_CONSEQUENCE, RULES_CONSENT_LABEL } from '../../content/delivery-rules';
 import { LEGAL_PATHS } from '../../content/legal';
 import { useCart } from '../../hooks/useCart';
 import { ApiError, api, errorMessage } from '../../lib/api';
 import { cartStore } from '../../lib/cart';
 import { PAYMENT_PROCESSORS } from '../../lib/order-status';
-import { queryKeys } from '../../lib/queries';
+import { queryKeys, useMe } from '../../lib/queries';
 import { hapticNotify, openExternalLink } from '../../lib/telegram';
 import { CartItemRow } from './CartItemRow';
 import { DiscountProgress } from './DiscountProgress';
@@ -126,6 +128,41 @@ function OrderLimitNotice() {
   );
 }
 
+type RulesConsentProps = {
+  limits: DeliveryLimitsDto | undefined;
+  isAccepted: boolean;
+  onChange: (isAccepted: boolean) => void;
+};
+
+/** No refund for a skipped step or a missed deadline: the buyer agrees to it before paying. */
+function RulesConsent({ limits, isAccepted, onChange }: RulesConsentProps) {
+  return (
+    <section aria-labelledby="rules-heading" className="flex flex-col gap-2.5 rounded-xl bg-warning/10 p-3.5">
+      <h2 id="rules-heading" className="flex items-center gap-2 text-label-lg text-warning">
+        <Icon name="schedule" className="shrink-0 text-[18px]" />
+        Сроки и условия выдачи
+      </h2>
+      <p className="text-body-sm text-on-surface">{deliveryTimeText(limits)}</p>
+      <p className="text-body-sm text-on-surface">
+        Проходите шаги строго по{' '}
+        <Link to="/guide" className="underline underline-offset-2 hover:text-primary">
+          инструкции
+        </Link>
+        . {RULES_CONSEQUENCE}
+      </p>
+      <label className="flex cursor-pointer items-start gap-2.5 rounded-lg bg-surface-container p-3">
+        <input
+          type="checkbox"
+          checked={isAccepted}
+          onChange={(event) => onChange(event.target.checked)}
+          className="mt-0.5 h-5 w-5 shrink-0 accent-primary"
+        />
+        <span className="text-body-sm text-on-surface">{RULES_CONSENT_LABEL}</span>
+      </label>
+    </section>
+  );
+}
+
 type CheckoutVariables = {
   appIds: string[];
   totalKopecks: number;
@@ -182,6 +219,8 @@ export function CartPage() {
   const [promo, setPromo] = useState<PromoCheckDto | null>(null);
   const [hasPromoDraft, setHasPromoDraft] = useState(false);
   const [chosenMethod, setChosenMethod] = useState<ActivePaymentMethod | null>(null);
+  const [isRulesAccepted, setIsRulesAccepted] = useState(false);
+  const { data: me } = useMe();
   const { pricing } = cart;
   const available = methods.data?.map((item) => item.method) ?? [];
   const payable = pricing ? available.filter((method) => methodBlocker(method, pricing.totalKopecks) === null) : [];
@@ -201,6 +240,7 @@ export function CartPage() {
   // A typed but unapplied code (maybe a free one) must not be skipped on the way to an invoice.
   const isPromoDraftPending = paymentsMode !== 'closed' && hasPromoDraft;
   const canPay =
+    isRulesAccepted &&
     !isPromoDraftPending &&
     (isFree
       ? !isFreeOverLimit && !isOverLimit
@@ -289,6 +329,10 @@ export function CartPage() {
               onClear={() => setPromo(null)}
               onDraftChange={setHasPromoDraft}
             />
+          )}
+
+          {paymentsMode !== 'closed' && (
+            <RulesConsent limits={me?.deliveryLimits} isAccepted={isRulesAccepted} onChange={setIsRulesAccepted} />
           )}
 
           <div className="mt-2">

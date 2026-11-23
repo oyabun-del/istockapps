@@ -3,7 +3,7 @@ import { PRIVACY_SECTIONS, PRIVACY_TITLE, privacyIntro } from './privacy';
 import { TERMS_SECTIONS, TERMS_TITLE, termsIntro } from './terms';
 
 /** Change together with the texts in terms.ts and privacy.ts. */
-export const LEGAL_EDITION = '31 октября 2026 г.';
+export const LEGAL_EDITION = '23 ноября 2026 г.';
 
 export { LEGAL_PATHS, type LegalDocId };
 

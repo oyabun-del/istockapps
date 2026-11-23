@@ -35,6 +35,7 @@ export const ME: MeDto = {
   channelUrl: 'https://t.me/test_channel',
   supportUrl: 'https://t.me/support',
   seller: SELLER,
+  deliveryLimits: { installSeconds: 43_200, activationSeconds: 21_600 },
   channel: { title: 'iStockApps', subscriberCount: 42_800 },
 };
 
@@ -65,6 +66,7 @@ export function makeOrder(overrides: Partial<OrderDto> = {}): OrderDto {
     paymentUrl: null,
     expiresAt: null,
     createdAt: '2026-10-14T12:00:00.000Z',
+    deliveryExpiresAt: null,
     isCodeReceived: false,
     paidAt: '2026-10-14T12:01:00.000Z',
     completedAt: null,

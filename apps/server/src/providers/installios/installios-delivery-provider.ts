@@ -28,6 +28,11 @@ export function toSnapshot(order: InstalliosOrder): DeliverySnapshot {
     isExpired: order.status === 'expired',
     isSandbox: order.sandbox,
     expiresAt: fromUnix(order.expires_at),
+    limits:
+      order.initial_ttl_seconds !== undefined && order.code_window_ttl_seconds !== undefined
+        ? { installSeconds: order.initial_ttl_seconds, activationSeconds: order.code_window_ttl_seconds }
+        : null,
+    activationStartedAt: order.code_window_started_at ? fromUnix(order.code_window_started_at) : null,
     groups: order.groups.map((group) => ({
       id: group.id,
       expiresAt: fromUnix(group.expires_at ?? order.expires_at),

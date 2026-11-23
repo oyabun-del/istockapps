@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '../../lib/api';
 import { cartStore } from '../../lib/cart';
-import { SBER, makeApp, makeOrder, renderWithProviders } from '../../test/render';
+import { ME, SBER, makeApp, makeOrder, renderWithProviders } from '../../test/render';
 import { CartPage } from './CartPage';
 
 const CATALOG = [SBER, makeApp('tbank', 'Т-Банк'), makeApp('canva', 'Canva'), makeApp('minecraft', 'Minecraft', 29900), makeApp('vtb', 'ВТБ')];
@@ -22,6 +22,13 @@ function fillCart(count: number) {
 
 function renderCart() {
   return renderWithProviders(<CartPage />, { route: '/cart', path: '/cart' });
+}
+
+/** The pay button stays disabled until the buyer accepts the delivery rules. */
+async function acceptRules() {
+  await screen.findByRole('button', { name: /Оплатить|Получить бесплатно/ });
+  const box = screen.queryByRole('checkbox', { name: /строго по инструкции/ });
+  if (box && !(box as HTMLInputElement).checked) await userEvent.click(box);
 }
 
 describe('CartPage', () => {
@@ -97,6 +104,7 @@ describe('CartPage', () => {
     renderCart();
 
     await screen.findByText('СБП');
+    await acceptRules();
     await userEvent.click(screen.getByRole('button', { name: 'Оплатить 447\u00a0₽' }));
 
     await waitFor(() =>
@@ -120,6 +128,7 @@ describe('CartPage', () => {
 
     await screen.findByText('СБП');
     const loads = app.mock.calls.length;
+    await acceptRules();
     await userEvent.click(screen.getByRole('button', { name: /Оплатить/ }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Цены обновились');
@@ -134,11 +143,14 @@ describe('CartPage', () => {
     fillCart(1);
     renderCart();
 
+    await acceptRules();
     await screen.findByRole('button', { name: 'Оплатить 349\u00a0₽' });
     app.mockResolvedValue({ ...SBER, priceKopecks: 39900 });
+    await acceptRules();
     await userEvent.click(screen.getByRole('button', { name: /Оплатить/ }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Цена изменилась: теперь 399 ₽. Проверьте и оплатите ещё раз.');
+    await acceptRules();
     expect(screen.getByRole('button', { name: 'Оплатить 399\u00a0₽' })).toBeInTheDocument();
   });
 
@@ -150,6 +162,7 @@ describe('CartPage', () => {
     renderCart();
 
     await screen.findByText('СБП');
+    await acceptRules();
     await userEvent.click(screen.getByRole('button', { name: /Оплатить/ }));
     expect(await screen.findByRole('alert')).toBeInTheDocument();
 
@@ -191,6 +204,7 @@ describe('CartPage', () => {
       expect(sbp).toHaveAttribute('aria-checked', 'false');
       expect(screen.getByText(/Безопасный платёж через CisPay/)).toBeInTheDocument();
 
+      await acceptRules();
       await userEvent.click(screen.getByRole('button', { name: 'Оплатить 349 ₽' }));
       await waitFor(() =>
         expect(createOrder).toHaveBeenCalledWith({ appIds: ['sberbank'], paymentMethod: 'CARD', expectedTotalKopecks: 34900 }),
@@ -204,6 +218,7 @@ describe('CartPage', () => {
       renderCart();
 
       expect(await screen.findByRole('radio', { name: /Карта РФ/ })).toHaveAttribute('aria-checked', 'true');
+      await acceptRules();
       expect(screen.getByRole('button', { name: /Оплатить/ })).toBeEnabled();
     });
 
@@ -226,6 +241,7 @@ describe('CartPage', () => {
       renderCart();
 
       await screen.findByRole('radio', { name: /Карта РФ/ });
+      await acceptRules();
       expect(screen.getByRole('button', { name: /Оплатить/ })).toBeDisabled();
     });
   });
@@ -238,6 +254,7 @@ describe('CartPage', () => {
     renderCart();
 
     expect(await screen.findByText(/Оплата временно недоступна/)).toBeInTheDocument();
+    await acceptRules();
     expect(screen.getByRole('button', { name: /Оплатить/ })).toBeDisabled();
   });
 
@@ -254,6 +271,7 @@ describe('CartPage', () => {
 
       expect(await screen.findByText(/Максимальная сумма заказа/)).toHaveAttribute('role', 'status');
       await screen.findByText('СБП');
+      await acceptRules();
       expect(screen.getByRole('button', { name: /Оплатить/ })).toBeDisabled();
     });
 
@@ -261,6 +279,7 @@ describe('CartPage', () => {
       renderPricedAt(1_000_000);
 
       await screen.findByText('СБП');
+      await acceptRules();
       await waitFor(() => expect(screen.getByRole('button', { name: /Оплатить/ })).toBeEnabled());
       expect(screen.queryByText(/Максимальная сумма заказа/)).not.toBeInTheDocument();
     });
@@ -274,6 +293,7 @@ describe('CartPage', () => {
     renderCart();
 
     await waitFor(() => expect(cartStore.getSnapshot()).toEqual(['sberbank']));
+    await acceptRules();
     expect(await screen.findByRole('button', { name: 'Оплатить 349\u00a0₽' })).toBeInTheDocument();
     expect(screen.getByText('Некоторые приложения больше недоступны и убраны из корзины')).toHaveAttribute('role', 'status');
   });
@@ -288,6 +308,7 @@ describe('CartPage', () => {
     expect(await screen.findByText('Каталог недоступен')).toBeInTheDocument();
     app.mockResolvedValue(SBER);
     await userEvent.click(screen.getByRole('button', { name: /Повторить/ }));
+    await acceptRules();
     expect(await screen.findByRole('button', { name: 'Оплатить 349\u00a0₽' })).toBeInTheDocument();
   });
 });
@@ -306,6 +327,7 @@ describe('CartPage payments mode', () => {
     renderCart();
 
     expect(await screen.findByText(/Приём оплат временно приостановлен/)).toHaveAttribute('role', 'status');
+    await acceptRules();
     expect(screen.getByRole('button', { name: /Оплатить/ })).toBeDisabled();
     expect(screen.queryByRole('textbox', { name: 'Промокод' })).not.toBeInTheDocument();
   });
@@ -321,6 +343,7 @@ describe('CartPage payments mode', () => {
     renderCart();
 
     const input = await screen.findByRole('textbox', { name: 'Промокод' });
+    await acceptRules();
     expect(screen.getByRole('button', { name: /Оплатить/ })).toBeDisabled();
     await userEvent.type(input, 'ios-review');
     await userEvent.click(screen.getByRole('button', { name: 'Применить' }));
@@ -328,6 +351,7 @@ describe('CartPage payments mode', () => {
     expect(checkPromo).toHaveBeenCalledWith('ios-review');
     expect(await screen.findByText('IOS-REVIEW')).toBeInTheDocument();
     expect(screen.getByText(/^Можно оплатить ещё 5\sприложений$/)).toBeInTheDocument();
+    await acceptRules();
     await userEvent.click(screen.getByRole('button', { name: /Оплатить/ }));
 
     await waitFor(() =>
@@ -349,6 +373,7 @@ describe('CartPage payments mode', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Применить' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Промокод не найден или больше не действует');
+    await acceptRules();
     expect(screen.getByRole('button', { name: /Оплатить/ })).toBeDisabled();
   });
 
@@ -363,9 +388,11 @@ describe('CartPage payments mode', () => {
 
     expect(await screen.findByText(/По промокоду можно оплатить ещё 1\sприложение/)).toHaveAttribute('role', 'status');
     // The server has the final word: this cart may be the buyer's own open invoice.
+    await acceptRules();
     expect(screen.getByRole('button', { name: /Оплатить/ })).toBeEnabled();
     await userEvent.click(screen.getByRole('button', { name: 'Убрать промокод' }));
     expect(screen.getByRole('textbox', { name: 'Промокод' })).toBeInTheDocument();
+    await acceptRules();
     expect(screen.getByRole('button', { name: /Оплатить/ })).toBeDisabled();
   });
 
@@ -377,6 +404,7 @@ describe('CartPage payments mode', () => {
 
     await screen.findByText('СБП');
     expect(screen.queryByRole('textbox', { name: 'Промокод' })).not.toBeInTheDocument();
+    await acceptRules();
     await userEvent.click(screen.getByRole('button', { name: /Оплатить/ }));
 
     await waitFor(() => expect(createOrder).toHaveBeenCalled());
@@ -414,6 +442,7 @@ describe('CartPage free promo codes', () => {
     expect(within(summary).getByText('По промокоду')).toBeInTheDocument();
     expect(within(summary).getByText('Бесплатно')).toBeInTheDocument();
     expect(screen.queryByText(/Безопасный платёж/)).not.toBeInTheDocument();
+    await acceptRules();
     await userEvent.click(screen.getByRole('button', { name: 'Получить бесплатно' }));
 
     await waitFor(() =>
@@ -433,8 +462,10 @@ describe('CartPage free promo codes', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Есть промокод?' }));
     await userEvent.type(screen.getByRole('textbox', { name: 'Промокод' }), 'gift-2026');
 
+    await acceptRules();
     expect(screen.getByRole('button', { name: /Оплатить/ })).toBeDisabled();
     expect(screen.getByText('Нажмите «Применить», чтобы использовать промокод')).toHaveAttribute('role', 'status');
+    await acceptRules();
     await userEvent.click(screen.getByRole('button', { name: /Оплатить/ }));
     expect(createOrder).not.toHaveBeenCalled();
   });
@@ -448,6 +479,7 @@ describe('CartPage free promo codes', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Есть промокод?' }));
     await applyCode('gift-2026');
 
+    await acceptRules();
     expect(screen.getByRole('button', { name: /Оплатить/ })).toBeDisabled();
   });
 
@@ -463,6 +495,7 @@ describe('CartPage free promo codes', () => {
     await userEvent.clear(input);
 
     expect(screen.queryByText(/Нажмите «Применить»/)).not.toBeInTheDocument();
+    await acceptRules();
     await userEvent.click(screen.getByRole('button', { name: /Оплатить/ }));
     await waitFor(() => expect(createOrder).toHaveBeenCalled());
     expect(createOrder.mock.calls[0]?.[0]).not.toHaveProperty('promoCode');
@@ -476,6 +509,7 @@ describe('CartPage free promo codes', () => {
 
     await applyCode('GIFT-2026');
 
+    await acceptRules();
     expect(await screen.findByRole('button', { name: 'Получить бесплатно' })).toBeEnabled();
   });
 
@@ -489,6 +523,7 @@ describe('CartPage free promo codes', () => {
     await applyCode('GIFT-2026');
 
     expect(await screen.findByText(/По промокоду можно получить ещё 1\sприложение/)).toHaveAttribute('role', 'status');
+    await acceptRules();
     expect(screen.getByRole('button', { name: 'Получить бесплатно' })).toBeDisabled();
   });
 
@@ -504,8 +539,32 @@ describe('CartPage free promo codes', () => {
 
     expect(await screen.findByText(/Сейчас оплатить можно и без промокода/)).toHaveAttribute('role', 'status');
     expect(screen.queryByText('IOS-REVIEW')).not.toBeInTheDocument();
+    await acceptRules();
     await userEvent.click(screen.getByRole('button', { name: /Оплатить/ }));
     await waitFor(() => expect(createOrder).toHaveBeenCalled());
     expect(createOrder.mock.calls[0]?.[0]).not.toHaveProperty('promoCode');
+  });
+});
+
+describe('CartPage delivery rules', () => {
+  it('names the time limits and keeps the pay button off until the rules are accepted', async () => {
+    mockCatalog();
+    vi.spyOn(api, 'paymentMethods').mockResolvedValue([{ method: 'SBP' }]);
+    vi.spyOn(api, 'me').mockResolvedValue(ME);
+    fillCart(1);
+
+    renderCart();
+
+    const pay = await screen.findByRole('button', { name: /Оплатить/ });
+    expect(pay).toBeDisabled();
+    expect(await screen.findByText(/На скачивание и вход в App Store — 12 ч/)).toBeInTheDocument();
+    expect(screen.getByText(/на завершение остаётся 6 ч/)).toBeInTheDocument();
+    expect(screen.getByText(/срок истёк, мы не можем гарантировать работу приложения и не возвращаем деньги/)).toBeInTheDocument();
+
+    const box = screen.getByRole('checkbox', { name: /строго по инструкции/ });
+    await userEvent.click(box);
+    expect(pay).toBeEnabled();
+    await userEvent.click(box);
+    expect(pay).toBeDisabled();
   });
 });

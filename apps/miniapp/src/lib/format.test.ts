@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCountdown, formatOrderDate, formatSubscribers, pluralRu } from './format';
+import { formatCountdown, formatDuration, formatOrderDate, formatSubscribers, pluralRu } from './format';
 
 const NOW = new Date(2026, 9, 15, 18, 30);
 
@@ -17,6 +17,19 @@ describe('formatCountdown', () => {
     expect(formatCountdown(14 * 60 + 46)).toBe('14:46');
     expect(formatCountdown(5)).toBe('0:05');
     expect(formatCountdown(-3)).toBe('0:00');
+  });
+
+  it('adds hours from an hour up', () => {
+    expect(formatCountdown(3600)).toBe('1:00:00');
+    expect(formatCountdown(6 * 3600 - 30)).toBe('5:59:30');
+  });
+});
+
+describe('formatDuration', () => {
+  it('speaks in hours and minutes', () => {
+    expect(formatDuration(43_200)).toBe('12 ч');
+    expect(formatDuration(5_400)).toBe('1 ч 30 мин');
+    expect(formatDuration(600)).toBe('10 мин');
   });
 });
 

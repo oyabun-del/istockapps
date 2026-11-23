@@ -32,6 +32,9 @@ export class MockDeliveryProvider implements DeliveryProvider {
       isExpired: false,
       isSandbox: true,
       expiresAt,
+      // The mock never shortens the order after a code request, so it reports no limits.
+      limits: null,
+      activationStartedAt: null,
       groups: [
         {
           id: `grp_${externalId}`,

@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
-import type { SellerDto } from '@istock/shared';
+import type { DeliveryLimitsDto, SellerDto } from '@istock/shared';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import type { CatalogProvider } from '../providers/catalog/catalog-provider.js';
 import type { MockPaymentProvider } from '../providers/payment/mock-payment-provider.js';
@@ -48,6 +48,7 @@ export interface AppDeps {
   allowedOrigin: string;
   links: { channelUrl: string; supportUrl: string };
   seller: SellerDto | null;
+  deliveryLimits: DeliveryLimitsDto;
   channel: ChannelInfoService;
   repos: Repositories;
   catalog: CatalogProvider;

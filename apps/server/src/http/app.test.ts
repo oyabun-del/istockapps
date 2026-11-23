@@ -40,6 +40,7 @@ function baseDeps(overrides: Partial<AppDeps> = {}): AppDeps {
     allowedOrigin: 'https://shop.example.com',
     links: { channelUrl: 'https://t.me/test_channel', supportUrl: 'https://t.me/support' },
     seller: null,
+    deliveryLimits: { installSeconds: 43_200, activationSeconds: 21_600 },
     channel: ctx.channel,
     repos: ctx.repos,
     catalog: ctx.catalog,

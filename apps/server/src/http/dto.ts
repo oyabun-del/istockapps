@@ -22,6 +22,7 @@ export function toOrderDto(order: Order): OrderDto {
     paymentUrl: isAwaitingPayment ? order.paymentUrl : null,
     expiresAt: isAwaitingPayment ? new Date(order.createdAt.getTime() + invoiceTtlMs(order.paymentMethod)).toISOString() : null,
     createdAt: order.createdAt.toISOString(),
+    deliveryExpiresAt: order.deliveryExpiresAt?.toISOString() ?? null,
     isCodeReceived: order.codeReceivedAt !== null || order.status === 'completed',
     paidAt: order.paidAt?.toISOString() ?? null,
     completedAt: order.completedAt?.toISOString() ?? null,

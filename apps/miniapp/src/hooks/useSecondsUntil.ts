@@ -19,3 +19,18 @@ export function useSecondsUntil(until: string | null): number {
 
   return until ? secondsUntil(until, now) : 0;
 }
+
+/**
+ * Countdown to a server deadline. Calls `onExpire` once when it runs out: the server has the final
+ * word on the expiry, so the caller re-reads the fresh state then.
+ */
+export function useDeadline(until: string, onExpire?: () => void): { secondsLeft: number; isExpired: boolean } {
+  const secondsLeft = useSecondsUntil(until);
+  const isExpired = secondsLeft === 0;
+
+  useEffect(() => {
+    if (isExpired) onExpire?.();
+  }, [isExpired, onExpire]);
+
+  return { secondsLeft, isExpired };
+}

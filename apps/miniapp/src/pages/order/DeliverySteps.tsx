@@ -1,7 +1,7 @@
 import type { DeliveryDto, DeliveryGroupDto, OrderDto, OrderStatus } from '@istock/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'motion/react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { CopyField } from '../../components/ui/CopyField';
@@ -9,12 +9,14 @@ import { Icon } from '../../components/ui/Icon';
 import { SettingsPath } from '../../components/ui/SettingsPath';
 import { Spinner } from '../../components/ui/Spinner';
 import { StepImage } from '../../components/ui/StepImage';
+import { activationWarningText } from '../../content/delivery-rules';
 import { GUIDE_IMAGES, MEDIA_PURCHASES_PATH } from '../../content/guide';
 import { api, errorMessage } from '../../lib/api';
 import { REVEAL } from '../../lib/motion';
 import { queryKeys } from '../../lib/queries';
 import { hapticNotify } from '../../lib/telegram';
 import { DeliveryApps } from './DeliveryApps';
+import { DeliveryDeadline } from './DeliveryDeadline';
 import { LoginCodeBox } from './LoginCodeBox';
 import { StepCard, type StepState } from './StepCard';
 
@@ -283,6 +285,12 @@ function CodeStep({ order, delivery, card }: { order: OrderDto; delivery: Delive
   return (
     <StepCard index={3} title="Введите код подтверждения" {...card}>
       {card.state === 'active' && <StepImage image={GUIDE_IMAGES.enterCode} />}
+      {card.state === 'active' && delivery?.limits && !delivery.activationStartedAt && groups.length > 0 && (
+        <p className="flex items-start gap-1.5 rounded-lg bg-warning/10 p-space-sm text-body-sm text-warning">
+          <Icon name="schedule" className="mt-0.5 text-[16px]" />
+          {activationWarningText(delivery.limits.activationSeconds)}
+        </p>
+      )}
       {groups.length === 0 && (
         <p className="text-body-sm text-on-surface-variant">Код станет доступен, когда появится рабочий аккаунт.</p>
       )}
@@ -363,6 +371,8 @@ export function DeliverySteps({ order }: Props) {
   // Locked steps are listed but have no actions: a step opens only once the previous one is done.
   const locked = (key: StepKey) => <LockedStep stepKey={key} isLast={key === lastKey} />;
   const isDownloadedNotActivated = progress.download === 'done' && order.status !== 'completed';
+  const { refetch } = delivery;
+  const handleExpire = useCallback(() => void refetch(), [refetch]);
 
   return (
     <section aria-labelledby="steps-heading" className="flex flex-col gap-space-md">
@@ -376,6 +386,9 @@ export function DeliverySteps({ order }: Props) {
         </div>
         <StepsProgress progress={progress} />
       </div>
+      {order.status !== 'completed' && delivery.data && (
+        <DeliveryDeadline delivery={delivery.data} onExpire={handleExpire} />
+      )}
       {isDownloadedNotActivated && <NotActivatedNotice />}
       <ol className="flex flex-col gap-space-md">
         {progress.download === 'locked' ? (

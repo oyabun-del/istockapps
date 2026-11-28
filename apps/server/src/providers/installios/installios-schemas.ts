@@ -2,7 +2,7 @@ import { CODE_WAIT_STATUSES } from '@istock/shared';
 import { z } from 'zod';
 
 /**
- * Response shapes of the Install-IOS Partner API (contract 1.11.0, https://api.installios.ru/openapi.json).
+ * Response shapes of the Install-IOS Partner API (contract 1.12.0, https://api.installios.ru/openapi.json).
  * Only the fields this project uses are declared; unknown fields are dropped on parse.
  */
 
@@ -50,12 +50,18 @@ const orderGroupSchema = z.object({
  */
 const automaticReplacementSchema = z.object({
   status: z.enum(['pending', 'partial', 'replaced', 'unknown']).catch('unknown'),
+  /**
+   * Replacement hold (1.12.0): a new account comes no earlier than 10 minutes after the block was
+   * reported. null once the server is already picking a catalog. A malformed value only drops the countdown.
+   */
+  available_at: z.number().int().nullish().catch(null),
   applications: z
     .array(
       z.object({
         application_id: z.string(),
         status: z.enum(['pending', 'replaced', 'unknown']).catch('unknown'),
         expires_at: z.number().int().optional(),
+        available_at: z.number().int().nullish().catch(null),
       }),
     )
     .default([]),

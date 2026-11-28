@@ -42,7 +42,7 @@ export function snapshot(groups: DeliveryGroup[], overrides: Partial<DeliverySna
     limits: null,
     activationStartedAt: null,
     groups,
-    replacingAppIds: new Set(),
+    replacingApps: new Map(),
     ...overrides,
   };
 }

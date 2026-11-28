@@ -12,6 +12,7 @@ import { StepImage } from '../../components/ui/StepImage';
 import { activationWarningText } from '../../content/delivery-rules';
 import { GUIDE_IMAGES, MEDIA_PURCHASES_PATH } from '../../content/guide';
 import { api, errorMessage } from '../../lib/api';
+import { replacingPollDelayMs } from '../../lib/delivery-poll';
 import { REVEAL } from '../../lib/motion';
 import { queryKeys } from '../../lib/queries';
 import { hapticNotify } from '../../lib/telegram';
@@ -25,11 +26,6 @@ const STATUS_ORDER: readonly OrderStatus[] = ['paid', 'download_confirmed', 'cre
 const STEP_KEYS = ['download', 'credentials', 'code', 'finish'] as const;
 type StepKey = (typeof STEP_KEYS)[number];
 type StepProgress = StepState | 'locked';
-
-/** While a replacement account is being found, re-read the delivery with a growing pause. */
-const REPLACING_POLL_BASE_MS = 15_000;
-const REPLACING_POLL_MAX_MS = 120_000;
-const MAX_BACKOFF_STEPS = 3;
 
 /** Step N is active when the order is at status STATUS_ORDER[N], done when beyond it. */
 function statusStep(status: OrderStatus, stepStatus: OrderStatus): StepProgress {
@@ -141,11 +137,7 @@ function useDelivery(orderId: number) {
     queryFn: () => api.delivery(orderId),
     staleTime: 0,
     refetchOnWindowFocus: true,
-    refetchInterval: (query) => {
-      if (!query.state.data?.isReplacing) return false;
-      const step = Math.min(query.state.dataUpdateCount, MAX_BACKOFF_STEPS);
-      return Math.min(REPLACING_POLL_BASE_MS * 2 ** step, REPLACING_POLL_MAX_MS);
-    },
+    refetchInterval: (query) => replacingPollDelayMs(query.state.data, query.state.dataUpdateCount),
   });
 }
 

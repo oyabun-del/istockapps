@@ -18,7 +18,7 @@ import {
   type InstalliosOrder,
 } from './installios-schemas.js';
 
-/** Spec: https://api.installios.ru/docs, contract 1.11.0. */
+/** Spec: https://api.installios.ru/docs, contract 1.12.0. */
 const REQUEST_TIMEOUT_MS = 15_000;
 const REQUEST_ID_PREFIX = 'istock-';
 const RETRIABLE_STATUSES = new Set([500, 502, 503, 504]);

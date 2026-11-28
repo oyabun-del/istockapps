@@ -273,11 +273,11 @@ describe('DeliveryService with Install-IOS semantics', () => {
 
   it('shows "replacing" while a free replacement is pending, then only the new links', async () => {
     const paid = await createPaidOrder(ctx);
-    provider.current = snapshot([revokedGroup('grp_a', ['app_main'])], { replacingAppIds: new Set(['app_main']) });
+    provider.current = snapshot([revokedGroup('grp_a', ['app_main'])], { replacingApps: new Map([['app_main', null]]) });
 
     const pending = await service.getDelivery(BUYER.id, paid.id);
     expect(pending.isReplacing).toBe(true);
-    expect(pending.groups[0]?.apps[0]?.state).toBe('replacing');
+    expect(pending.groups[0]?.apps[0]).toMatchObject({ state: 'replacing', replacementInSeconds: null });
 
     // The API keeps the old revoked group and adds a new one; the optional replacement block is gone.
     provider.current = snapshot([revokedGroup('grp_a', ['app_main']), group('grp_new', ['app_main'])]);
@@ -287,6 +287,25 @@ describe('DeliveryService with Install-IOS semantics', () => {
     expect(replaced.groups).toHaveLength(1);
     expect(replaced.groups[0]).toMatchObject({ id: 'grp_new', state: 'available', message: null });
     expect(provider.count('createDelivery')).toBe(1);
+  });
+
+  it('counts down the replacement hold until the new account is due', async () => {
+    const paid = await createPaidOrder(ctx);
+    const dueAt = new Date(ctx.clock.current.getTime() + 9 * 60_000 + 30_500);
+    provider.current = snapshot([revokedGroup('grp_a', ['app_main']), group('grp_b', ['app_extra'])], {
+      replacingApps: new Map([['app_main', dueAt]]),
+    });
+
+    const held = await service.getDelivery(BUYER.id, paid.id);
+    expect(held.groups.find((item) => item.id === 'grp_a')?.apps[0]?.replacementInSeconds).toBe(571);
+    expect(held.groups.find((item) => item.id === 'grp_b')?.apps[0]?.replacementInSeconds).toBeNull();
+
+    ctx.clock.advance(HOUR_MS);
+    const overdue = await service.getDelivery(BUYER.id, paid.id);
+    expect(overdue.groups.find((item) => item.id === 'grp_a')?.apps[0]).toMatchObject({
+      state: 'replacing',
+      replacementInSeconds: null,
+    });
   });
 
   it('uses the individual group deadline instead of a fixed window', async () => {

@@ -121,12 +121,17 @@ describe('OrderPage after the invoice closed', () => {
 
 const IN_6_HOURS = () => new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
 
-function appEntry(id: string, state: DeliveryAppDto['state'] = 'available'): DeliveryAppDto {
+function appEntry(
+  id: string,
+  state: DeliveryAppDto['state'] = 'available',
+  replacementInSeconds: number | null = null,
+): DeliveryAppDto {
   return {
     id,
     name: id.toUpperCase(),
     state,
     links: state === 'available' ? { main: `https://install.example/${id}`, reserve: `https://reserve.example/${id}` } : null,
+    replacementInSeconds,
   };
 }
 
@@ -343,6 +348,18 @@ describe('OrderPage delivery', () => {
     expect(await screen.findByText(/Подбираем замену бесплатно/)).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Скачать' })).toHaveLength(1);
     expect(screen.getByText('APP_B')).toBeInTheDocument();
+  });
+
+  it('tells how many minutes are left until the replacement account', async () => {
+    vi.spyOn(api, 'order').mockResolvedValue(makeOrder({ status: 'paid' }));
+    vi.spyOn(api, 'delivery').mockResolvedValue(
+      delivery([deliveryGroup('grp_blocked', [appEntry('app_a', 'replacing', 9 * 60 + 5)])]),
+    );
+
+    renderOrder();
+
+    expect(await screen.findByText(/Новая учётка будет примерно через 10 мин/)).toBeInTheDocument();
+    expect(screen.queryByText(/Подбираем замену бесплатно/)).not.toBeInTheDocument();
   });
 
   it('shows the revocation message without any link', async () => {

@@ -27,10 +27,30 @@ const STATE_NOTICE: Record<Exclude<DeliveryState, 'available'>, { icon: IconName
   },
 };
 
-function StateNotice({ state, message }: { state: Exclude<DeliveryState, 'available'>; message: string | null }) {
-  const notice = STATE_NOTICE[state];
+const SECONDS_PER_MINUTE = 60;
+
+/** Replacement hold: the delivery API names when the new account is due. */
+function heldReplacementText(seconds: number): string {
+  const minutes = Math.max(1, Math.ceil(seconds / SECONDS_PER_MINUTE));
+  return `Аккаунт заблокирован Apple. Новая учётка будет примерно через ${minutes} мин. — ссылки появятся здесь автоматически.`;
+}
+
+type StateNoticeProps = {
+  state: Exclude<DeliveryState, 'available'>;
+  message: string | null;
+  replacementInSeconds: number | null;
+};
+
+function noticeText({ state, message, replacementInSeconds }: StateNoticeProps): string {
   // The API's own explanation is shown for revoked access only; the other texts are ours.
-  const text = state === 'revoked' && message ? message : notice.text;
+  if (state === 'revoked' && message) return message;
+  if (state === 'replacing' && replacementInSeconds !== null) return heldReplacementText(replacementInSeconds);
+  return STATE_NOTICE[state].text;
+}
+
+function StateNotice(props: StateNoticeProps) {
+  const notice = STATE_NOTICE[props.state];
+  const text = noticeText(props);
   return (
     <p role="status" className={`flex items-start gap-1.5 rounded-lg p-space-sm text-body-sm ${notice.tone}`}>
       <Icon name={notice.icon} className="mt-0.5 text-[16px]" />
@@ -52,7 +72,11 @@ function AppLinks({ app, group, isDone, hasManyApps }: AppLinksProps) {
     return (
       <div className="flex flex-col gap-1.5">
         {title}
-        <StateNotice state={app.state === 'available' ? 'unavailable' : app.state} message={group.message} />
+        <StateNotice
+          state={app.state === 'available' ? 'unavailable' : app.state}
+          message={group.message}
+          replacementInSeconds={app.replacementInSeconds}
+        />
       </div>
     );
   }

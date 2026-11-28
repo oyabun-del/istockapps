@@ -19,10 +19,19 @@ function fromUnix(seconds: number): Date {
   return new Date(seconds * MS_PER_SECOND);
 }
 
-export function toSnapshot(order: InstalliosOrder): DeliverySnapshot {
-  const replacing = (order.automatic_replacement?.applications ?? [])
+/** Pending replacements with their due time: the app's own one, else the whole block's. */
+function toReplacingApps(order: InstalliosOrder): ReadonlyMap<string, Date | null> {
+  const replacement = order.automatic_replacement;
+  const entries = (replacement?.applications ?? [])
     .filter((item) => item.status === 'pending')
-    .map((item) => item.application_id);
+    .map((item): [string, Date | null] => {
+      const availableAt = item.available_at ?? replacement?.available_at ?? null;
+      return [item.application_id, availableAt === null ? null : fromUnix(availableAt)];
+    });
+  return new Map(entries);
+}
+
+export function toSnapshot(order: InstalliosOrder): DeliverySnapshot {
   return {
     ref: order.id,
     isExpired: order.status === 'expired',
@@ -43,7 +52,7 @@ export function toSnapshot(order: InstalliosOrder): DeliverySnapshot {
       // Copy only what the shop shows; links stay null when the API says so.
       apps: group.applications.map((app) => ({ id: app.id, name: app.name, links: app.links })),
     })),
-    replacingAppIds: new Set(replacing),
+    replacingApps: toReplacingApps(order),
   };
 }
 

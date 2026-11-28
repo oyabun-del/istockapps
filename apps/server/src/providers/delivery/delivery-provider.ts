@@ -40,8 +40,11 @@ export interface DeliverySnapshot {
   /** Start of the shortened window after the first code request; null before it. */
   activationStartedAt: Date | null;
   groups: DeliveryGroup[];
-  /** App ids still waiting for a free replacement account. */
-  replacingAppIds: ReadonlySet<string>;
+  /**
+   * App ids still waiting for a free replacement account, with the earliest time the new account
+   * can come (replacement hold); null when the provider is already picking it or does not say.
+   */
+  replacingApps: ReadonlyMap<string, Date | null>;
 }
 
 /** Live values: keep in memory only, never persist or log. */

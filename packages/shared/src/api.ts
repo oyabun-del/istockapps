@@ -163,6 +163,11 @@ export interface DeliveryAppDto {
   state: DeliveryState;
   /** Only present while the app is available. */
   links: { main: string; reserve: string } | null;
+  /**
+   * While replacing: seconds until the new account is due, counted from when the response was sent
+   * (so no clocks are compared). null when the time is unknown or already reached.
+   */
+  replacementInSeconds: number | null;
 }
 
 /** One Apple account; its apps share login, password and confirmation codes. */

@@ -6,7 +6,7 @@ import {
 } from '../delivery/delivery-provider.js';
 import { InstalliosApiError } from './installios-client.js';
 import { InstalliosDeliveryProvider, toSnapshot } from './installios-delivery-provider.js';
-import type { InstalliosOrder } from './installios-schemas.js';
+import { orderSchema, type InstalliosOrder } from './installios-schemas.js';
 
 const BASE_ORDER: InstalliosOrder = {
   id: 'ord_1',
@@ -75,13 +75,54 @@ describe('toSnapshot', () => {
     });
     expect(snapshot.groups[0]?.apps[0]?.links).toBeNull();
     expect(snapshot.groups[1]?.expiresAt).toEqual(new Date(1_800_003_600_000));
-    expect([...snapshot.replacingAppIds]).toEqual(['app_a']);
+    expect([...snapshot.replacingApps.keys()]).toEqual(['app_a']);
   });
 
   it('treats a missing automatic_replacement as no replacement at all', () => {
     const { automatic_replacement: _ignored, ...withoutReplacement } = BASE_ORDER;
-    expect(toSnapshot(withoutReplacement).replacingAppIds.size).toBe(0);
+    expect(toSnapshot(withoutReplacement).replacingApps.size).toBe(0);
     expect(toSnapshot({ ...BASE_ORDER, status: 'expired' }).isExpired).toBe(true);
+  });
+
+  it('reads when a held replacement is due, preferring the app over the whole block', () => {
+    const snapshot = toSnapshot({
+      ...BASE_ORDER,
+      automatic_replacement: {
+        status: 'pending',
+        available_at: 1_799_000_600,
+        applications: [
+          { application_id: 'app_a', status: 'pending', available_at: 1_799_000_300 },
+          { application_id: 'app_d', status: 'pending' },
+        ],
+      },
+    });
+    expect(snapshot.replacingApps.get('app_a')).toEqual(new Date(1_799_000_300_000));
+    expect(snapshot.replacingApps.get('app_d')).toEqual(new Date(1_799_000_600_000));
+  });
+
+  it('has no due time while the server is already picking a catalog', () => {
+    const snapshot = toSnapshot({
+      ...BASE_ORDER,
+      automatic_replacement: {
+        status: 'pending',
+        available_at: null,
+        applications: [{ application_id: 'app_a', status: 'pending', available_at: null }],
+      },
+    });
+    expect(snapshot.replacingApps.has('app_a')).toBe(true);
+    expect(snapshot.replacingApps.get('app_a')).toBeNull();
+  });
+
+  it('keeps the order readable when available_at has an unexpected shape', () => {
+    const order = orderSchema.parse({
+      ...BASE_ORDER,
+      automatic_replacement: {
+        status: 'pending',
+        available_at: 'soon',
+        applications: [{ application_id: 'app_a', status: 'pending', available_at: '10m' }],
+      },
+    });
+    expect(toSnapshot(order).replacingApps.get('app_a')).toBeNull();
   });
 
   it('reads the order limits and the start of the activation window', () => {

@@ -53,7 +53,7 @@ export class MockDeliveryProvider implements DeliveryProvider {
           })),
         },
       ],
-      replacingAppIds: new Set(),
+      replacingApps: new Map(),
     };
     this.deliveries.set(externalId, snapshot);
     return snapshot;

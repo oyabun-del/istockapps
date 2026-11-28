@@ -6,6 +6,8 @@ import type { CodeWait, DeliveryApp, DeliveryGroup, DeliverySnapshot } from '../
  * merged in: a revoked flag, a replacement banner or a link disappears as soon as the API drops it.
  */
 
+const MS_PER_SECOND = 1000;
+
 function isGroupExpired(group: DeliveryGroup, snapshot: DeliverySnapshot, now: Date): boolean {
   return snapshot.isExpired || group.expiresAt.getTime() <= now.getTime();
 }
@@ -13,7 +15,7 @@ function isGroupExpired(group: DeliveryGroup, snapshot: DeliverySnapshot, now: D
 function appState(app: DeliveryApp, group: DeliveryGroup, snapshot: DeliverySnapshot, now: Date): DeliveryState {
   if (isGroupExpired(group, snapshot, now)) return 'expired';
   if (!group.isRevoked && app.links) return 'available';
-  if (snapshot.replacingAppIds.has(app.id)) return 'replacing';
+  if (snapshot.replacingApps.has(app.id)) return 'replacing';
   return group.isRevoked ? 'revoked' : 'unavailable';
 }
 
@@ -23,10 +25,24 @@ function groupState(apps: readonly DeliveryAppDto[]): DeliveryState {
   return priority.find((state) => states.has(state)) ?? 'unavailable';
 }
 
+/** Seconds left of the replacement hold; null when the due time is unknown or already reached. */
+function replacementInSeconds(app: DeliveryApp, snapshot: DeliverySnapshot, now: Date): number | null {
+  const dueAt = snapshot.replacingApps.get(app.id);
+  if (!dueAt) return null;
+  const seconds = Math.ceil((dueAt.getTime() - now.getTime()) / MS_PER_SECOND);
+  return seconds > 0 ? seconds : null;
+}
+
 function toGroupDto(group: DeliveryGroup, snapshot: DeliverySnapshot, now: Date): DeliveryGroupDto {
   const apps = group.apps.map((app) => {
     const state = appState(app, group, snapshot, now);
-    return { id: app.id, name: app.name, state, links: state === 'available' ? app.links : null };
+    return {
+      id: app.id,
+      name: app.name,
+      state,
+      links: state === 'available' ? app.links : null,
+      replacementInSeconds: state === 'replacing' ? replacementInSeconds(app, snapshot, now) : null,
+    };
   });
   return {
     id: group.id,

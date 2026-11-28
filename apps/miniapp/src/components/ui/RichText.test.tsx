@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { RichText } from './RichText';
 
@@ -26,9 +26,18 @@ describe('RichText', () => {
   });
 
   it('keeps a chip on one line', () => {
-    render(<RichText text="Откройте «Медиаматериалы и покупки»." />);
+    render(<RichText text="Нажмите «Просмотреть учётную запись»." />);
 
-    expect(screen.getByText('Медиаматериалы и покупки', { selector: 'strong' })).toHaveClass('whitespace-nowrap');
+    expect(screen.getByText('Просмотреть учётную запись', { selector: 'strong' })).toHaveClass('whitespace-nowrap');
+  });
+
+  it('marks the App Store section with the App Store icon inside its chip', () => {
+    const { container } = render(<RichText text="Нажмите «Контент и покупки», затем «Выйти»." />);
+
+    const section = screen.getByText('Контент и покупки', { selector: 'strong' });
+    expect(within(section).getByTestId('app-store-icon')).toBeInTheDocument();
+    expect(within(screen.getByText('Выйти', { selector: 'strong' })).queryByTestId('app-store-icon')).toBeNull();
+    expect(container.textContent).toBe('Нажмите «Контент и покупки», затем «Выйти».');
   });
 
   it('leaves an unclosed quote as plain text', () => {

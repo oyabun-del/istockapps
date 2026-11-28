@@ -12,8 +12,13 @@ import openAppSrc from '../assets/guide/open-app.svg';
 import signBackInSrc from '../assets/guide/sign-back-in.svg';
 import signOutSrc from '../assets/guide/sign-out.svg';
 
-/** Where App Store sign-in lives; iCloud is configured elsewhere and must not be touched. */
-export const MEDIA_PURCHASES_PATH = ['Настройки', 'Ваше имя', 'Медиаматериалы и покупки'] as const;
+/**
+ * The Settings item where App Store sign-in lives, as iOS names it; the guide marks it with the
+ * App Store icon (components/ui/RichText.tsx). iCloud is configured elsewhere and must not be touched.
+ */
+export const APP_STORE_SECTION = 'Контент и покупки';
+
+export const APP_STORE_SECTION_PATH = ['Настройки', 'Ваше имя', APP_STORE_SECTION] as const;
 
 export const QUICK_STEPS = [
   'Оплатите заказ удобным способом',
@@ -45,11 +50,11 @@ export const GUIDE_IMAGES = {
   },
   signOut: {
     src: signOutSrc,
-    alt: 'Схема: в Настройках нажмите на своё имя, затем «Медиаматериалы и покупки» и в меню «Выйти». iCloud и «Выйти» внизу экрана с именем не трогайте.',
+    alt: `Схема: в Настройках нажмите на своё имя, затем «${APP_STORE_SECTION}» и в меню «Выйти». iCloud и «Выйти» внизу экрана с именем не трогайте.`,
   },
   enterCode: {
     src: enterCodeSrc,
-    alt: 'Схема: в «Медиаматериалы и покупки» войдите с логином и паролем из заказа и введите 6 цифр кода.',
+    alt: `Схема: в «${APP_STORE_SECTION}» войдите с логином и паролем из заказа и введите 6 цифр кода.`,
   },
   openApp: {
     src: openAppSrc,
@@ -57,7 +62,7 @@ export const GUIDE_IMAGES = {
   },
   signBackIn: {
     src: signBackInSrc,
-    alt: 'Схема: в «Медиаматериалы и покупки» нажмите «Выйти» и войдите в свой Аккаунт Apple.',
+    alt: `Схема: в «${APP_STORE_SECTION}» нажмите «Выйти» и войдите в свой Аккаунт Apple.`,
   },
 } as const satisfies Record<string, GuideImage>;
 
@@ -99,14 +104,14 @@ export const ACTIVATION_STEPS: readonly GuideStep[] = [
   },
   {
     title: 'Выйдите из App Store',
-    action: 'Выйдите из «Медиаматериалы и покупки», iCloud не трогайте',
+    action: `Выйдите из «${APP_STORE_SECTION}», iCloud не трогайте`,
     substeps: [
       'Сверните Telegram и откройте «Настройки»',
       'Нажмите на своё имя в самом верху',
-      'Нажмите «Медиаматериалы и покупки»',
+      `Нажмите «${APP_STORE_SECTION}»`,
       'В меню нажмите «Выйти». Нет кнопки — нажмите «Просмотреть учётную запись» и прокрутите вниз',
       'Подтвердите: ещё раз нажмите «Выйти»',
-      'Готово, если «Медиаматериалы и покупки» теперь предлагают войти. Вернитесь в Telegram к заказу',
+      `Готово, если «${APP_STORE_SECTION}» теперь предлагают войти. Вернитесь в Telegram к заказу`,
     ],
     image: GUIDE_IMAGES.signOut,
     note: 'Не нажимайте «Выйти» внизу экрана с вашим именем: это выход из всего Аккаунта Apple, вместе с iCloud и «Локатором».',
@@ -125,11 +130,11 @@ export const ACTIVATION_STEPS: readonly GuideStep[] = [
   },
   {
     title: 'Верните свой аккаунт',
-    action: 'В «Медиаматериалы и покупки» нажмите «Выйти» и войдите в свой Аккаунт Apple',
+    action: `В «${APP_STORE_SECTION}» нажмите «Выйти» и войдите в свой Аккаунт Apple`,
     substeps: [
       'Откройте «Настройки» и нажмите на своё имя вверху',
-      'Нажмите «Медиаматериалы и покупки», затем «Выйти» и подтвердите',
-      'Снова нажмите «Медиаматериалы и покупки» и войдите в свой Аккаунт Apple. iPhone предложит его сам — нажмите «Продолжить»',
+      `Нажмите «${APP_STORE_SECTION}», затем «Выйти» и подтвердите`,
+      `Снова нажмите «${APP_STORE_SECTION}» и войдите в свой Аккаунт Apple. iPhone предложит его сам — нажмите «Продолжить»`,
       'Готово, если в App Store под значком аккаунта вверху справа ваш адрес',
     ],
     image: GUIDE_IMAGES.signBackIn,
@@ -145,7 +150,7 @@ export const FAQ: readonly { question: string; answer: string }[] = [
   {
     question: 'Нет кнопки «Выйти»',
     answer:
-      'В iOS 26.5 и новее она может быть спрятана: в «Медиаматериалы и покупки» нажмите «Просмотреть учётную запись» и прокрутите вниз.',
+      `В iOS 26.5 и новее она может быть спрятана: в «${APP_STORE_SECTION}» нажмите «Просмотреть учётную запись» и прокрутите вниз.`,
   },
   {
     question: 'Я удалил приложение',

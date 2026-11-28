@@ -153,7 +153,9 @@ describe('GuidePage', () => {
     expect(steps).toHaveLength(5);
     expect(steps[0]).toHaveTextContent('Скачайте приложение');
     expect(steps[4]).toHaveTextContent('Верните свой аккаунт');
-    expect(screen.getAllByText('Медиаматериалы и покупки').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Контент и покупки', { selector: 'strong' }).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Медиаматериалы/)).toBeNull();
+    expect(screen.queryAllByAltText(/Медиаматериалы/)).toHaveLength(0);
   });
 
   it('lists the safety rules and answers common problems', () => {
@@ -188,7 +190,8 @@ describe('GuidePage', () => {
     const taps = within(within(signOut).getByRole('list', { name: 'Выйдите из App Store: по нажатиям' })).getAllByRole('listitem');
     expect(taps).toHaveLength(6);
     expect(taps[0]).toHaveTextContent('Настройки');
-    expect(within(nth(taps, 2)).getByText('Медиаматериалы и покупки', { selector: 'strong' })).toBeInTheDocument();
+    const section = within(nth(taps, 2)).getByText('Контент и покупки', { selector: 'strong' });
+    expect(within(section).getByTestId('app-store-icon')).toBeInTheDocument();
     expect(within(nth(taps, 3)).getByText('Просмотреть учётную запись', { selector: 'strong' })).toBeInTheDocument();
     expect(within(signOut).getByText(/выход из всего Аккаунта Apple/)).toBeInTheDocument();
 

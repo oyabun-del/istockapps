@@ -10,7 +10,7 @@ import { SettingsPath } from '../../components/ui/SettingsPath';
 import { Spinner } from '../../components/ui/Spinner';
 import { StepImage } from '../../components/ui/StepImage';
 import { activationWarningText } from '../../content/delivery-rules';
-import { GUIDE_IMAGES, MEDIA_PURCHASES_PATH } from '../../content/guide';
+import { APP_STORE_SECTION, APP_STORE_SECTION_PATH, GUIDE_IMAGES } from '../../content/guide';
 import { api, errorMessage } from '../../lib/api';
 import { replacingPollDelayMs } from '../../lib/delivery-poll';
 import { REVEAL } from '../../lib/motion';
@@ -225,7 +225,7 @@ function CredentialsStep({ order, delivery, card }: { order: OrderDto; delivery:
 
   return (
     <StepCard index={2} title="Войдите в App Store" {...card}>
-      <SettingsPath path={MEDIA_PURCHASES_PATH} />
+      <SettingsPath path={APP_STORE_SECTION_PATH} />
       <p className="flex items-start gap-1.5 rounded-lg bg-warning/10 p-space-sm text-body-sm text-warning">
         <Icon name="warning" className="mt-0.5 text-[16px]" />
         Входите только в App Store. Не входите с этими данными в iCloud.
@@ -315,7 +315,7 @@ function FinishStep({ order, card }: { order: OrderDto; card: CardProps }) {
     return (
       <StepCard index={4} title="Приложение активировано" {...card}>
         <p className="text-body-sm text-on-surface-variant">
-          Готово! Теперь выйдите из выданного аккаунта в «Медиаматериалы и покупки» и войдите в свой Аккаунт Apple.
+          {`Готово! Теперь выйдите из выданного аккаунта в «${APP_STORE_SECTION}» и войдите в свой Аккаунт Apple.`}
         </p>
         <StepImage image={GUIDE_IMAGES.signBackIn} />
       </StepCard>

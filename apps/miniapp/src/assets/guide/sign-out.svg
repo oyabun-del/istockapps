@@ -15,7 +15,21 @@
   <line x1="40" y1="162" x2="296" y2="162" stroke="#38383a"/>
 
   <rect x="24" y="162" width="272" height="44" fill="#FACC15" fill-opacity=".18"/>
-  <text x="40" y="189" font-size="13" font-weight="600" fill="#fff">Медиаматериалы и покупки</text>
+  <defs>
+    <linearGradient id="app-store-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1ac8fc"/>
+      <stop offset="1" stop-color="#1d6ff2"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(38 172)">
+    <rect width="24" height="24" rx="5.4" fill="url(#app-store-fill)"/>
+    <g stroke="#fff" stroke-width="1.9" stroke-linecap="round" fill="none">
+      <path d="M7.4 17.4 13 7.6"/>
+      <path d="M11 7.6l5.6 9.8"/>
+      <path d="M6.2 14.6h11.6"/>
+    </g>
+  </g>
+  <text x="72" y="189" font-size="13" font-weight="600" fill="#fff">Контент и покупки</text>
   <text x="282" y="189" font-size="15" fill="#8e8e93">›</text>
   <rect x="21" y="160" width="278" height="48" rx="10" fill="none" stroke="#FACC15" stroke-width="2.5"/>
   <g transform="translate(296 160)"><circle r="11" fill="#FACC15" stroke="#1c1c1e" stroke-width="2"/><text y="4" text-anchor="middle" font-size="12" font-weight="700" fill="#1a1600">1</text></g>
